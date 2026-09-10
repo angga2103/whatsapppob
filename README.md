@@ -61,27 +61,25 @@ Dilengkapi dengan **Interactive One-Click Installer**, **Pengaturan Penuh via Ch
 
 ## 🚀 Panduan Instalasi Cepat (One-Click Installer)
 
-### 1. Clone Repository
+### ⚡ Jalankan di Linux / VPS (Paling Mudah, Cepat & Aman)
+Cukup salin dan tempel **satu baris perintah** ini di terminal VPS Anda. Perintah ini otomatis membuat direktori terisolasi di `/var/www/bot-ppob` sehingga **100% aman dan tidak akan bentrok** dengan web aplikasi lain yang ada di VPS Anda:
+
 ```bash
-git clone https://github.com/angga2103/whatsapppob.git
-cd whatsapppob
+git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob && chmod +x install.sh && ./install.sh
 ```
 
-### 2. Jalankan One-Click Installer
+---
 
-#### Pengguna Windows:
-Cukup klik dua kali file **`install.bat`** atau jalankan perintah:
-```powershell
-npm run setup
-```
-
-#### Pengguna Linux / VPS:
-```bash
-chmod +x install.sh
-./install.sh
-# Atau jalankan:
-npm run setup
-```
+### 💻 Pengguna Windows:
+1. Clone repository:
+   ```bash
+   git clone https://github.com/angga2103/whatsapppob.git
+   cd whatsapppob
+   ```
+2. Cukup klik dua kali file **`install.bat`** atau jalankan perintah:
+   ```powershell
+   npm run setup
+   ```
 
 ### 3. Ikuti Panduan Interaktif di Terminal:
 1. Installer akan memeriksa Node.js dan memasang dependensi secara otomatis.
