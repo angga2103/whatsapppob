@@ -137,15 +137,15 @@ async function runInstaller() {
 
 async function promptConfig() {
     const curPort = process.env.PORT || '3000';
-    const curOwner = process.env.OWNER_NUMBER || '6281234567890';
-    const curDigiUser = process.env.DIGIFLAZZ_USERNAME || 'wulilio6xBvW';
-    const curDigiKey = process.env.DIGIFLAZZ_KEY || '32d4d136-84de-549a-9870-3f7e873e2cd8';
-    const curMId = process.env.PAYMENTKITA_MERCHANT_ID || 'PKM78524949';
-    const curMSecret = process.env.PAYMENTKITA_SECRET || 'PKSK_cEeTfLiVKc9tEESTnOmnyCoDB2GnYr8OF9ClcJ8V';
+    const curOwner = process.env.OWNER_NUMBER || '';
+    const curDigiUser = process.env.DIGIFLAZZ_USERNAME || '';
+    const curDigiKey = process.env.DIGIFLAZZ_KEY || '';
+    const curMId = process.env.PAYMENTKITA_MERCHANT_ID || '';
+    const curMSecret = process.env.PAYMENTKITA_SECRET || '';
     const curTgToken = process.env.TELEGRAM_TOKEN || '';
     const curTgChat = process.env.TELEGRAM_CHAT_ID || '';
 
-    console.log(`\n${C.cyan}Tekan [ENTER] langsung untuk menggunakan nilai default/saat ini.${C.reset}\n`);
+    console.log(`\n${C.cyan}Tekan [ENTER] langsung untuk menggunakan nilai saat ini / default.${C.reset}\n`);
 
     const port = (await ask(`• Port Server [${curPort}]: `)) || curPort;
     const owner = (await ask(`• Nomor WA Owner / Admin (Contoh: 6281234567890) [${curOwner}]: `)) || curOwner;

@@ -506,11 +506,9 @@ if (!global.heartbeatStarted) {
             if (!m.message || m.key.fromMe) return;
             const sender = jidNormalizedUser(m.key.remoteJid);
             const normSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
-            const senderPhone = normSender.replace(/[^0-9]/g, '');
             const isOwner = (config.owner || []).some(o => {
                 const normO = db.normalizeJid ? db.normalizeJid(o) : o;
-                const oPhone = String(normO).replace(/[^0-9]/g, '');
-                return o === sender || o === normSender || (oPhone && senderPhone && (senderPhone.endsWith(oPhone) || oPhone.endsWith(senderPhone)));
+                return normO === normSender || o === sender;
             });
             let textBody = m.message.conversation || m.message.extendedTextMessage?.text || '';
 
@@ -791,9 +789,15 @@ Mohon tunggu beberapa saat.`
     db.orders.push(order);
     db.saveOrders();
 
-    let qrUrl = `https://quickchart.io/qr?size=500&margin=2&text=${encodeURIComponent(qris.data.qr_string)}`;
+    let qrPayload = { url: `https://quickchart.io/qr?size=500&margin=2&text=${encodeURIComponent(qris.data.qr_string)}` };
+    try {
+        const QRCode = require('qrcode');
+        const qrBuf = await QRCode.toBuffer(qris.data.qr_string, { width: 500, margin: 2 });
+        qrPayload = qrBuf;
+    } catch (_) {}
+
     await sock.sendMessage(sender, {
-        image: { url: qrUrl },
+        image: qrPayload,
         caption: `🧾 *TAGIHAN QRIS*
 
 Invoice : ${oid}
@@ -849,12 +853,13 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
         order.status = 'processing'; db.saveOrders();
         await sock.sendMessage(targetJid, { text: `⏳ *DIPROSES*...\nMenembak ke server pusat untuk nomor: *${order.target}*.` });
         
-                console.log("\n[==== BONGKAR DATA ORDER PPOB ====]\n", JSON.stringify(order, null, 2));
+                const maskPhone = (p = '') => p.length > 7 ? p.slice(0, 4) + '****' + p.slice(-3) : p;
+                console.log(`[ORDER PPOB] ID: ${order.id} | SKU: ${order.sku} | Target: ${maskPhone(order.target)}`);
                 const hit = await safeHitDigiflazz(sock, order);
         
         if (hit && hit.data) {
             if (hit.data.status === 'Sukses') {
-console.log('[HIT SUCCESS]', order.id, JSON.stringify(hit.data));
+                console.log(`[HIT SUCCESS] ${order.id} -> Sukses`);
                     const menuItem = db.menu.find(m => m.nama === order.item);
                     if (menuItem) {
                         menuItem.stok = Math.max(0, (menuItem.stok || 0) - (order.qty || 1));
@@ -1024,28 +1029,38 @@ try {
     const TelegramBot = require('node-telegram-bot-api');
     
     // Mencegah bentrok / double polling jika file dimuat ulang
-    if (!global.botTg) {
+    if (!global.botTg && config.telegram.token && config.telegram.token.includes(':')) {
         global.botTg = new TelegramBot(config.telegram.token, {polling: true});
         global.awaitingPhoneNumber = false;
 
         global.botTg.on('callback_query', async (query) => {
-            const chatId = query.message.chat.id;
+            const chatId = String(query.message?.chat?.id || query.from?.id || '');
+            const authorizedChatId = String(config.telegram.chatId || '');
+
+            if (!authorizedChatId || chatId !== authorizedChatId) {
+                console.warn(`[SECURITY] Unauthorized Telegram callback attempt from Chat ID: ${chatId}`);
+                return global.botTg.answerCallbackQuery(query.id, { text: "❌ Akses ditolak! Anda bukan Administrator.", show_alert: true });
+            }
+
             const action = query.data;
 
             if (action === 'cmd_restore') {
                 global.botTg.answerCallbackQuery(query.id);
                 global.botTg.sendMessage(chatId, "⏳ *Mengekstrak file backup...*\nMohon tunggu, proses penimpaan data sedang berlangsung...", {parse_mode: 'Markdown'});
                 try {
-                    const { execSync } = require('child_process');
-                    const backupFiles = fs.readdirSync('.').filter(f => f.startsWith('AUTO-BACKUP-') && f.endsWith('.zip')).sort().reverse();
+                    const { spawnSync } = require('child_process');
+                    const path = require('path');
+                    const backupFiles = fs.readdirSync('.').filter(f => /^AUTO-BACKUP-[\w.-]+\.zip$/.test(f)).sort().reverse();
                     if (backupFiles.length === 0) {
-                        return global.botTg.sendMessage(chatId, "❌ *Tidak ada file backup AUTO-BACKUP-*.zip yang ditemukan.*", {parse_mode: 'Markdown'});
+                        return global.botTg.sendMessage(chatId, "❌ *Tidak ada file backup AUTO-BACKUP-*.zip yang valid ditemukan.*", {parse_mode: 'Markdown'});
                     }
                     const targetZip = backupFiles[0];
+                    const safeZipPath = path.resolve('.', targetZip);
+
                     if (process.platform === 'win32') {
-                        execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${targetZip}' -DestinationPath '.' -Force"`, { stdio: 'ignore' });
+                        spawnSync('powershell', ['-NoProfile', '-Command', 'Expand-Archive', '-LiteralPath', safeZipPath, '-DestinationPath', '.', '-Force'], { stdio: 'ignore' });
                     } else {
-                        execSync(`unzip -o "${targetZip}"`, { stdio: 'ignore' });
+                        spawnSync('unzip', ['-o', safeZipPath, '-d', '.'], { stdio: 'ignore' });
                     }
                     fs.writeFileSync('RESTORE_SUCCESS.txt', 'true');
                     global.botTg.sendMessage(chatId, `✅ *Restore Berhasil (${targetZip})!*\nSistem melakukan restart untuk menerapkan data baru...`, {parse_mode: 'Markdown'});
@@ -1063,15 +1078,16 @@ try {
         });
 
         global.botTg.on('message', async (msg) => {
-            const chatId = msg.chat.id;
+            const chatId = String(msg.chat?.id || '');
+            const authorizedChatId = String(config.telegram.chatId || '');
+            if (!authorizedChatId || chatId !== authorizedChatId) return;
+
             const text = msg.text;
 
             // Jika bot sedang menunggu input nomor HP
             if (global.awaitingPhoneNumber && text && text.startsWith('62')) {
                 global.awaitingPhoneNumber = false;
                 global.botTg.sendMessage(chatId, "⏳ Memproses nomor: *" + text + "*...\n\n_Menyiapkan jembatan Pairing ke server Baileys..._", {parse_mode: 'Markdown'});
-                
-                // RUANG KOSONG: Di sini kita akan masukkan logika Pairing Baileys di Tahap 2
             }
         });
         
@@ -1123,7 +1139,8 @@ setInterval(async () => {
             }
 
             // LOGGING INTELIJEN: Tampilkan apa yang sedang dicek
-            console.log(`[RADAR V4] 🔍 Mengecek OID: ${oid} | SKU: ${order.sku} | Trg: ${order.target}`);
+            const maskTrg = (t = '') => t.length > 6 ? t.slice(0, 4) + '****' + t.slice(-3) : t;
+            console.log(`[RADAR V4] 🔍 Mengecek OID: ${oid} | SKU: ${order.sku} | Trg: ${maskTrg(order.target)}`);
 
             const req = await fetch('https://api.digiflazz.com/v1/transaction', {
                 method: 'POST',

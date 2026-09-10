@@ -16,32 +16,33 @@ const config = {
     get owner() {
         const s = getSettings();
         if (Array.isArray(s.owner) && s.owner.length > 0) return s.owner;
-        return [process.env.OWNER_NUMBER || '206429499748373@lid'];
+        const envOwner = process.env.OWNER_NUMBER;
+        return envOwner ? [envOwner] : [];
     },
     port: parseInt(process.env.PORT || '3000', 10),
     pakasir: {
-        project: process.env.PAKASIR_PROJECT || 'Ansor',
-        key: process.env.PAKASIR_KEY || 'F0n6LNRnKWxGSHeIJgeeiDSt6q5E36OH'
+        project: process.env.PAKASIR_PROJECT || '',
+        key: process.env.PAKASIR_KEY || ''
     },
     get digiflazz() {
         const s = getSettings();
         return {
-            username: s.digiflazz?.username || process.env.DIGIFLAZZ_USERNAME || 'wulilio6xBvW',
-            key: s.digiflazz?.key || process.env.DIGIFLAZZ_KEY || '32d4d136-84de-549a-9870-3f7e873e2cd8'
+            username: s.digiflazz?.username || process.env.DIGIFLAZZ_USERNAME || '',
+            key: s.digiflazz?.key || process.env.DIGIFLAZZ_KEY || ''
         };
     },
     get telegram() {
         const s = getSettings();
         return {
-            token: s.telegram?.token || process.env.TELEGRAM_TOKEN || '8470095940:AAEAaqIqMRt0RGT1kxMddT9HItJcRMdEFPc',
-            chatId: s.telegram?.chatId || process.env.TELEGRAM_CHAT_ID || '7236113204'
+            token: s.telegram?.token || process.env.TELEGRAM_TOKEN || '',
+            chatId: s.telegram?.chatId || process.env.TELEGRAM_CHAT_ID || ''
         };
     },
     get paymentkita() {
         const s = getSettings();
         return {
-            merchantId: s.paymentkita?.merchantId || process.env.PAYMENTKITA_MERCHANT_ID || 'PKM78524949',
-            secret: s.paymentkita?.secret || process.env.PAYMENTKITA_SECRET || 'PKSK_cEeTfLiVKc9tEESTnOmnyCoDB2GnYr8OF9ClcJ8V'
+            merchantId: s.paymentkita?.merchantId || process.env.PAYMENTKITA_MERCHANT_ID || '',
+            secret: s.paymentkita?.secret || process.env.PAYMENTKITA_SECRET || ''
         };
     },
     get profit() {

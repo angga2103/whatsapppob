@@ -136,9 +136,14 @@ if (cmd === 'namatoko') {
         const [phoneRaw, nomStr] = args.split(' ');
         if (!phoneRaw || !nomStr) return sock.sendMessage(sender, { text: "❌ Format: .addsaldo 62812xxx 50000" });
         const nominal = parseInt(nomStr);
-        if (isNaN(nominal) || nominal <= 0) return sock.sendMessage(sender, { text: "❌ Nominal harus berupa angka positif." });
+        if (isNaN(nominal) || nominal <= 0 || nominal > 50000000) {
+            return sock.sendMessage(sender, { text: "❌ Nominal harus berupa angka valid antara Rp1 - Rp50.000.000." });
+        }
         let phone = phoneRaw.replace(/[^0-9]/g, '');
         if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+        if (phone.length < 10 || !phone.startsWith('62')) {
+            return sock.sendMessage(sender, { text: "❌ Nomor tujuan tidak valid. Format: 62812xxx (Min 10 digit)." });
+        }
         
         const targetJid = `${phone}@s.whatsapp.net`;
         const user = db.getUser(targetJid);
@@ -625,7 +630,9 @@ ${rate}%`
 
     if (cmd === 'setdigi') {
         const [user, key] = args.trim().split(/\s+/);
-        if (!user || !key) return sock.sendMessage(sender, { text: "❌ Format: .setdigi [username] [api_key]\nContoh: .setdigi myuser 32d4-xxxx" });
+        if (!user || !key || user.length < 3 || key.length < 8) {
+            return sock.sendMessage(sender, { text: "❌ Format salah atau kredensial terlalu pendek.\nFormat: .setdigi [username] [api_key]\nContoh: .setdigi myuser 32d4-xxxx" });
+        }
         if (!db.settings) db.settings = {};
         db.settings.digiflazz = { username: user, key: key };
         if (db.saveSettings) db.saveSettings();
@@ -634,7 +641,9 @@ ${rate}%`
 
     if (cmd === 'setpayment') {
         const [mId, secret] = args.trim().split(/\s+/);
-        if (!mId || !secret) return sock.sendMessage(sender, { text: "❌ Format: .setpayment [merchant_id] [secret_key]\nContoh: .setpayment PKM12345 PKSK_xxxx" });
+        if (!mId || !secret || mId.length < 3 || secret.length < 8) {
+            return sock.sendMessage(sender, { text: "❌ Format salah atau secret terlalu pendek.\nFormat: .setpayment [merchant_id] [secret_key]\nContoh: .setpayment PKM12345 PKSK_xxxx" });
+        }
         if (!db.settings) db.settings = {};
         db.settings.paymentkita = { merchantId: mId, secret: secret };
         if (db.saveSettings) db.saveSettings();
@@ -643,7 +652,9 @@ ${rate}%`
 
     if (cmd === 'settg') {
         const [token, chatId] = args.trim().split(/\s+/);
-        if (!token || !chatId) return sock.sendMessage(sender, { text: "❌ Format: .settg [bot_token] [chat_id]\nContoh: .settg 847009:AAEA... 7236113204" });
+        if (!token || !chatId || !token.includes(':') || !/^[0-9-]+$/.test(chatId)) {
+            return sock.sendMessage(sender, { text: "❌ Format bot token atau Chat ID Telegram tidak valid.\nContoh: .settg 847009:AAEA... 7236113204" });
+        }
         if (!db.settings) db.settings = {};
         db.settings.telegram = { token, chatId };
         if (db.saveSettings) db.saveSettings();
@@ -654,8 +665,8 @@ ${rate}%`
         const [katRaw, nomStr] = args.trim().split(/\s+/);
         const kat = (katRaw || '').toLowerCase();
         const nom = parseInt(nomStr);
-        if (!['pulsa', 'data', 'emoney', 'pln'].includes(kat) || isNaN(nom) || nom < 0) {
-            return sock.sendMessage(sender, { text: "❌ Format: .setprofit [pulsa|data|emoney|pln] [nominal]\nContoh: .setprofit pulsa 750" });
+        if (!['pulsa', 'data', 'emoney', 'pln'].includes(kat) || isNaN(nom) || nom < 0 || nom > 500000) {
+            return sock.sendMessage(sender, { text: "❌ Format salah. Margin harus antara Rp0 - Rp500.000.\nContoh: .setprofit pulsa 750" });
         }
         if (!db.settings) db.settings = {};
         const configData = require('../config');
@@ -669,8 +680,8 @@ ${rate}%`
         const [tierRaw, nomStr] = args.trim().split(/\s+/);
         const tier = (tierRaw || '').toLowerCase();
         const nom = parseInt(nomStr);
-        if (!['kecil', 'sedang', 'besar', 'premium'].includes(tier) || isNaN(nom) || nom < 0) {
-            return sock.sendMessage(sender, { text: "❌ Format: .settier [kecil|sedang|besar|premium] [nominal]\nContoh: .settier kecil 1200" });
+        if (!['kecil', 'sedang', 'besar', 'premium'].includes(tier) || isNaN(nom) || nom < 0 || nom > 1000000) {
+            return sock.sendMessage(sender, { text: "❌ Format salah. Margin tier harus antara Rp0 - Rp1.000.000.\nContoh: .settier kecil 1200" });
         }
         if (!db.settings) db.settings = {};
         const configData = require('../config');

@@ -201,6 +201,21 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         if (!order) {
             return sock.sendMessage(sender, { text: `❌ Order ID *${orderId}* tidak ditemukan.` });
         }
+
+        // 🛡️ ANTI-IDOR SHIELD: Validasi Otorisasi Kepemilikan Invoice
+        const canonicalSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
+        const isBuyer = (order.buyer === sender || order.buyer === canonicalSender);
+        const isOwner = (config.owner || []).some(o => {
+            const normO = db.normalizeJid ? db.normalizeJid(o) : o;
+            return normO === canonicalSender || o === sender;
+        });
+
+        if (!isBuyer && !isOwner) {
+            return sock.sendMessage(sender, {
+                text: `🔒 *AKSES DITOLAK*\n\nAnda tidak memiliki izin untuk melihat detail invoice ini karena bukan milik akun Anda.`
+            });
+        }
+
         let t = `🔎 *STATUS TRANSAKSI*\n\n`;
         t += `🧾 Invoice: \`${order.id}\`\n`;
         t += `📦 Produk: ${order.item || order.sku}\n`;
@@ -241,31 +256,43 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     if (['.TRANSFER', '!TRANSFER', 'TRANSFER'].includes(cmdFirst)) {
         let targetNo = (parts[1] || '').trim().replace(/[^0-9]/g, '');
         const nom = parseInt(parts[2]);
-        if (!targetNo || isNaN(nom) || nom < 1000) {
+        if (!targetNo || isNaN(nom) || nom < 1000 || nom > 50000000) {
             return sock.sendMessage(sender, {
-                text: `💸 *FORMAT TRANSFER SALDO:*\n.transfer [Nomor_Tujuan] [Nominal]\n\nContoh:\n.transfer 08123456789 10000\n\n📌 _Minimal transfer Rp1.000 (Tanpa Biaya Admin)_`
+                text: `💸 *FORMAT TRANSFER SALDO:*\n.transfer [Nomor_Tujuan] [Nominal]\n\nContoh:\n.transfer 08123456789 10000\n\n📌 _Minimal transfer Rp1.000 (Maks Rp50.000.000)_`
             });
         }
         if (targetNo.startsWith('0')) targetNo = '62' + targetNo.slice(1);
+        
         const senderUser = db.getUser ? db.getUser(sender) : (db.users[sender] || (db.users[sender] = { saldo: 0 }));
-        if ((senderUser.saldo || 0) < nom) {
+        const senderPhone = (senderUser.phone || sender.split('@')[0].split(':')[0]).replace(/[^0-9]/g, '');
+        
+        // 🛡️ CEGAH TRANSFER KE DIRI SENDIRI
+        if (targetNo === senderPhone) {
+            return sock.sendMessage(sender, { text: "❌ Tidak dapat mentransfer saldo ke nomor Anda sendiri." });
+        }
+
+        // 🛡️ DEDUCTION ATOMIK: Menjamin saldo cukup dan bebas race condition
+        const deductRes = db.deductSaldo(sender, nom, `TRF-${targetNo}`, `Transfer ke ${targetNo}`);
+        if (!deductRes.success) {
             return sock.sendMessage(sender, {
-                text: `❌ Saldo Anda tidak mencukupi.\nSaldo Anda: ${formatRupiah(senderUser.saldo || 0)}\nNominal transfer: ${formatRupiah(nom)}`
+                text: `❌ Transfer gagal: ${deductRes.reason}.\nSaldo Anda saat ini: ${formatRupiah(deductRes.saldo || senderUser.saldo || 0)}`
             });
         }
+
         const targetJid = targetNo.includes('@') ? targetNo : targetNo + '@s.whatsapp.net';
         const targetUser = db.getUser ? db.getUser(targetJid) : (db.users[targetJid] || (db.users[targetJid] = { saldo: 0, phone: targetNo }));
-
-        senderUser.saldo -= nom;
-        targetUser.saldo = (targetUser.saldo || 0) + nom;
+        targetUser.saldo = (Number(targetUser.saldo) || 0) + nom;
+        if (!Array.isArray(targetUser.history)) targetUser.history = [];
+        const dateStr = new Date().toLocaleDateString('id-ID');
+        targetUser.history.push(`[${dateStr}] 🟢 Terima Transfer (+Rp ${nom.toLocaleString('id-ID')}) dari ${senderPhone}`);
         db.saveUsers();
 
         await sock.sendMessage(sender, {
-            text: `✅ *TRANSFER SALDO BERHASIL*\n\n🎯 Tujuan: ${targetNo}\n💰 Nominal: ${formatRupiah(nom)}\n💵 Sisa Saldo: ${formatRupiah(senderUser.saldo)}`
+            text: `✅ *TRANSFER SALDO BERHASIL*\n\n🎯 Tujuan: ${targetNo}\n💰 Nominal: ${formatRupiah(nom)}\n💵 Sisa Saldo: ${formatRupiah(deductRes.remainingSaldo)}`
         });
 
         await sock.sendMessage(targetJid, {
-            text: `🎁 *SALDO MASUK*\n\nAnda menerima transfer saldo sebesar *${formatRupiah(nom)}* dari ${senderUser.phone || sender.split('@')[0]}.\n💰 Saldo Baru: ${formatRupiah(targetUser.saldo)}`
+            text: `🎁 *SALDO MASUK*\n\nAnda menerima transfer saldo sebesar *${formatRupiah(nom)}* dari ${senderPhone}.\n💰 Saldo Baru: ${formatRupiah(targetUser.saldo)}`
         }).catch(()=>{});
         return;
     }
@@ -338,10 +365,25 @@ if (session.step === S.INPUT_DEPOSIT) {
         });
     }
 
-    if (amount > 300000) {
+    if (amount > 500000) {
 
         return sock.sendMessage(sender, {
-            text: '❌ Maksimal deposit Rp300.000'
+            text: '❌ Maksimal deposit Rp500.000'
+        });
+    }
+
+    // 🛡️ ANTI-DOS FLOOD GUARD: Batasi 1 Deposit Pending per User
+    const canonicalSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
+    const pendingDep = (db.deposits || []).find(d => 
+        (d.buyer === sender || d.buyer === canonicalSender) &&
+        d.status === 'pending' &&
+        Date.now() - d.createdAt < 5 * 60 * 1000
+    );
+
+    if (pendingDep) {
+        session.step = S.IDLE;
+        return sock.sendMessage(sender, {
+            text: `⚠️ *DEPOSIT AKTIF DITEMUKAN*\n\nAnda masih memiliki tagihan deposit aktif yang belum kadaluarsa (ID: \`${pendingDep.id}\`).\nSelesaikan pembayaran atau tunggu 5 menit hingga kadaluarsa sebelum membuat deposit baru.`
         });
     }
 
@@ -361,7 +403,7 @@ if (session.step === S.INPUT_DEPOSIT) {
 
     db.deposits.push({
         id: depositId,
-        buyer: sender,
+        buyer: canonicalSender,
         amount: amount,
         status: 'pending',
         createdAt: Date.now()
@@ -372,13 +414,15 @@ if (session.step === S.INPUT_DEPOSIT) {
 
     session.step = S.IDLE;
 
-    const qrUrl =
-`https://quickchart.io/qr?size=500&margin=2&text=${encodeURIComponent(qris.data.qr_string)}`;
+    let qrPayload = { url: `https://quickchart.io/qr?size=500&margin=2&text=${encodeURIComponent(qris.data.qr_string)}` };
+    try {
+        const QRCode = require('qrcode');
+        const qrBuf = await QRCode.toBuffer(qris.data.qr_string, { width: 500, margin: 2 });
+        qrPayload = qrBuf;
+    } catch (_) {}
 
     await sock.sendMessage(sender, {
-        image: {
-            url: qrUrl
-        },
+        image: qrPayload,
         caption:
         `💰 *DEPOSIT SALDO*
 
