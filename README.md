@@ -1,4 +1,4 @@
-﻿# 🤖 Bot PPOB & Toko Digital WhatsApp + Telegram
+# 🤖 Bot PPOB & Toko Digital WhatsApp + Telegram
 
 Bot WhatsApp otomatis untuk melayani transaksi **PPOB (Pulsa, Paket Data, E-Money, Token PLN, Tagihan Pascabayar)** dan **Produk Digital (Akun / Lisensi / Voucher)** dengan sistem pembayaran otomatis menggunakan **Saldo Akun** dan **QRIS Realtime (PaymentKita)**, terintegrasi dengan provider **Digiflazz**.
 
@@ -9,9 +9,13 @@ Dilengkapi dengan **Interactive One-Click Installer**, **Pengaturan Penuh via Ch
 ## 🌟 Fitur Utama
 
 ### 🛒 Fitur Pelanggan & Transaksi
-- **Transaksi Super Cepat & Mudah:**
-  - **Menu Interaktif:** Ketik `MENU` untuk memilih kategori bertingkat dengan deteksi operator otomatis (Telkomsel, Indosat, XL, Axis, Tri, Smartfren, by.U).
-  - **Shortcut Pembelian Instan:** Cukup ketik `.beli [SKU] [NoHP]` (Contoh: `.beli S10 081234567890`) untuk langsung checkout tanpa langkah panjang.
+- **Navigasi Interaktif Berbasis Nomor:**
+  - **Menu Nomor 1-10:** Cukup balas nomor (1. Pulsa, 2. Data, 3. PLN, 4. E-Money, 5. Pascabayar, dst.) tanpa perlu mengetik panjang.
+  - **Pilihan Produk Angka 1-N:** Setiap daftar paket/nominal dinomori urut sehingga pembeli hanya perlu membalas angka pilihan.
+  - **Konfirmasi Transaksi Super Simpel:** Balas `1` untuk Bayar Sekarang atau `2` untuk Batal.
+- **Transaksi Super Cepat & Cerdas:**
+  - **Dukungan Penuh Prabayar & Pascabayar:** Transaksi pulsa/paket data/token PLN dan cek tagihan + bayar Pascabayar (PLN Pascabayar, PDAM, BPJS, HP Pascabayar) terintegrasi via Digiflazz (`inq-pasca` & `pay-pasca`).
+  - **Shortcut Pembelian Instan:** Tetap mendukung format instan: cukup ketik `.beli [SKU] [NoHP]` (Contoh: `.beli S10 081234567890`) untuk langsung checkout.
   - **Cek Daftar Harga & SKU:** Ketik `.harga [Operator]` (Contoh: `.harga tsel`, `.harga pln`) untuk melihat daftar produk dan harga aktif.
   - **Cek Status & SN:** Ketik `.status [Invoice]` untuk melihat status transaksi atau mengambil kembali nomor token PLN / SN.
   - **Riwayat Pembelian:** Ketik `.riwayat` untuk melihat 5 transaksi terakhir.
@@ -161,6 +165,9 @@ pm2 startup
 
 ```
 Bot PPOB/
+├── RULES.md                # Panduan arsitektur, standar keamanan, & anti-double refund
+├── WORKFLOW.md             # Diagram siklus transaksi prabayar, pascabayar & radar
+├── ADMIN_GUIDE.md          # Panduan lengkap perintah in-chat remote control admin
 ├── config.js               # Konfigurasi dinamis (Integrasi .env & settings.json)
 ├── index.js                # Server utama (Baileys, Transaction Engine, Polling)
 ├── installer.js            # Interactive One-Click Installer & Pairing CLI
@@ -180,15 +187,22 @@ Bot PPOB/
 │   └── users.json          # Data saldo dan profil pelanggan
 ├── handlers/               # Pengelola pesan masuk
 │   ├── admin.js            # Command Center & In-Chat Settings Admin
-│   └── user.js             # Alur belanja, shortcut cepat, & transaksi pelanggan
+│   └── user.js             # Alur belanja, menu angka, & transaksi pelanggan
 ├── lib/                    # Library pembantu
 │   ├── api.js              # Integrasi API Digiflazz & PaymentKita
 │   ├── logger.js           # Pencatatan log transaksi
-│   ├── postpaid.js         # Inquiry & Pembayaran Pascabayar
+│   ├── postpaid.js         # Inquiry & Pembayaran Pascabayar Digiflazz
 │   ├── search.js           # Engine pencarian produk cerdas
 │   └── utils.js            # Helper format rupiah & operator
 └── system/                 # Health check, watchdog, & alert state
 ```
+
+---
+
+## 📚 Dokumentasi Lanjutan
+- 📖 [RULES.md](RULES.md): Standar arsitektur, aturan idempotensi saldo, proteksi database atomik, dan kebijakan anti double-refund.
+- 🔄 [WORKFLOW.md](WORKFLOW.md): Alur komprehensif transaksi Prabayar & Pascabayar, alur radar status background, dan state machine navigasi nomor.
+- 👑 [ADMIN_GUIDE.md](ADMIN_GUIDE.md): Daftar lengkap dan panduan sintaks remote control in-chat WhatsApp untuk Administrator / Owner.
 
 ---
 

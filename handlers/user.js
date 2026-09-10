@@ -16,7 +16,10 @@ const S = {
     PILIH_PRODUK_DIGITAL: 7,
     QTY_DIGITAL: 8,
     CONFIRM: 9,
-    INPUT_DEPOSIT: 10
+    INPUT_DEPOSIT: 10,
+    PILIH_KATEGORI_PASCA: 11,
+    INPUT_TARGET_PASCA: 12,
+    PILIH_PRODUK_PASCA: 13
 };
 
 // --- ENGINE CERDAS UNTUK SORTING & GROUPING OTOMATIS ---
@@ -268,18 +271,21 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     }
 
     // 1. MAIN MENU
-    if (['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#'].includes(txt)) {
+    if (['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT'].includes(txt)) {
         session.step = S.PILIH_KATEGORI;
-        let t = `╭── 🛍️ *${db.store.namaToko || 'STORE'}* ──\n│\n`;
-        t += `├ *1.* 🌐 Pulsa Reguler\n`;
-        t += `├ *2.* 📶 Paket Data\n`;
-        t += `├ *3.* 💸 Topup E-Money\n`;
-        t += `├ *4.* 📂 Produk Digital (Akun/App)\n├ *5.* ⚡ Token PLN\n│\n`;
-        t += `│\n╰───────────────────────────\n\n`;
-        t += `👇 Balas *Angka* pilihan Anda, atau gunakan shortcut:\n`;
-        t += `• *.beli* [SKU] [NoHP] (Beli Cepat)\n`;
-        t += `• *.harga* [Operator] (Cek Harga)\n`;
-        t += `• *DEPOSIT* | *PROFIL* | *RIWAYAT* | *HELP*`;
+        let t = `╭── 🛍️ *${db.store.namaToko || 'GARUDATEL STORE'}* ──\n│\n`;
+        t += `├ *1.* 🌐 Pulsa Reguler (Prabayar)\n`;
+        t += `├ *2.* 📶 Paket Data Internet\n`;
+        t += `├ *3.* 💸 Topup E-Money & E-Wallet\n`;
+        t += `├ *4.* ⚡ Token Listrik PLN (Prabayar)\n`;
+        t += `├ *5.* 📑 Tagihan PPOB Pascabayar\n`;
+        t += `├ *6.* 📂 Produk Digital (Akun / Aplikasi)\n`;
+        t += `├ *7.* 💰 Isi Saldo (Deposit QRIS)\n`;
+        t += `├ *8.* 👤 Profil & Cek Saldo\n`;
+        t += `├ *9.* 🧾 Riwayat Transaksi\n`;
+        t += `├ *10.* 📖 Bantuan & Panduan\n│\n`;
+        t += `╰───────────────────────────\n\n`;
+        t += `👇 Balas dengan *ANGKA (1 - 10)* untuk memilih menu.`;
         return sock.sendMessage(sender, { text: t });
     }
 
@@ -478,67 +484,250 @@ if (txt === 'PROFIL') {
         return sock.sendMessage(sender, { text: `👤 *PROFIL*\n📱 HP: ${p.phone || realJid.split('@')[0].replace(/[^0-9]/g, '')}\n💰 Saldo: *${typeof formatRupiah !== 'undefined' ? formatRupiah(p.saldo || 0) : 'Rp ' + (p.saldo || 0).toLocaleString('id-ID')}*\n\n_Ketik *DEPOSIT* untuk isi saldo._` });
     }
 
-    if (txt === 'B') {
+    if (txt === 'B' || txt === '0') {
         session.step = S.IDLE;
-        return sock.sendMessage(sender, { text: "🚫 Aksi dibatalkan. Ketik *MENU* untuk kembali." });
+        return sock.sendMessage(sender, { text: "🚫 Aksi dibatalkan. Ketik *MENU* untuk kembali belanja." });
     }
 
-    // 2. PILIH KATEGORI (1,2,3,4)
-    if (session.step === S.PILIH_KATEGORI) {
+    // 2. PILIH KATEGORI (1-10)
+    if (session.step === S.PILIH_KATEGORI || (session.step === S.IDLE && /^(10|[1-9])$/.test(txt))) {
         if (txt === '1' || txt === '2') {
             session.tempTipe = txt === '1' ? 'Pulsa' : 'Data';
             session.step = S.INPUT_TARGET_PULSA;
             if (session.tempTipe === 'Data') {
-return sock.sendMessage(sender,{text:`📱 *PAKET DATA*
-
-Masukkan Nomor HP Tujuan.
-
-Contoh:
-08123456789
-
-🔎 Opsional:
-
-• 08123456789.30gb
-• 08123456789.10k
-• 08123456789.30h
-• 08123456789.edukasi
-
-💡 Tanpa tambahan kata kunci:
-Bot akan menampilkan rekomendasi paket terlebih dahulu.`});
-}
-
-return sock.sendMessage(sender,{text:`📱 *${session.tempTipe}*\n\nSilakan masukkan *Nomor HP* Tujuan Anda:\n_Contoh: 08123456789_`});
+                return sock.sendMessage(sender, {
+                    text: `📶 *PAKET DATA INTERNET*\n\nSilakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\nKetik *0* atau *B* untuk batal.`
+                });
+            }
+            return sock.sendMessage(sender, {
+                text: `📱 *PULSA REGULER*\n\nSilakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\nKetik *0* atau *B* untuk batal.`
+            });
         } else if (txt === '3') {
             session.tempTipe = 'E-Money';
             session.step = S.PILIH_BRAND_EMONEY;
             const brands = [...new Set(db.ppob.filter(p => p.kategori === 'E-Money').map(p => p.brand))];
-            if (brands.length === 0) return sock.sendMessage(sender, { text: `❌ Sistem belum menarik data E-Money.` });
+            if (brands.length === 0) return sock.sendMessage(sender, { text: `❌ Sistem belum menarik data E-Money. Ketik .sync emoney` });
             
             session.tempBrands = brands;
             let t = `💸 *PILIH PROVIDER E-MONEY*\n\n`;
             brands.forEach((b, i) => t += `*${i+1}.* ${b}\n`);
-            t += `\nKetik angka pilihan Anda.`;
+            t += `\nBalas angka (*1 - ${brands.length}*) pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: t });
-        } else if (txt === '5') {
+        } else if (txt === '4') {
             session.tempTipe = 'PLN';
             session.step = S.INPUT_TARGET_PULSA;
-
             return sock.sendMessage(sender, {
-                text: `⚡ *TOKEN PLN*
-
-Silakan masukkan *Nomor Meteran / ID Pelanggan PLN*
-
-Contoh:
-123456789012`
+                text: `⚡ *TOKEN LISTRIK PLN (PRABAYAR)*\n\nSilakan masukkan *Nomor Meteran / ID Pelanggan PLN* (11-12 Digit):\n_Contoh: 123456789012_\n\nKetik *0* atau *B* untuk batal.`
             });
-
-        } else if (txt === '4') {
-            session.step = S.PILIH_PRODUK_DIGITAL;
-            let t = `📂 *PRODUK DIGITAL*\n\n`;
-            if (db.menu.length === 0) return sock.sendMessage(sender, { text: `❌ Belum ada produk digital.` });
-            db.menu.forEach(m => t += `*${m.id}.* ${m.nama}\n🏷️ ${formatRupiah(m.harga)} | 📦 Stok: ${m.stok}\n\n`);
-            t += `Ketik angka *ID Produk* pilihan Anda.`;
+        } else if (txt === '5') {
+            session.step = S.PILIH_KATEGORI_PASCA;
+            let t = `📑 *PILIH KATEGORI TAGIHAN PASCABAYAR*\n\n`;
+            t += `*1.* ⚡ PLN Pascabayar (Tagihan Listrik Bulanan)\n`;
+            t += `*2.* 🏥 BPJS Kesehatan\n`;
+            t += `*3.* 💧 PDAM (Air Minum Daerah)\n`;
+            t += `*4.* 🏢 PBB (Pajak Bumi & Bangunan)\n`;
+            t += `*5.* ⚡ PLN Non-Taglis\n`;
+            t += `*6.* 📱 HP Pascabayar & Internet Kabel\n\n`;
+            t += `Balas *Angka (1 - 6)* kategori tagihan Anda.\nKetik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: t });
+        } else if (txt === '6') {
+            session.step = S.PILIH_PRODUK_DIGITAL;
+            let t = `📂 *PRODUK DIGITAL (AKUN / APLIKASI)*\n\n`;
+            if (!db.menu || db.menu.length === 0) return sock.sendMessage(sender, { text: `❌ Belum ada produk digital tersedia saat ini.` });
+            session.tempDigitalList = [...db.menu];
+            db.menu.forEach((m, idx) => t += `*${idx + 1}.* ${m.nama}\n   💰 ${formatRupiah(m.harga)} | 📦 Stok: ${m.stok}\n\n`);
+            t += `Balas *Angka (1 - ${db.menu.length})* produk pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
+            return sock.sendMessage(sender, { text: t });
+        } else if (txt === '7') {
+            session.step = S.INPUT_DEPOSIT;
+            return sock.sendMessage(sender, {
+                text: `💰 *DEPOSIT SALDO OTOMATIS (QRIS)*\n\nMasukkan nominal deposit yang diinginkan:\n📌 Minimal: Rp1.000\n📌 Maksimal: Rp500.000\n\n_Contoh: 10000_\nKetik *0* atau *B* untuk batal.`
+            });
+        } else if (txt === '8') {
+            session.step = S.IDLE;
+            const u = db.getUser(sender);
+            return sock.sendMessage(sender, {
+                text: `👤 *PROFIL PENGGUNA*\n📱 Nomor: ${u.phone || sender.split('@')[0]}\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau balas *7* untuk isi saldo._`
+            });
+        } else if (txt === '9') {
+            session.step = S.IDLE;
+            const canonical = db.normalizeJid(sender);
+            const userOrders = (db.orders || [])
+                .filter(o => o.buyer === canonical || o.buyer === sender)
+                .slice(-5)
+                .reverse();
+            if (userOrders.length === 0) {
+                return sock.sendMessage(sender, { text: "📦 Anda belum memiliki riwayat transaksi.\nKetik *MENU* untuk mulai bertransaksi." });
+            }
+            let t = `🧾 *5 TRANSAKSI TERAKHIR ANDA*\n\n`;
+            userOrders.forEach((o, i) => {
+                const dateStr = o.timestamp ? new Date(o.timestamp).toLocaleString('id-ID') : '-';
+                const icon = o.status === 'success' ? '✅' : o.status === 'failed' ? '❌' : '⏳';
+                t += `*${i+1}.* ${icon} *${o.item || o.sku}*\n`;
+                t += `   Inv: \`${o.id}\`\n`;
+                t += `   Target: ${o.target || '-'}\n`;
+                t += `   Total: ${formatRupiah(o.baseAmount || o.total || 0)}\n`;
+                t += `   Status: *${String(o.status).toUpperCase()}*\n`;
+                if (o.sn) t += `   SN/Token: \`${o.sn}\`\n`;
+                t += `   Waktu: ${dateStr}\n\n`;
+            });
+            return sock.sendMessage(sender, { text: t });
+        } else if (txt === '10') {
+            session.step = S.IDLE;
+            let t = `📖 *PANDUAN LENGKAP TRANSAKSI*\n\n`;
+            t += `*Cara Berbelanja via Menu Angka:*\n`;
+            t += `1. Ketik *MENU* untuk membuka katalog layanan.\n`;
+            t += `2. Balas angka layanan yang diinginkan (1 - 6).\n`;
+            t += `3. Masukkan nomor HP / ID Pelanggan tujuan.\n`;
+            t += `4. Pilih produk / nominal dengan membalas angka.\n`;
+            t += `5. Konfirmasi: Balas *1* untuk Bayar, *2* untuk Batal.\n\n`;
+            t += `*Shortcut Cepat (Opsional):*\n`;
+            t += `• *.beli [SKU] [NoHP]* : Beli instan\n`;
+            t += `• *.harga [Operator]* : Cek daftar harga & SKU\n`;
+            t += `• *.transfer [NoHP] [Nominal]* : Kirim saldo ke sesama member\n`;
+            t += `• *.status [Invoice]* : Cek status / token transaksi\n`;
+            t += `• *B* atau *0* : Batalkan transaksi kapan saja\n\n`;
+            t += `🏪 *${db.store.namaToko || 'GARUDATEL STORE'}* - Aman, Cepat, dan Otomatis.`;
+            return sock.sendMessage(sender, { text: t });
+        }
+    }
+
+    // 2B. ALUR PASCABAYAR: PILIH KATEGORI (1-6)
+    if (session.step === S.PILIH_KATEGORI_PASCA) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali." });
+        }
+        const pascaProducts = db.postpaid || [];
+        let selectedCategory = '';
+        let targetLabel = 'ID Pelanggan';
+
+        if (txt === '1') {
+            selectedCategory = 'PLN PASCABAYAR';
+            targetLabel = 'ID Pelanggan PLN (12 Digit)';
+        } else if (txt === '2') {
+            selectedCategory = 'BPJS KESEHATAN';
+            targetLabel = 'Nomor Virtual Account / Kartu BPJS';
+        } else if (txt === '3') {
+            selectedCategory = 'PDAM';
+            targetLabel = 'Nomor Pelanggan PDAM';
+        } else if (txt === '4') {
+            selectedCategory = 'PBB';
+            targetLabel = 'Nomor Objek Pajak (NOP)';
+        } else if (txt === '5') {
+            selectedCategory = 'PLN NONTAGLIS';
+            targetLabel = 'Nomor Registrasi PLN Non-Taglis';
+        } else if (txt === '6') {
+            selectedCategory = 'HP PASCABAYAR';
+            targetLabel = 'Nomor HP Pascabayar';
+        } else {
+            return sock.sendMessage(sender, { text: "❌ Pilihan salah. Balas dengan angka *1 - 6*, atau *0* untuk batal." });
+        }
+
+        let matched = pascaProducts.filter(p => p.brand && p.brand.toUpperCase().includes(selectedCategory));
+        if (matched.length === 0) {
+            matched = pascaProducts.filter(p => (p.name && p.name.toUpperCase().includes(selectedCategory)) || (p.category && p.category.toUpperCase().includes(selectedCategory)));
+        }
+
+        if (matched.length <= 1) {
+            const product = matched[0] || { sku: (selectedCategory === 'BPJS KESEHATAN' ? 'post685476' : selectedCategory === 'PLN PASCABAYAR' ? 'plnpost' : 'post685472'), brand: selectedCategory, name: selectedCategory };
+            session.tempPostpaidProduct = product;
+            session.tempPostpaidCategory = selectedCategory;
+            session.step = S.INPUT_TARGET_PASCA;
+            return sock.sendMessage(sender, {
+                text: `📑 *TAGIHAN ${selectedCategory}*\n\nSilakan masukkan *${targetLabel}*:\n_Contoh: 512345678901_\n\nKetik *0* atau *B* untuk batal.`
+            });
+        } else {
+            session.tempPostpaidList = matched.slice(0, 15);
+            session.step = S.PILIH_PRODUK_PASCA;
+            let t = `💧 *PILIH WILAYAH ${selectedCategory}*\n\n`;
+            session.tempPostpaidList.forEach((p, idx) => {
+                t += `*${idx + 1}.* ${p.name}\n`;
+            });
+            t += `\nBalas angka (*1 - ${session.tempPostpaidList.length}*) pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
+            return sock.sendMessage(sender, { text: t });
+        }
+    }
+
+    if (session.step === S.PILIH_PRODUK_PASCA) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali." });
+        }
+        const idx = parseInt(txt) - 1;
+        if (isNaN(idx) || !session.tempPostpaidList || !session.tempPostpaidList[idx]) {
+            return sock.sendMessage(sender, { text: "❌ Pilihan tidak valid. Balas angka yang tertera di menu." });
+        }
+        const product = session.tempPostpaidList[idx];
+        session.tempPostpaidProduct = product;
+        session.step = S.INPUT_TARGET_PASCA;
+        return sock.sendMessage(sender, {
+            text: `📑 *${product.name.toUpperCase()}*\n\nSilakan masukkan *Nomor / ID Pelanggan*:\n_Contoh: 1234567890_\n\nKetik *0* atau *B* untuk batal.`
+        });
+    }
+
+    if (session.step === S.INPUT_TARGET_PASCA) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali." });
+        }
+        const target = txt.replace(/[^0-9a-zA-Z]/g, '');
+        if (!target || target.length < 5) {
+            return sock.sendMessage(sender, { text: "❌ Nomor ID Pelanggan tidak valid. Silakan periksa kembali." });
+        }
+        const product = session.tempPostpaidProduct || { sku: 'plnpost', name: 'PLN Pascabayar', brand: 'PLN' };
+        session.tempTarget = target;
+
+        await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengecek rincian tagihan ke server..." });
+
+        const postpaid = require('../lib/postpaid');
+        const refId = `INQ-${Date.now()}`;
+        try {
+            const inq = await postpaid.inquiry(product.sku, target, refId);
+            if (!inq || !inq.data || inq.data.status === 'Gagal') {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, {
+                    text: `❌ *TAGIHAN TIDAK DITEMUKAN / GAGAL*\n\nPesan: ${inq?.data?.message || 'Nomor ID Pelanggan salah atau tagihan sudah terbayar lunas.'}\n\nKetik *MENU* untuk kembali.`
+                });
+            }
+
+            const data = inq.data;
+            const customerName = data.customer_name || '-';
+            const adminFee = Number(data.admin) || 2500;
+            const billAmount = Number(data.price || data.selling_price || 0);
+            const totalAmount = billAmount;
+            const period = data.period || '-';
+
+            session.tempItem = {
+                sku: product.sku,
+                nama: `${product.name} (${customerName})`,
+                cleanName: product.name,
+                hargaJual: totalAmount,
+                isPasca: true
+            };
+            session.tempQty = 1;
+            session.step = S.CONFIRM;
+
+            const user = db.getUser(sender);
+            const userSaldo = Number(user.saldo) || 0;
+
+            let invoiceText = `🧾 *RINCIAN TAGIHAN PASCABAYAR*\n\n`;
+            invoiceText += `📦 Layanan: *${product.name}*\n`;
+            invoiceText += `👤 Nama Pelanggan: *${customerName}*\n`;
+            invoiceText += `🎯 ID Pelanggan: *${target}*\n`;
+            invoiceText += `📅 Periode: *${period}*\n`;
+            invoiceText += `💵 Tagihan: *${formatRupiah(billAmount - adminFee)}*\n`;
+            invoiceText += `📑 Biaya Admin: *${formatRupiah(adminFee)}*\n`;
+            invoiceText += `────────────────────────\n`;
+            invoiceText += `💰 *TOTAL BAYAR: ${formatRupiah(totalAmount)}*\n\n`;
+            invoiceText += `💵 Saldo Dompet Anda: ${formatRupiah(userSaldo)}\n`;
+            invoiceText += userSaldo >= totalAmount ? `_Saldo Anda mencukupi (Potong Otomatis)._\n\n` : `_Pembayaran via QRIS Otomatis._\n\n`;
+            invoiceText += `Balas *1* untuk BAYAR SEKARANG\nBalas *2* untuk BATAL`;
+
+            return sock.sendMessage(sender, { text: invoiceText });
+        } catch (err) {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: `❌ *ERROR SERVER:* Gagal memproses inquiry tagihan (${err.message}). Silakan coba beberapa saat lagi.` });
         }
     }
 
@@ -1003,25 +1192,26 @@ Atau ketik Z untuk melihat katalog lengkap.`
     }
 
     // 7. CHECKOUT (CONFIRM)
-    if (session.step === S.CONFIRM && txt === 'Y') {
-        session.step = S.IDLE;
-        await processCheckout(sock, sender, session); 
+    if (session.step === S.CONFIRM) {
+        if (txt === '1' || txt === 'Y') {
+            session.step = S.IDLE;
+            await processCheckout(sock, sender, session);
+            return;
+        } else if (txt === '2' || txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Pesanan dibatalkan. Ketik *MENU* untuk kembali belanja." });
+        } else {
+            return sock.sendMessage(sender, { text: "⚠️ Balas *1* untuk BAYAR SEKARANG, atau *2* untuk BATAL." });
+        }
     }
 }
 
 async function showInvoice(sock, sender, session) {
     const isPpob = !!session.tempItem.sku;
-    const qty = isPpob ? 1 : session.tempQty;
+    const qty = isPpob ? 1 : (session.tempQty || 1);
     const total = (isPpob ? session.tempItem.hargaJual : session.tempItem.harga) * qty;
-    // 🧬 RADAR DOMPET UTAMA KASIR
-    let realJid = sender;
-    if (sender.includes('@lid')) {
-        let pPhone = (db.users[sender] && db.users[sender].phone) ? String(db.users[sender].phone).replace(/[^0-9]/g, '') : sender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-        if (pPhone.startsWith('0')) pPhone = '62' + pPhone.slice(1);
-        let findMain = Object.entries(db.users).find(([j, u]) => !j.includes('@lid') && (u.phone === pPhone || j.startsWith(pPhone)));
-        if (findMain) realJid = findMain[0];
-    }
-    const saldo = (db.users[realJid] && db.users[realJid].saldo) ? db.users[realJid].saldo : 0;
+    const user = db.getUser(sender);
+    const saldo = Number(user.saldo) || 0;
     
     let t = `🧾 *KONFIRMASI PESANAN*\n\n📦 ${session.tempItem.cleanName || session.tempItem.nama}\n`;
     if (isPpob) t += `🎯 Tujuan: *${session.tempTarget}*\n`;
@@ -1029,19 +1219,10 @@ async function showInvoice(sock, sender, session) {
     
     t += `💵 Total: *${formatRupiah(total)}*\n💰 Saldo Anda: ${formatRupiah(saldo)}\n\n`;
     t += saldo >= total ? `_Saldo mencukupi (Potong Otomatis)._\n\n` : `_Pembayaran via QRIS Otomatis._\n\n`;
-    t += `Ketik *Y* untuk Bayar.\nKetik *B* untuk Batal.`;
+    t += `Balas *1* untuk BAYAR SEKARANG\nBalas *2* untuk BATAL`;
     
     await sock.sendMessage(sender, { text: t });
 }
-
-
-
-
-
-
-
-
-
 
 exports.handleUser = handleUser;
 
@@ -1056,9 +1237,11 @@ exports.S = {
     PILIH_PRODUK_DIGITAL: 7,
     QTY_DIGITAL: 8,
     CONFIRM: 9,
-    INPUT_DEPOSIT: 10
+    INPUT_DEPOSIT: 10,
+    PILIH_KATEGORI_PASCA: 11,
+    INPUT_TARGET_PASCA: 12,
+    PILIH_PRODUK_PASCA: 13
 };
-
 
 module.exports = {
     handleUser,

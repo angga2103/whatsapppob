@@ -136,30 +136,20 @@ if (cmd === 'namatoko') {
         const [phoneRaw, nomStr] = args.split(' ');
         if (!phoneRaw || !nomStr) return sock.sendMessage(sender, { text: "❌ Format: .addsaldo 62812xxx 50000" });
         const nominal = parseInt(nomStr);
+        if (isNaN(nominal) || nominal <= 0) return sock.sendMessage(sender, { text: "❌ Nominal harus berupa angka positif." });
         let phone = phoneRaw.replace(/[^0-9]/g, '');
         if (phone.startsWith('0')) phone = '62' + phone.slice(1);
         
-        // 🧬 RADAR PENAUT ADD-SALDO
-        let targetJid = Object.keys(db.users).find(jid => {
-            let p = db.users[jid].phone ? String(db.users[jid].phone).replace(/[^0-9]/g, '') : jid.split('@')[0].split(':')[0];
-            if (p.startsWith('0')) p = '62' + p.slice(1);
-            return (p === phone || jid.includes(phone)) && !jid.includes('@lid');
-        }) || Object.keys(db.users).find(jid => {
-            let p = db.users[jid].phone ? String(db.users[jid].phone).replace(/[^0-9]/g, '') : jid.split('@')[0].split(':')[0];
-            if (p.startsWith('0')) p = '62' + p.slice(1);
-            return p === phone || jid.includes(phone);
-        });
-
-        if (!targetJid) {
-            // 🧬 AUTO-REGISTER GOD MODE
-            let cleanPhone = phone.startsWith('0') ? '62' + phone.slice(1) : phone;
-            targetJid = cleanPhone + '@s.whatsapp.net';
-            db.users[targetJid] = { nama: 'Member Baru', phone: cleanPhone, saldo: 0, date: Date.now() };
-        }
-        db.users[targetJid].saldo = (db.users[targetJid].saldo || 0) + nominal;
+        const targetJid = `${phone}@s.whatsapp.net`;
+        const user = db.getUser(targetJid);
+        user.saldo = (Number(user.saldo) || 0) + nominal;
+        if (!Array.isArray(user.history)) user.history = [];
+        const dateStr = new Date().toLocaleDateString('id-ID');
+        user.history.push(`[${dateStr}] 🟢 Topup Admin (+Rp ${nominal.toLocaleString('id-ID')})`);
         db.saveUsers();
-        await sock.sendMessage(targetJid, { text: `✅ Saldo disesuaikan Admin: ${formatRupiah(nominal)}. Saldo Anda: ${formatRupiah(db.users[targetJid].saldo)}` }).catch(()=>{});
-        return sock.sendMessage(sender, { text: `✅ Saldo user diupdate.` });
+
+        await sock.sendMessage(targetJid, { text: `✅ Saldo disesuaikan Admin: ${formatRupiah(nominal)}. Saldo Anda: ${formatRupiah(user.saldo)}` }).catch(()=>{});
+        return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditambah ${formatRupiah(nominal)}. Saldo baru: ${formatRupiah(user.saldo)}` });
     }
 
     // --- FITUR CRUD MANUAL (DIJAMIN AKTIF) ---

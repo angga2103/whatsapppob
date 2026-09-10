@@ -127,11 +127,17 @@ async function safeHitDigiflazz(sock, order) {
                 `[DIGIFLAZZ] Attempt ${retry + 1} -> ${order.id}`
             );
 
-            const hit = await api.hitDigiflazz(
-                order.sku,
-                order.target,
-                order.id
-            );
+            let hit;
+            if (order.isPasca) {
+                const postpaid = require('./lib/postpaid');
+                hit = await postpaid.pay(order.sku, order.target, order.id);
+            } else {
+                hit = await api.hitDigiflazz(
+                    order.sku,
+                    order.target,
+                    order.id
+                );
+            }
 
             if (hit && hit.data) {
                 return hit;
@@ -508,9 +514,9 @@ if (!global.heartbeatStarted) {
             });
             let textBody = m.message.conversation || m.message.extendedTextMessage?.text || '';
 
-            if (!db.users[sender]) { db.users[sender] = { phone: sender.split('@')[0], saldo: 0, history: [] }; db.saveUsers(); }
-            if (!userSessions.has(sender)) userSessions.set(sender, { step: S.IDLE });
-            const session = userSessions.get(sender);
+            db.getUser(sender);
+            if (!userSessions.has(normSender)) userSessions.set(normSender, { step: S.IDLE });
+            const session = userSessions.get(normSender);
 
             const lastChat = spamDelay.get(sender) || 0;
 
@@ -555,27 +561,18 @@ if (!global.heartbeatStarted) {
                         let targetOrder = typeof db !== 'undefined' && db.orders ? db.orders.find(o => o.id === targetInv) : null;
                         
                         if (targetOrder && (targetOrder.status === 'pending' || targetOrder.status === 'processing')) {
-                            targetOrder.status = 'failed';
+                            const refundResult = db.refundOrder(targetOrder, 'Dibatalkan Admin (Via Reply)');
                             
-                            // Ekstrak Dompet Utama Pembeli
-                            let rawJid = targetOrder.buyer || targetOrder.sender || targetOrder.jid;
-                            let realBuyer = rawJid && rawJid.includes(':') ? rawJid.split(':')[0] + '@s.whatsapp.net' : rawJid;
-                            
-                            let refundNominal = Number(targetOrder.baseAmount || targetOrder.total || targetOrder.harga || 0);
-                            
-                            // Eksekusi Refund
-                            if (db.users && db.users[realBuyer]) {
-                                db.users[realBuyer].saldo = (db.users[realBuyer].saldo || 0) + refundNominal;
-                                if (typeof db.saveUsers === 'function') db.saveUsers();
+                            if (refundResult.success) {
+                                // Lapor Admin
+                                sock.sendMessage(m.key.remoteJid, { text: '✅ *ORDER DIBATALKAN (VIA REPLY)*\n\n🧾 Invoice: ' + targetInv + '\n💸 Saldo Rp ' + refundResult.amount.toLocaleString('id-ID') + ' telah dikembalikan ke pembeli.' }, { quoted: m });
+                                
+                                // Lapor Pembeli
+                                let pesanPembeli = '❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda dibatalkan.\n\n📦 Produk: ' + (targetOrder.item || targetOrder.sku) + '\n🧾 Invoice: ' + targetInv + '\n💰 Saldo Rp ' + refundResult.amount.toLocaleString('id-ID') + ' telah dikembalikan ke dompet Anda.';
+                                sock.sendMessage(refundResult.buyerJid, { text: pesanPembeli }).catch(()=>{});
+                            } else {
+                                sock.sendMessage(m.key.remoteJid, { text: '⚠️ *PERHATIAN:* Order ' + targetInv + ' ' + (refundResult.alreadyRefunded ? 'sudah pernah di-refund sebelumnya.' : 'gagal di-refund: ' + refundResult.reason) }, { quoted: m });
                             }
-                            if (typeof db.saveOrders === 'function') db.saveOrders();
-                            
-                            // Lapor Admin
-                            sock.sendMessage(m.key.remoteJid, { text: '✅ *ORDER DIBATALKAN (VIA REPLY)*\n\n🧾 Invoice: ' + targetInv + '\n💸 Saldo Rp ' + refundNominal + ' telah dikembalikan ke pembeli.' }, { quoted: m });
-                            
-                            // Lapor Pembeli
-                            let pesanPembeli = '❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda dibatalkan.\n\n📦 Produk: ' + targetOrder.item + '\n🧾 Invoice: ' + targetInv + '\n💰 Saldo Rp ' + refundNominal + ' telah dikembalikan ke dompet Anda.';
-                            sock.sendMessage(realBuyer, { text: pesanPembeli }).catch(()=>{});
                         }
                         return; // 🛑 HENTIKAN KODE DISINI AGAR TIDAK DIEKSEKUSI SEBAGAI PESANAN SUKSES
                     }
@@ -729,84 +726,83 @@ Mohon tunggu beberapa saat.`
     let baseAmount = (isPpob ? item.hargaJual : item.harga) * qty;
 
     const oid = `INV-${Date.now()}`;
-    const cleanBuyer = (sender && sender.includes(':') ? sender.split(':')[0] + '@s.whatsapp.net' : sender);
-    const order = { id: oid, buyer: cleanBuyer, item: item.nama, qty: qty, baseAmount: baseAmount, status: 'pending', isPpob: isPpob, sku: item.sku, target: session.tempTarget, timestamp: Date.now() };
+    const cleanBuyer = db.normalizeJid(sender);
+    const order = { 
+        id: oid, 
+        buyer: cleanBuyer, 
+        item: item.nama || item.cleanName, 
+        qty: qty, 
+        baseAmount: baseAmount, 
+        status: 'pending', 
+        isPpob: isPpob, 
+        isPasca: !!item.isPasca,
+        sku: item.sku, 
+        target: session.tempTarget, 
+        timestamp: Date.now() 
+    };
 
     // --- INJEKSI INQUIRY PASCABAYAR ---
     if (item.isPasca) {
-        await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengambil total tagihan dari server..." });
-        const crypto = require('crypto');
-        const config = require('./config');
-        const sign = crypto.createHash('md5').update(config.digiflazz.username + config.digiflazz.key + oid).digest('hex');
-        
+        await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengambil rincian tagihan dari server..." });
+        const postpaid = require('./lib/postpaid');
         try {
-            const req = await fetch('https://api.digiflazz.com/v1/transaction', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    commands: "inq-pasca",
-                    username: config.digiflazz.username,
-                    buyer_sku_code: item.sku,
-                    customer_no: session.tempTarget,
-                    ref_id: oid,
-                    sign: sign
-                })
-            });
-            const res = await req.json();
-            
-            // 📡 INTELIJEN RADAR: Rekam nomor OID/INV asli dari Digiflazz ke database order saat ini
-            if (res && res.data && res.data.ref_id) {
-                order.digiflazz_oid = res.data.ref_id;
-                console.log("[INTELIJEN] 📝 OID Digiflazz Terrekam Berhasil: " + res.data.ref_id);
+            const inq = await postpaid.inquiry(item.sku, session.tempTarget, oid);
+            if (inq && inq.data && inq.data.ref_id) {
+                order.digiflazz_oid = inq.data.ref_id;
             }
-            
-            if (!res.data || res.data.status === 'Gagal') {
+            if (!inq.data || inq.data.status === 'Gagal') {
                 activeTransactions.delete(trxKey);
-                return sock.sendMessage(sender, { text: `❌ *TAGIHAN GAGAL*\nPesan: ${res.data ? res.data.message : 'ID Pelanggan salah atau sudah lunas.'}` });
+                return sock.sendMessage(sender, { text: `❌ *INQUIRY GAGAL*\nPesan: ${inq.data ? inq.data.message : 'ID Pelanggan salah atau sudah lunas.'}` });
             }
-            
-            // Ambil harga tagihan + admin fee dari server Digiflazz
-            baseAmount = res.data.selling_price || res.data.price;
-            item.hargaJual = baseAmount; // Simpan ke session agar QRIS/Saldo valid
-            item.nama = res.data.customer_name ? `${item.brand} (${res.data.customer_name})` : item.brand;
+            baseAmount = inq.data.selling_price || inq.data.price;
+            item.hargaJual = baseAmount;
+            item.nama = inq.data.customer_name ? `${item.brand || item.name} (${inq.data.customer_name})` : (item.brand || item.name);
             order.baseAmount = baseAmount;
             order.item = item.nama;
-            
         } catch (e) {
             activeTransactions.delete(trxKey);
             return sock.sendMessage(sender, { text: "❌ *ERROR API:* Gagal terhubung ke Digiflazz." });
         }
     }
-    const userSaldo = (db.users[sender] && db.users[sender].saldo) ? db.users[sender].saldo : 0;
 
-    // 🧬 RADAR DOMPET UTAMA EKSKUSI KASIR
-    let realJid = sender;
-    if (sender.includes('@lid')) {
-        let pPhone = (db.users[sender] && db.users[sender].phone) ? String(db.users[sender].phone).replace(/[^0-9]/g, '') : sender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-        if (pPhone.startsWith('0')) pPhone = '62' + pPhone.slice(1);
-        let findMain = Object.entries(db.users).find(([j, u]) => !j.includes('@lid') && (u.phone === pPhone || j.startsWith(pPhone)));
-        if (findMain) realJid = findMain[0];
-    }
-    let actualSaldo = (db.users[realJid] && db.users[realJid].saldo) ? db.users[realJid].saldo : 0;
+    const buyerUser = db.getUser(cleanBuyer);
+    const actualSaldo = Number(buyerUser.saldo) || 0;
 
     if (actualSaldo >= baseAmount) {
-        db.users[realJid].saldo -= baseAmount; db.saveUsers();
-        order.buyer = (typeof realJid !== 'undefined' ? realJid : order.buyer); order.method = 'Saldo Akun'; db.orders.push(order); db.saveOrders();
-        return handleSuccessPayment(sock, order, true);
-    } else {
-        const qris = await api.createQris(oid, baseAmount);
-        if (!qris || qris.status !== 'Success') return sock.sendMessage(sender, {text: "❌ Gangguan server payment."});
-        order.total = qris.data.total_bayar; order.method = 'QRIS'; order.status = 'unpaid';
-        db.orders.push(order); db.saveOrders();
-        
-        let qrUrl = `https://quickchart.io/qr?size=500&margin=2&text=${encodeURIComponent(qris.data.qr_string)}`;
-        await sock.sendMessage(sender, { image: { url: qrUrl }, caption: `🧾 *TAGIHAN QRIS*
+        const deduct = db.deductSaldo(cleanBuyer, baseAmount, oid, order.item);
+        if (deduct.success) {
+            order.method = 'Saldo Akun';
+            order.status = 'processing';
+            db.orders.push(order);
+            db.saveOrders();
+            return handleSuccessPayment(sock, order, true);
+        }
+    }
+
+    // Jika saldo tidak cukup -> Generate QRIS
+    const qris = await api.createQris(oid, baseAmount);
+    if (!qris || qris.status !== 'Success') {
+        activeTransactions.delete(trxKey);
+        return sock.sendMessage(sender, { text: "❌ Gangguan server payment QRIS." });
+    }
+    order.total = qris.data.total_bayar;
+    order.method = 'QRIS';
+    order.status = 'unpaid';
+    db.orders.push(order);
+    db.saveOrders();
+
+    let qrUrl = `https://quickchart.io/qr?size=500&margin=2&text=${encodeURIComponent(qris.data.qr_string)}`;
+    await sock.sendMessage(sender, {
+        image: { url: qrUrl },
+        caption: `🧾 *TAGIHAN QRIS*
 
 Invoice : ${oid}
+Produk  : ${order.item}
 Nominal : ${formatRupiah(order.total)}
 
-Expired : 5 Menit (Otomatis Batal)` });
-        startPolling(sock, order);
-    }
+Expired : 5 Menit (Otomatis Batal)`
+    });
+    startPolling(sock, order);
 }
 
 function startPolling(sock, orderData) {
@@ -880,22 +876,6 @@ activeTransactions.delete(
                 order.status = 'processing'; if(typeof hit !== 'undefined' && hit.data && hit.data.ref_id) { order.digiflazz_oid = hit.data.ref_id; } db.saveOrders();
                 await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU PROVIDER*\n\nPembayaran LUNAS. Transaksi sedang diproses oleh server pusat. Mohon ditunggu ya kak, produk akan segera masuk.` });
             } else {
-                order.status = 'failed';
-                db.saveOrders();
-
-                // 💰 PROSES REFUND SALDO OTOMATIS (TEPAT 1 KALI)
-                const buyerId = db.normalizeJid ? db.normalizeJid(order.buyer || targetJid) : (order.buyer || targetJid);
-                const refundAmount = Number(order.baseAmount || order.total || order.harga || 0);
-
-                if (!db.users[buyerId]) {
-                    db.users[buyerId] = { saldo: 0, phone: buyerId.split('@')[0] };
-                }
-                db.users[buyerId].saldo = (db.users[buyerId].saldo || 0) + refundAmount;
-                if (typeof db.saveUsers === 'function') {
-                    db.saveUsers();
-                }
-                console.log(`[REFUND SUKSES] Mengembalikan Rp ${refundAmount} ke ${buyerId}`);
-
                 activeTransactions.delete(
                     order.buyer +
                     '-' +
@@ -904,21 +884,24 @@ activeTransactions.delete(
                     order.target
                 );
 
-                await sock.sendMessage(targetJid, {
-                    text:
+                const refundRes = db.refundOrder(order, hit.data.message || 'Gangguan Server');
+                if (refundRes.success) {
+                    await sock.sendMessage(targetJid, {
+                        text:
 `❌ *TRANSAKSI GAGAL*
 
 Alasan:
 ${hit.data.message || 'Gangguan'}
 
 💰 Saldo otomatis dikembalikan:
-${formatRupiah(refundAmount)}`
-                });
+${formatRupiah(refundRes.amount)}`
+                    });
 
-                for (const owner of config.owner) {
-                    await sock.sendMessage(owner, { 
-                        text: `⚠️ *PPOB GAGAL*\nID: ${order.id}\nTarget: ${order.target}\nAlasan: ${hit.data.message || 'Gangguan'}\nSaldo di-refund: ${formatRupiah(refundAmount)}` 
-                    }).catch(()=>{});
+                    for (const owner of config.owner) {
+                        await sock.sendMessage(owner, { 
+                            text: `⚠️ *PPOB GAGAL*\nID: ${order.id}\nTarget: ${order.target}\nAlasan: ${hit.data.message || 'Gangguan'}\nSaldo di-refund: ${formatRupiah(refundRes.amount)}` 
+                        }).catch(()=>{});
+                    }
                 }
             }
         } else {
@@ -1175,16 +1158,10 @@ setInterval(async () => {
                     continue; 
                 }
 
-                order.status = 'failed';
-                if (typeof db.saveOrders === 'function') db.saveOrders();
-
-                if (db.users && db.users[realBuyerJid]) {
-                    let refund = Number(order.baseAmount || order.harga || order.total || 0);
-                    db.users[realBuyerJid].saldo = (db.users[realBuyerJid].saldo || 0) + refund;
-                    if (typeof db.saveUsers === 'function') db.saveUsers();
-                    
-                    await botSock.sendMessage(buyerJid, { text: `❌  *PPOB GAGAL*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}\nAlasan: ${sn}\n\n💰 Saldo Rp ${refund} telah dikembalikan ke dompet Anda.` });
-                    console.log("[RADAR V4] ❌ Gagal asli! Saldo di-refund.");
+                const refundRes = db.refundOrder(order, sn || 'Gagal dari server Digiflazz');
+                if (refundRes.success) {
+                    await botSock.sendMessage(refundRes.buyerJid, { text: `❌  *PPOB GAGAL*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}\nAlasan: ${sn}\n\n💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.` });
+                    console.log(`[RADAR V4] ❌ Gagal asli! Saldo Rp ${refundRes.amount} di-refund ke ${refundRes.buyerJid}.`);
                 }
             }
         }
