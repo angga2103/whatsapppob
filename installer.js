@@ -1,4 +1,4 @@
-﻿const readline = require('readline');
+const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
@@ -17,16 +17,45 @@ const C = {
     bgGreen: "\x1b[42m"
 };
 
-function ask(query) {
-    const rl = readline.createInterface({
+let rl = null;
+const linesQueue = [];
+const pendingResolvers = [];
+
+function initRL() {
+    rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
     });
-    return new Promise(resolve => rl.question(query, ans => {
-        rl.close();
-        resolve(ans.trim());
-    }));
+    rl.on('line', (line) => {
+        if (pendingResolvers.length > 0) {
+            const resolve = pendingResolvers.shift();
+            resolve(line.trim());
+        } else {
+            linesQueue.push(line.trim());
+        }
+    });
 }
+
+function ask(query) {
+    if (!rl) initRL();
+    process.stdout.write(query);
+    if (linesQueue.length > 0) {
+        const val = linesQueue.shift();
+        process.stdout.write(val + '\n');
+        return Promise.resolve(val);
+    }
+    return new Promise((resolve) => {
+        pendingResolvers.push(resolve);
+    });
+}
+
+function closeRL() {
+    if (rl) {
+        rl.close();
+        rl = null;
+    }
+}
+
 
 async function runInstaller() {
     console.clear();
@@ -102,6 +131,7 @@ async function runInstaller() {
     console.log(`${C.green}║   Semua pengaturan (profit, API key, dll.) dapat diubah          ║${C.reset}`);
     console.log(`${C.green}║   langsung melalui chat WhatsApp dengan ketik: ${C.bold}.admin${C.reset}${C.green}            ║${C.reset}`);
     console.log(`${C.green}╚══════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+    closeRL();
     process.exit(0);
 }
 
@@ -157,13 +187,15 @@ async function startPairingProcess() {
     console.log(`Pastikan nomor WhatsApp Anda aktif dan siap menerima kode pairing.`);
     console.log(`${C.cyan}──────────────────────────────────────────────────${C.reset}\n`);
 
-    let phone = await ask(`${C.yellow}👉 Masukkan Nomor WhatsApp Bot (Contoh: 6281234567890): ${C.reset}`);
-    phone = phone.replace(/[^0-9]/g, '');
-    if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+    let phone = '';
+    while (!phone || phone.length < 10) {
+        phone = await ask(`${C.yellow}👉 Masukkan Nomor WhatsApp Bot (Contoh: 6281234567890): ${C.reset}`);
+        phone = phone.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '62' + phone.slice(1);
 
-    if (!phone || phone.length < 10) {
-        console.log(`${C.red}Nomor tidak valid. Gunakan format internasional (awalan 62).${C.reset}`);
-        return;
+        if (!phone || phone.length < 10) {
+            console.log(`${C.red}Nomor tidak valid. Minimal 10 digit dengan format internasional (awalan 62). Coba lagi.${C.reset}`);
+        }
     }
 
     console.log(`\n${C.blue}⏳ Menghubungkan ke server WhatsApp dan meminta kode pairing...${C.reset}`);
