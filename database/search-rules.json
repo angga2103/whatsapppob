@@ -1,0 +1,5 @@
+{
+  "harga_tolerance": 0.15,
+  "max_result": 10,
+  "suggestion_limit": 5
+}

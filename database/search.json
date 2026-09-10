@@ -1,0 +1,33 @@
+{
+  "alias": {
+    "tsel": "telkomsel",
+    "simpati": "telkomsel",
+    "as": "telkomsel",
+
+    "isat": "indosat",
+    "im3": "indosat",
+
+    "tri": "tri",
+    "3": "tri",
+
+    "smart": "smartfren",
+    "sf": "smartfren",
+
+    "xl": "xl",
+    "axis": "axis"
+  },
+
+  "durasi": {
+    "7h": [7],
+    "14h": [14],
+    "30h": [28,29,30,31]
+  },
+
+  "kategori": {
+    "yt": ["youtube"],
+    "youtube": ["youtube"],
+    "game": ["game","gaming"],
+    "unli": ["unlimited"],
+    "unlimited": ["unlimited"]
+  }
+}

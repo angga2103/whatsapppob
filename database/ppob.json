@@ -1,0 +1,4835 @@
+[
+  {
+    "sku": "ax10",
+    "nama": "Axis 10.000",
+    "hargaModal": 10875,
+    "hargaJual": 11875,
+    "brand": "AXIS",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "ax5",
+    "nama": "Axis 5.000",
+    "hargaModal": 5900,
+    "hargaJual": 6900,
+    "brand": "AXIS",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "axi20",
+    "nama": "Axis 20.000",
+    "hargaModal": 21115,
+    "hargaJual": 22115,
+    "brand": "AXIS",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Axi50",
+    "nama": "Axis 50.000",
+    "hargaModal": 49975,
+    "hargaJual": 51475,
+    "brand": "AXIS",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "B100",
+    "nama": "by.U 100.000",
+    "hargaModal": 97250,
+    "hargaJual": 98750,
+    "brand": "BY.U",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "B15",
+    "nama": "by.U 15.000",
+    "hargaModal": 15040,
+    "hargaJual": 16040,
+    "brand": "BY.U",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "B20",
+    "nama": "by.U 20.000",
+    "hargaModal": 19985,
+    "hargaJual": 20985,
+    "brand": "BY.U",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "B5",
+    "nama": "by.U 5.000",
+    "hargaModal": 5189,
+    "hargaJual": 6189,
+    "brand": "BY.U",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "B50",
+    "nama": "by.U 50.000",
+    "hargaModal": 49835,
+    "hargaJual": 51335,
+    "brand": "BY.U",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "BY10",
+    "nama": "by.U 10.000",
+    "hargaModal": 10215,
+    "hargaJual": 11215,
+    "brand": "BY.U",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hdjd",
+    "nama": "Axis 30.000",
+    "hargaModal": 29975,
+    "hargaJual": 31475,
+    "brand": "AXIS",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "i10",
+    "nama": "Indosat 10.000",
+    "hargaModal": 10110,
+    "hargaJual": 11110,
+    "brand": "INDOSAT",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "i100",
+    "nama": "Indosat 100.000",
+    "hargaModal": 98515,
+    "hargaJual": 100015,
+    "brand": "INDOSAT",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "i15",
+    "nama": "Indosat 15.000",
+    "hargaModal": 15690,
+    "hargaJual": 16690,
+    "brand": "INDOSAT",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "i20",
+    "nama": "Indosat 20.000",
+    "hargaModal": 20870,
+    "hargaJual": 21870,
+    "brand": "INDOSAT",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "i25",
+    "nama": "Indosat 25.000",
+    "hargaModal": 25205,
+    "hargaJual": 26705,
+    "brand": "INDOSAT",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "i5",
+    "nama": "Indosat 5.000",
+    "hargaModal": 4985,
+    "hargaJual": 5985,
+    "brand": "INDOSAT",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "i50",
+    "nama": "Indosat 50.000",
+    "hargaModal": 49975,
+    "hargaJual": 51475,
+    "brand": "INDOSAT",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s10",
+    "nama": "Telkomsel 10.000",
+    "hargaModal": 10399,
+    "hargaJual": 11399,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s100",
+    "nama": "Telkomsel 100.000",
+    "hargaModal": 98825,
+    "hargaJual": 100325,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s15",
+    "nama": "Telkomsel 15.000",
+    "hargaModal": 14895,
+    "hargaJual": 15895,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s20",
+    "nama": "Telkomsel 20.000",
+    "hargaModal": 19745,
+    "hargaJual": 20745,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s25",
+    "nama": "Telkomsel 25.000",
+    "hargaModal": 24655,
+    "hargaJual": 25655,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s30",
+    "nama": "Telkomsel 30.000",
+    "hargaModal": 29950,
+    "hargaJual": 31450,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s5",
+    "nama": "Telkomsel 5.000",
+    "hargaModal": 5010,
+    "hargaJual": 6010,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "s50",
+    "nama": "Telkomsel 50.000",
+    "hargaModal": 49650,
+    "hargaJual": 51150,
+    "brand": "TELKOMSEL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "smr10",
+    "nama": "Smartfren 10.000",
+    "hargaModal": 9982,
+    "hargaJual": 10982,
+    "brand": "SMARTFREN",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "smr100",
+    "nama": "Smartfren 100.000",
+    "hargaModal": 99650,
+    "hargaJual": 101150,
+    "brand": "SMARTFREN",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "smr20",
+    "nama": "Smartfren 20.000",
+    "hargaModal": 20000,
+    "hargaJual": 21000,
+    "brand": "SMARTFREN",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "smr5",
+    "nama": "Smartfren 5.000",
+    "hargaModal": 4999,
+    "hargaJual": 5999,
+    "brand": "SMARTFREN",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "smr50",
+    "nama": "Smartfren 50.000",
+    "hargaModal": 49825,
+    "hargaJual": 51325,
+    "brand": "SMARTFREN",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "t10",
+    "nama": "Three 10.000",
+    "hargaModal": 10085,
+    "hargaJual": 11085,
+    "brand": "TRI",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "t100",
+    "nama": "Three 100.000",
+    "hargaModal": 97700,
+    "hargaJual": 99200,
+    "brand": "TRI",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "t20",
+    "nama": "Three 20.000",
+    "hargaModal": 19782,
+    "hargaJual": 20782,
+    "brand": "TRI",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "t5",
+    "nama": "Three 5.000",
+    "hargaModal": 5120,
+    "hargaJual": 6120,
+    "brand": "TRI",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "t50",
+    "nama": "Three 50.000",
+    "hargaModal": 49020,
+    "hargaJual": 50520,
+    "brand": "TRI",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "x10",
+    "nama": "Xl 10.000",
+    "hargaModal": 10855,
+    "hargaJual": 11855,
+    "brand": "XL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "x100",
+    "nama": "Xl 100.000",
+    "hargaModal": 100025,
+    "hargaJual": 102025,
+    "brand": "XL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "X15",
+    "nama": "Xl 15.000",
+    "hargaModal": 14994,
+    "hargaJual": 15994,
+    "brand": "XL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "X25",
+    "nama": "Xl 25.000",
+    "hargaModal": 25020,
+    "hargaJual": 26520,
+    "brand": "XL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "x5",
+    "nama": "Xl 5.000",
+    "hargaModal": 5896,
+    "hargaJual": 6896,
+    "brand": "XL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "x50",
+    "nama": "Xl 50.000",
+    "hargaModal": 50000,
+    "hargaJual": 51500,
+    "brand": "XL",
+    "kategori": "Pulsa",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "bjhbg",
+    "nama": "DANA 8.000",
+    "hargaModal": 8090,
+    "hargaJual": 9090,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "bnjhg",
+    "nama": "DANA 2.000",
+    "hargaModal": 2130,
+    "hargaJual": 3130,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "dana20",
+    "nama": "DANA 20.000",
+    "hargaModal": 20135,
+    "hargaJual": 21135,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "dana50",
+    "nama": "DANA 50.000",
+    "hargaModal": 50105,
+    "hargaJual": 51605,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "danacek",
+    "nama": "Cek Nama Pengguna DANA",
+    "hargaModal": 10,
+    "hargaJual": 1010,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "DN100",
+    "nama": "DANA 100.000 Admin 500",
+    "hargaModal": 99585,
+    "hargaJual": 101085,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "DN20",
+    "nama": "DANA 20.000 Admin 500",
+    "hargaModal": 19585,
+    "hargaJual": 20585,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "DN50",
+    "nama": "DANA 25.000 Admin 500",
+    "hargaModal": 25060,
+    "hargaJual": 26560,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "go100",
+    "nama": "Go Pay 100.000",
+    "hargaModal": 101000,
+    "hargaJual": 103000,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Customer"
+  },
+  {
+    "sku": "go50",
+    "nama": "Go Pay 50.000",
+    "hargaModal": 50925,
+    "hargaJual": 52425,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Customer"
+  },
+  {
+    "sku": "gopaycek",
+    "nama": "Cek Nama Pengguna Gopay",
+    "hargaModal": 10,
+    "hargaJual": 1010,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "GP10",
+    "nama": "Go Pay 10.000 Admin 1.000",
+    "hargaModal": 9705,
+    "hargaJual": 10705,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "GP100",
+    "nama": "Go Pay 100.000 Admin 1.000",
+    "hargaModal": 99700,
+    "hargaJual": 101200,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "GP20",
+    "nama": "Go Pay 20.000 Admin 1.000",
+    "hargaModal": 19700,
+    "hargaJual": 20700,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "GP50",
+    "nama": "Go Pay 50.000 Admin 1.000",
+    "hargaModal": 49700,
+    "hargaJual": 51200,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "Hdhdu",
+    "nama": "DANA 75.000",
+    "hargaModal": 75785,
+    "hargaJual": 77285,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hdhfj",
+    "nama": "DANA 250.000",
+    "hargaModal": 250045,
+    "hargaJual": 252045,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hdishn",
+    "nama": "DANA 30.000",
+    "hargaModal": 30150,
+    "hargaJual": 31650,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hdushbd",
+    "nama": "DANA 150.000",
+    "hargaModal": 150200,
+    "hargaJual": 152200,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hshsh",
+    "nama": "DANA 45.000",
+    "hargaModal": 45084,
+    "hargaJual": 46584,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hsushj",
+    "nama": "DANA 70.000",
+    "hargaModal": 70095,
+    "hargaJual": 71595,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Jdidj",
+    "nama": "DANA 5.000",
+    "hargaModal": 5130,
+    "hargaJual": 6130,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Jdjdj",
+    "nama": "DANA 55.000",
+    "hargaModal": 55295,
+    "hargaJual": 56795,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "jxjxjj",
+    "nama": "DANA 1.000",
+    "hargaModal": 1048,
+    "hargaJual": 2048,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Nsjsjdb",
+    "nama": "DANA 40.000",
+    "hargaModal": 40150,
+    "hargaJual": 41650,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "OV10",
+    "nama": "OVO 10.000 Admin 1.000",
+    "hargaModal": 9700,
+    "hargaJual": 10700,
+    "brand": "OVO",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "OV100",
+    "nama": "OVO 100.000 Admin 1.000",
+    "hargaModal": 99595,
+    "hargaJual": 101095,
+    "brand": "OVO",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "OV25",
+    "nama": "OVO 25.000 Admin 1.000",
+    "hargaModal": 24850,
+    "hargaJual": 25850,
+    "brand": "OVO",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "OV50",
+    "nama": "OVO 50.000 Admin 1.000",
+    "hargaModal": 49595,
+    "hargaJual": 51095,
+    "brand": "OVO",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "ovo100",
+    "nama": "OVO 100.000",
+    "hargaModal": 100620,
+    "hargaJual": 102620,
+    "brand": "OVO",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "ovo50",
+    "nama": "OVO 50.000",
+    "hargaModal": 50700,
+    "hargaJual": 52200,
+    "brand": "OVO",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "ovocek",
+    "nama": "Cek Nama Pengguna OVO",
+    "hargaModal": 7,
+    "hargaJual": 1007,
+    "brand": "OVO",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30880295",
+    "nama": "Go Pay 25.000",
+    "hargaModal": 25810,
+    "hargaJual": 27310,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Customer"
+  },
+  {
+    "sku": "pre30880309",
+    "nama": "Go Pay 25.000 Admin 1.000",
+    "hargaModal": 24710,
+    "hargaJual": 25710,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 1000"
+  },
+  {
+    "sku": "pre30976963",
+    "nama": "DANA 15.000",
+    "hargaModal": 15135,
+    "hargaJual": 16135,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30976964",
+    "nama": "DANA 25.000",
+    "hargaModal": 25150,
+    "hargaJual": 26650,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30976965",
+    "nama": "DANA 100.000",
+    "hargaModal": 100799,
+    "hargaJual": 102799,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30976966",
+    "nama": "DANA 125.000",
+    "hargaModal": 125080,
+    "hargaJual": 127080,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30976968",
+    "nama": "DANA 200.000",
+    "hargaModal": 200170,
+    "hargaJual": 202170,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30976974",
+    "nama": "DANA 50.000 Admin 500",
+    "hargaModal": 49630,
+    "hargaJual": 51130,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "pre30977266",
+    "nama": "Go Pay 20.000",
+    "hargaModal": 20999,
+    "hargaJual": 21999,
+    "brand": "GO PAY",
+    "kategori": "E-Money",
+    "tipe": "Customer"
+  },
+  {
+    "sku": "pre30977371",
+    "nama": "SHOPEE PAY 15.000",
+    "hargaModal": 15590,
+    "hargaJual": 16590,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30977372",
+    "nama": "SHOPEE PAY 20.000",
+    "hargaModal": 20650,
+    "hargaJual": 21650,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30977899",
+    "nama": "DANA 10.000",
+    "hargaModal": 10064,
+    "hargaJual": 11064,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30977960",
+    "nama": "SHOPEE PAY 10.000",
+    "hargaModal": 10650,
+    "hargaJual": 11650,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "shopee100",
+    "nama": "SHOPEE PAY 100.000",
+    "hargaModal": 100105,
+    "hargaJual": 102105,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "shopee50",
+    "nama": "SHOPEE PAY 50.000",
+    "hargaModal": 50325,
+    "hargaJual": 51825,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "SPY10",
+    "nama": "SHOPEE PAY 10.000 Admin 500",
+    "hargaModal": 10045,
+    "hargaJual": 11045,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "SPY100",
+    "nama": "SHOPEE PAY 100.000 Admin 500",
+    "hargaModal": 99775,
+    "hargaJual": 101275,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "SPY15",
+    "nama": "SHOPEE PAY 15.000 Admin 500",
+    "hargaModal": 14760,
+    "hargaJual": 15760,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "SPY25",
+    "nama": "SHOPEE PAY 25.000 Admin 500",
+    "hargaModal": 24760,
+    "hargaJual": 25760,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "SPY50",
+    "nama": "SHOPEE PAY 50.000 Admin 500",
+    "hargaModal": 49775,
+    "hargaJual": 51275,
+    "brand": "SHOPEE PAY",
+    "kategori": "E-Money",
+    "tipe": "Admin 500"
+  },
+  {
+    "sku": "Ushdjd",
+    "nama": "DANA 35.000",
+    "hargaModal": 35150,
+    "hargaJual": 36650,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Usyshb",
+    "nama": "DANA 60.000",
+    "hargaModal": 60350,
+    "hargaJual": 61850,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Yausjj",
+    "nama": "DANA 90.000",
+    "hargaModal": 90150,
+    "hargaJual": 91650,
+    "brand": "DANA",
+    "kategori": "E-Money",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pln100",
+    "nama": "PLN 100.000",
+    "hargaModal": 101749,
+    "hargaJual": 103749,
+    "brand": "PLN",
+    "kategori": "PLN",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pln1000",
+    "nama": "PLN 1.000.000",
+    "hargaModal": 1001780,
+    "hargaJual": 1004780,
+    "brand": "PLN",
+    "kategori": "PLN",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pln20",
+    "nama": "PLN 20.000",
+    "hargaModal": 21879,
+    "hargaJual": 22879,
+    "brand": "PLN",
+    "kategori": "PLN",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pln50",
+    "nama": "PLN 50.000",
+    "hargaModal": 51791,
+    "hargaJual": 53291,
+    "brand": "PLN",
+    "kategori": "PLN",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646211",
+    "nama": "Cek Nama Token PLN",
+    "hargaModal": 6,
+    "hargaJual": 1006,
+    "brand": "PLN",
+    "kategori": "PLN",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "afgwgwr",
+    "nama": "XL Data FlexMax 7 GB 28 Hari",
+    "hargaModal": 33058,
+    "hargaJual": 34558,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "FlexMax"
+  },
+  {
+    "sku": "axdj1",
+    "nama": "Axis Data Jawa 2.5 GB 5 Hari",
+    "hargaModal": 13660,
+    "hargaJual": 14660,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Jawa Bali Nusra"
+  },
+  {
+    "sku": "axdss2",
+    "nama": "Axis Data SS 2 GB 3 Hari",
+    "hargaModal": 10631,
+    "hargaJual": 11631,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "B,B55",
+    "nama": "XL Data Bebas Puas 9 GB 5 Hari",
+    "hargaModal": 26598,
+    "hargaJual": 28098,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 5rb"
+  },
+  {
+    "sku": "Bchcgc",
+    "nama": "Axis Data Mini 3 GB 1 Hari",
+    "hargaModal": 6525,
+    "hargaJual": 7525,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "Bujjb",
+    "nama": "by.U Data Kaget 20 GB 30 Hari",
+    "hargaModal": 45475,
+    "hargaJual": 46975,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Kaget"
+  },
+  {
+    "sku": "Bwiwjj",
+    "nama": "Axis Data Mini 10 GB 7 Hari",
+    "hargaModal": 22441,
+    "hargaJual": 23441,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "CK212AX",
+    "nama": "AXIS Cek Sisa Paket Kuota",
+    "hargaModal": 19,
+    "hargaJual": 1019,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Cek Paket"
+  },
+  {
+    "sku": "ck212in",
+    "nama": "Indosat Cek Sisa Paket Kuota",
+    "hargaModal": 19,
+    "hargaJual": 1019,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Cek Paket"
+  },
+  {
+    "sku": "CK212XL",
+    "nama": "XL Cek Sisa Paket Kuota",
+    "hargaModal": 11,
+    "hargaJual": 1011,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Cek Paket"
+  },
+  {
+    "sku": "ddjk",
+    "nama": "Telkomsel Data 9 GB 30 Hari (Jawa Timur)",
+    "hargaModal": 48475,
+    "hargaJual": 49975,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "dfbeh",
+    "nama": "Smartfren Data Unlimited Harian 1 GB Berlaku 30 Hari",
+    "hargaModal": 73275,
+    "hargaJual": 74775,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited"
+  },
+  {
+    "sku": "DFH52",
+    "nama": "Smartfren Data Unlimited Harian 1 GB Berlaku 3 Hari",
+    "hargaModal": 11333,
+    "hargaJual": 12333,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited"
+  },
+  {
+    "sku": "DG68",
+    "nama": "Smartfren Data Unlimited Harian 1 GB Berlaku 1 Hari",
+    "hargaModal": 8969,
+    "hargaJual": 9969,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited"
+  },
+  {
+    "sku": "ettet",
+    "nama": "XL Data Bebas Puas 1.5 GB 3 Hari",
+    "hargaModal": 12205,
+    "hargaJual": 13205,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 3rb"
+  },
+  {
+    "sku": "FHK2",
+    "nama": "Indosat Freedom Internet 9 GB 28 Hari",
+    "hargaModal": 32995,
+    "hargaJual": 34495,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "FixhX",
+    "nama": "Axis Data Mini 5 GB 1 Hari",
+    "hargaModal": 6505,
+    "hargaJual": 7505,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "flash1",
+    "nama": "Telkomsel Data Flash 1 GB 30 Hari",
+    "hargaModal": 11210,
+    "hargaJual": 12210,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "flash2",
+    "nama": "Telkomsel Data Flash 2 GB 30 Hari",
+    "hargaModal": 21175,
+    "hargaJual": 22175,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "flash3",
+    "nama": "Telkomsel Data Flash 3 GB 30 Hari",
+    "hargaModal": 28050,
+    "hargaJual": 29550,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "flexs",
+    "nama": "XL Xtra Combo Flex S 28 Hari",
+    "hargaModal": 33270,
+    "hargaJual": 34770,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Xtra Combo Flex"
+  },
+  {
+    "sku": "Gausho",
+    "nama": "by.U Data 7.5 GB 7 Hari",
+    "hargaModal": 17175,
+    "hargaJual": 18175,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Gcgcg",
+    "nama": "Axis Data Mini 1.5 GB 1 Hari",
+    "hargaModal": 6350,
+    "hargaJual": 7350,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "Gcghc",
+    "nama": "Axis Data Mini 15 GB 1 Hari",
+    "hargaModal": 7960,
+    "hargaJual": 8960,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "Gcvchd",
+    "nama": "Axis Data Mini 5 GB 3 Hari",
+    "hargaModal": 11460,
+    "hargaJual": 12460,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "Gdu",
+    "nama": "Axis Data Paket Warnet 1 GB 1 Jam",
+    "hargaModal": 1805,
+    "hargaJual": 2805,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "Gfhfjh",
+    "nama": "Axis Data SS 2.5 GB 3 Hari",
+    "hargaModal": 12480,
+    "hargaJual": 13480,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "ghfkuku",
+    "nama": "Indosat Data Freedom Play 20 GB 30 Hari",
+    "hargaModal": 72200,
+    "hargaJual": 73700,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Play"
+  },
+  {
+    "sku": "Gikuku",
+    "nama": "Axis Data 500 MB 30 Hari",
+    "hargaModal": 4080,
+    "hargaJual": 5080,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Gjljlk",
+    "nama": "Axis Data Paket Warnet Unlimited 24 Jam",
+    "hargaModal": 7005,
+    "hargaJual": 8005,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "Gsushn",
+    "nama": "Tri Data Happy 45 GB 28 Hari",
+    "hargaModal": 84525,
+    "hargaJual": 86025,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "Gubi",
+    "nama": "Axis Data 1.5 GB / 30 Hari",
+    "hargaModal": 15310,
+    "hargaJual": 16310,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Gxbc",
+    "nama": "Axis Data Mini 2 GB 1 Hari",
+    "hargaModal": 4855,
+    "hargaJual": 5855,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "happy1",
+    "nama": "Tri Data Happy 1.5 GB 1 Hari",
+    "hargaModal": 5105,
+    "hargaJual": 6105,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "happy3",
+    "nama": "Tri Data Happy 3 GB 3 Hari",
+    "hargaModal": 11910,
+    "hargaJual": 12910,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "Hdudi",
+    "nama": "Axis Data Paket Warnet 1.5 GB 2 Jam",
+    "hargaModal": 1935,
+    "hargaJual": 2935,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "HG215",
+    "nama": "Tri Data HiFi Air 500 GB 30 Hari",
+    "hargaModal": 221025,
+    "hargaJual": 223025,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "HiFi Air"
+  },
+  {
+    "sku": "Hiubvg",
+    "nama": "Axis Data Mini 1 GB 3 Hari",
+    "hargaModal": 9755,
+    "hargaJual": 10755,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "HKMGH",
+    "nama": "XL Data Bebas Puas 1 GB 2 Hari",
+    "hargaModal": 6171,
+    "hargaJual": 7171,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 3rb"
+  },
+  {
+    "sku": "hntyj",
+    "nama": "Axis Data AIGO Unlimited 1 Hari",
+    "hargaModal": 24550,
+    "hargaJual": 25550,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "AIGO Unlimited"
+  },
+  {
+    "sku": "Hshs",
+    "nama": "by.U Data Kaget 7 GB 20 Hari",
+    "hargaModal": 22720,
+    "hargaJual": 23720,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Kaget"
+  },
+  {
+    "sku": "Hsisn",
+    "nama": "by.U Data 4 GB 30 Hari",
+    "hargaModal": 32910,
+    "hargaJual": 34410,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hsissi",
+    "nama": "Tri Data Happy 7 GB 14 Hari",
+    "hargaModal": 20810,
+    "hargaJual": 21810,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "Hsjsi",
+    "nama": "by.U Data Kaget 37 GB 30 Hari",
+    "hargaModal": 74975,
+    "hargaJual": 76475,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Kaget"
+  },
+  {
+    "sku": "Hsjsj",
+    "nama": "Indosat Freedom Combo 30 GB 30 Hari",
+    "hargaModal": 92650,
+    "hargaJual": 94150,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Combo"
+  },
+  {
+    "sku": "Hsjsksk",
+    "nama": "Indosat Freedom Combo 16 GB 30 Hari",
+    "hargaModal": 53800,
+    "hargaJual": 55300,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Combo"
+  },
+  {
+    "sku": "Hsjsn",
+    "nama": "Indosat Freedom Kuota Harian 28 GB 28 Hari",
+    "hargaModal": 65025,
+    "hargaJual": 66525,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "Hsksnw",
+    "nama": "Indosat Freedom Combo 10 GB 30 Hari",
+    "hargaModal": 47955,
+    "hargaJual": 49455,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Combo"
+  },
+  {
+    "sku": "Hsuai",
+    "nama": "by.U Data 10 GB 10 Hari",
+    "hargaModal": 46525,
+    "hargaJual": 48025,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Hvcjdv",
+    "nama": "Axis Data Mini 1 GB 1 Hari",
+    "hargaModal": 6310,
+    "hargaJual": 7310,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "if2",
+    "nama": "Indosat Freedom Internet 2.5 GB 5 Hari",
+    "hargaModal": 14410,
+    "hargaJual": 15410,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "if3g30d",
+    "nama": "Indosat Freedom Internet 3 GB 28 Hari",
+    "hargaModal": 31495,
+    "hargaJual": 32995,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "if5g30d",
+    "nama": "Indosat Freedom Internet 5.5 GB 28 Hari",
+    "hargaModal": 30325,
+    "hargaJual": 31825,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "IN30",
+    "nama": "Indosat Data Freedom Internet Spesial 30 GB 30 Hari",
+    "hargaModal": 53399,
+    "hargaJual": 54899,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Spesial"
+  },
+  {
+    "sku": "JBJ56",
+    "nama": "Indosat Freedom Combo 16 GB 30 Hari",
+    "hargaModal": 53800,
+    "hargaJual": 55300,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Combo"
+  },
+  {
+    "sku": "Jdjxnx",
+    "nama": "by.U Data Kaget 3 GB 3 Hari",
+    "hargaModal": 9935,
+    "hargaJual": 10935,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Kaget"
+  },
+  {
+    "sku": "JF2656",
+    "nama": "Tri Data AlwaysOn 10 GB",
+    "hargaModal": 57900,
+    "hargaJual": 59400,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "AlwaysOn"
+  },
+  {
+    "sku": "Jfifu",
+    "nama": "Axis Data Paket Warnet Unlimited 1 Jam",
+    "hargaModal": 1505,
+    "hargaJual": 2505,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "Jfjffi",
+    "nama": "Axis Data Paket Warnet 3 GB 3 Jam",
+    "hargaModal": 2955,
+    "hargaJual": 3955,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "JHG53",
+    "nama": "Smartfren Data Kuota 6 GB 7 Hari",
+    "hargaModal": 16491,
+    "hargaJual": 17491,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Kuota"
+  },
+  {
+    "sku": "Jhvjkg",
+    "nama": "Axis Data Paket Warnet Unlimited 48 Jam",
+    "hargaModal": 18610,
+    "hargaJual": 19610,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "Jihhfxg",
+    "nama": "Axis Data Mini 15 GB 3 Hari",
+    "hargaModal": 16772,
+    "hargaJual": 17772,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "Jsnsn",
+    "nama": "Indosat Data Freedom Play 30 GB 30 Hari",
+    "hargaModal": 85000,
+    "hargaJual": 86500,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Play"
+  },
+  {
+    "sku": "Jxjxjd",
+    "nama": "Axis Data Mini 3 GB 7 Hari",
+    "hargaModal": 15335,
+    "hargaJual": 16335,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "Kdkjd",
+    "nama": "Indosat Freedom Combo 20 GB 30 Hari",
+    "hargaModal": 72275,
+    "hargaJual": 73775,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Combo"
+  },
+  {
+    "sku": "Khkjlk",
+    "nama": "Axis Data SS 4.5 GB 3 Hari",
+    "hargaModal": 10710,
+    "hargaJual": 11710,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "Khmhv",
+    "nama": "Axis Data 5 GB / 30 Hari",
+    "hargaModal": 36625,
+    "hargaJual": 38125,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Kjkj",
+    "nama": "Axis Data 1 GB 30 Hari",
+    "hargaModal": 8435,
+    "hargaJual": 9435,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Lklklj",
+    "nama": "Axis Data SS 3 GB 3 Hari",
+    "hargaModal": 10195,
+    "hargaJual": 11195,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "Mhvkh",
+    "nama": "Axis Data 3 GB 30 Hari",
+    "hargaModal": 21110,
+    "hargaJual": 22110,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Nllk",
+    "nama": "Axis Data SS 5 GB 2 Hari",
+    "hargaModal": 9195,
+    "hargaJual": 10195,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "Nsnsj",
+    "nama": "by.U Data Kaget 5 GB 7 Hari",
+    "hargaModal": 16620,
+    "hargaJual": 17620,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Kaget"
+  },
+  {
+    "sku": "pre30645767",
+    "nama": "Telkomsel Data Mini 1 GB 1 Hari",
+    "hargaModal": 12325,
+    "hargaJual": 13325,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre30645769",
+    "nama": "Telkomsel Data Mini 1 GB 2 Hari",
+    "hargaModal": 10810,
+    "hargaJual": 11810,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre30645770",
+    "nama": "Telkomsel Data Mini 2 GB 1 Hari",
+    "hargaModal": 8385,
+    "hargaJual": 9385,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre30645771",
+    "nama": "Telkomsel Data Mini 3 GB 1 Hari",
+    "hargaModal": 12999,
+    "hargaJual": 13999,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre30645772",
+    "nama": "Telkomsel Data Mini 1 GB 7 Hari",
+    "hargaModal": 10110,
+    "hargaJual": 11110,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre30645773",
+    "nama": "Telkomsel Data Mini 2 GB 7 Hari",
+    "hargaModal": 20350,
+    "hargaJual": 21350,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre30645790",
+    "nama": "Telkomsel Data 2 GB + 1 GB Apps 30 Hari",
+    "hargaModal": 28750,
+    "hargaJual": 30250,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Apps Kuota"
+  },
+  {
+    "sku": "pre30645791",
+    "nama": "Telkomsel Data 3 GB + 2 GB Apps 30 Hari",
+    "hargaModal": 31525,
+    "hargaJual": 33025,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Apps Kuota"
+  },
+  {
+    "sku": "pre30645792",
+    "nama": "Telkomsel Data 8 GB + 4 GB Apps + 3 GB Zoom 30 Hari",
+    "hargaModal": 61425,
+    "hargaJual": 62925,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Apps Kuota"
+  },
+  {
+    "sku": "pre30645828",
+    "nama": "Telkomsel Data Combo Sakti 1.5 GB 30 Hari",
+    "hargaModal": 21510,
+    "hargaJual": 22510,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Combo Sakti"
+  },
+  {
+    "sku": "pre30645829",
+    "nama": "Telkomsel Data Combo Sakti 2.5 GB 30 Hari",
+    "hargaModal": 27550,
+    "hargaJual": 29050,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Combo Sakti"
+  },
+  {
+    "sku": "pre30645830",
+    "nama": "Telkomsel Data Combo Sakti 3 GB 30 Hari",
+    "hargaModal": 30025,
+    "hargaJual": 31525,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Combo Sakti"
+  },
+  {
+    "sku": "pre30645831",
+    "nama": "Telkomsel Data Combo Sakti 4 GB 30 Hari",
+    "hargaModal": 37350,
+    "hargaJual": 38850,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Combo Sakti"
+  },
+  {
+    "sku": "pre30645832",
+    "nama": "Telkomsel Data Combo Sakti 5 GB 30 Hari",
+    "hargaModal": 37950,
+    "hargaJual": 39450,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Combo Sakti"
+  },
+  {
+    "sku": "pre30645833",
+    "nama": "Telkomsel Data Mingguan 1.5 GB 7 Hari",
+    "hargaModal": 18025,
+    "hargaJual": 19025,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mingguan"
+  },
+  {
+    "sku": "pre30645834",
+    "nama": "Telkomsel Data Mingguan 30.000",
+    "hargaModal": 24535,
+    "hargaJual": 25535,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mingguan"
+  },
+  {
+    "sku": "pre30645835",
+    "nama": "Telkomsel Data Mingguan 2.5 GB 7 Hari",
+    "hargaModal": 22000,
+    "hargaJual": 23000,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mingguan"
+  },
+  {
+    "sku": "pre30645836",
+    "nama": "Telkomsel Data Mingguan 3.5 GB 7 Hari",
+    "hargaModal": 39900,
+    "hargaJual": 41400,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mingguan"
+  },
+  {
+    "sku": "pre30645837",
+    "nama": "Telkomsel Data Bulanan OMG 55.000",
+    "hargaModal": 54610,
+    "hargaJual": 56110,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulanan"
+  },
+  {
+    "sku": "pre30645838",
+    "nama": "Telkomsel Data Bulanan OMG + Vidio 65.000",
+    "hargaModal": 50000,
+    "hargaJual": 51500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulanan"
+  },
+  {
+    "sku": "pre30645839",
+    "nama": "Telkomsel Data Bulanan OMG 75.000",
+    "hargaModal": 65525,
+    "hargaJual": 67025,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulanan"
+  },
+  {
+    "sku": "pre30645841",
+    "nama": "Telkomsel Data Bulanan OMG 110.000",
+    "hargaModal": 77575,
+    "hargaJual": 79075,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulanan"
+  },
+  {
+    "sku": "pre30645846",
+    "nama": "Telkomsel Data Ketengan Utama 1 GB 1 Hari",
+    "hargaModal": 8005,
+    "hargaJual": 9005,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ketengan Utama"
+  },
+  {
+    "sku": "pre30645847",
+    "nama": "Telkomsel Data Ketengan Utama 2 GB 3 Hari",
+    "hargaModal": 12565,
+    "hargaJual": 13565,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ketengan Utama"
+  },
+  {
+    "sku": "pre30645848",
+    "nama": "Telkomsel Data Ketengan Utama 2.5 GB 5 Hari",
+    "hargaModal": 11660,
+    "hargaJual": 12660,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ketengan Utama"
+  },
+  {
+    "sku": "pre30645850",
+    "nama": "Telkomsel Data Ilmupedia 11 GB 30 Hari",
+    "hargaModal": 24261,
+    "hargaJual": 25261,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ilmupedia"
+  },
+  {
+    "sku": "pre30645851",
+    "nama": "Telkomsel Data Ilmupedia 22 GB 30 Hari",
+    "hargaModal": 41950,
+    "hargaJual": 43450,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ilmupedia"
+  },
+  {
+    "sku": "pre30645852",
+    "nama": "Telkomsel Data UKM 3 GB 30 Hari",
+    "hargaModal": 22800,
+    "hargaJual": 23800,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UKM"
+  },
+  {
+    "sku": "pre30645853",
+    "nama": "Telkomsel Data UKM 4 GB 30 Hari",
+    "hargaModal": 26975,
+    "hargaJual": 28475,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UKM"
+  },
+  {
+    "sku": "pre30645854",
+    "nama": "Telkomsel Data UKM 5 GB 30 Hari",
+    "hargaModal": 29975,
+    "hargaJual": 31475,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UKM"
+  },
+  {
+    "sku": "pre30645855",
+    "nama": "Telkomsel Data 1 GB + 5 GB Ruang Guru / 30 Hari",
+    "hargaModal": 25685,
+    "hargaJual": 27185,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ruangguru"
+  },
+  {
+    "sku": "pre30645856",
+    "nama": "Telkomsel Data 2 GB + 10 GB Ruang Guru / 30 Hari",
+    "hargaModal": 40125,
+    "hargaJual": 41625,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ruangguru"
+  },
+  {
+    "sku": "pre30645858",
+    "nama": "Telkomsel Data Ketengan Belajar 11 GB 7 Hari",
+    "hargaModal": 11700,
+    "hargaJual": 12700,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Belajar"
+  },
+  {
+    "sku": "pre30645859",
+    "nama": "Telkomsel Data Ketengan Belajar 22 GB 7 Hari",
+    "hargaModal": 16010,
+    "hargaJual": 17010,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Belajar"
+  },
+  {
+    "sku": "pre30645861",
+    "nama": "Telkomsel Data Terbaik Untukmu 1.5 GB 1 Hari",
+    "hargaModal": 9955,
+    "hargaJual": 10955,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Terbaik Untukmu"
+  },
+  {
+    "sku": "pre30645862",
+    "nama": "Telkomsel Data Terbaik Untukmu 3.5 GB 3 Hari",
+    "hargaModal": 24790,
+    "hargaJual": 25790,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Terbaik Untukmu"
+  },
+  {
+    "sku": "pre30645863",
+    "nama": "Telkomsel Data Terbaik Untukmu 3 GB 30 Hari",
+    "hargaModal": 23625,
+    "hargaJual": 24625,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Terbaik Untukmu"
+  },
+  {
+    "sku": "pre30645865",
+    "nama": "Telkomsel Data Terbaik Untukmu 8 GB 30 Hari",
+    "hargaModal": 35075,
+    "hargaJual": 36575,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Terbaik Untukmu"
+  },
+  {
+    "sku": "pre30645867",
+    "nama": "XL Data Paket Harian S 3 Hari",
+    "hargaModal": 11710,
+    "hargaJual": 12710,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Harian"
+  },
+  {
+    "sku": "pre30645869",
+    "nama": "XL Data Flex 7 GB 28 Hari",
+    "hargaModal": 32175,
+    "hargaJual": 33675,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex"
+  },
+  {
+    "sku": "pre30645872",
+    "nama": "XL Data Flex 26 GB 28 Hari",
+    "hargaModal": 63240,
+    "hargaJual": 64740,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex"
+  },
+  {
+    "sku": "pre30645874",
+    "nama": "XL Data Flex Mini 10 GB 1 Hari",
+    "hargaModal": 9596,
+    "hargaJual": 10596,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex Mini"
+  },
+  {
+    "sku": "pre30645875",
+    "nama": "XL Data Flex Mini 3 GB 1 Hari",
+    "hargaModal": 6660,
+    "hargaJual": 7660,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex Mini"
+  },
+  {
+    "sku": "pre30645876",
+    "nama": "XL Data Flex Mini 3.5 GB 3 Hari",
+    "hargaModal": 11570,
+    "hargaJual": 12570,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex Mini"
+  },
+  {
+    "sku": "pre30645878",
+    "nama": "XL Data Flex Mini 6 GB 3 Hari",
+    "hargaModal": 13668,
+    "hargaJual": 14668,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex Mini"
+  },
+  {
+    "sku": "pre30645884",
+    "nama": "XL Data Bebas Puas 6rb/hr - 1 Hari",
+    "hargaModal": 6580,
+    "hargaJual": 7580,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 6rb"
+  },
+  {
+    "sku": "pre30645886",
+    "nama": "XL Data Bebas Puas 6rb/hr - 3 Hari",
+    "hargaModal": 17060,
+    "hargaJual": 18060,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 6rb"
+  },
+  {
+    "sku": "pre30645887",
+    "nama": "XL Data Bebas Puas 6rb/hr - 5 Hari",
+    "hargaModal": 28420,
+    "hargaJual": 29920,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 6rb"
+  },
+  {
+    "sku": "pre30645893",
+    "nama": "XL Data FlexMax 16 GB 28 Hari",
+    "hargaModal": 46572,
+    "hargaJual": 48072,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "FlexMax"
+  },
+  {
+    "sku": "pre30645895",
+    "nama": "XL Data FlexMax 23 GB 28 Hari",
+    "hargaModal": 56081,
+    "hargaJual": 57581,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "FlexMax"
+  },
+  {
+    "sku": "pre30645897",
+    "nama": "XL Xtra Conference 2 GB 1 Hari",
+    "hargaModal": 2025,
+    "hargaJual": 3025,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Conference"
+  },
+  {
+    "sku": "pre30645899",
+    "nama": "XL Xtra Conference 15 GB 7 Hari",
+    "hargaModal": 10160,
+    "hargaJual": 11160,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Conference"
+  },
+  {
+    "sku": "pre30645902",
+    "nama": "XL Xtra Edukasi 15 GB 7 Hari",
+    "hargaModal": 7555,
+    "hargaJual": 8555,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Edukasi"
+  },
+  {
+    "sku": "pre30645903",
+    "nama": "XL Data Akrab Kuota Bersama 10 GB / 30 Hari",
+    "hargaModal": 61150,
+    "hargaJual": 62650,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Paket Akrab"
+  },
+  {
+    "sku": "pre30645915",
+    "nama": "Axis Data 5 GB / 30 Hari",
+    "hargaModal": 27625,
+    "hargaJual": 29125,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645920",
+    "nama": "Axis Data 10 GB 30 Hari",
+    "hargaModal": 82225,
+    "hargaJual": 83725,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645928",
+    "nama": "Tri Data 2.75 GB 7 Hari",
+    "hargaModal": 22510,
+    "hargaJual": 23510,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645930",
+    "nama": "Tri Data H3RO 9 GB / 30 Hari",
+    "hargaModal": 45300,
+    "hargaJual": 46800,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645931",
+    "nama": "5 GB Semua Jaringan + 20 Menit Telepon + SMS Semua Op + TRIXOGO + VIU 7 Hari",
+    "hargaModal": 29225,
+    "hargaJual": 30725,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645932",
+    "nama": "5GB + 4GB (01 Pagi - 12 Siang) + 10 Menit Telepon All Op 7 Hari",
+    "hargaModal": 34685,
+    "hargaJual": 36185,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645935",
+    "nama": "Tri Data 4G 10 GB 30 Hari",
+    "hargaModal": 35025,
+    "hargaJual": 36525,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645937",
+    "nama": "Tri Data 12 GB / 30 Hari",
+    "hargaModal": 57250,
+    "hargaJual": 58750,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645939",
+    "nama": "Tri Data 15 GB / 30 Hari",
+    "hargaModal": 46675,
+    "hargaJual": 48175,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645951",
+    "nama": "Smartfren Internet 10.000",
+    "hargaModal": 15999,
+    "hargaJual": 16999,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645952",
+    "nama": "Smartfren Internet 20.000",
+    "hargaModal": 37090,
+    "hargaJual": 38590,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645955",
+    "nama": "Smartfren Internet 60.000",
+    "hargaModal": 68262,
+    "hargaJual": 69762,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645956",
+    "nama": "Smartfren Internet 100.000",
+    "hargaModal": 111225,
+    "hargaJual": 113225,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645971",
+    "nama": "Smartfren Data 4 GB 14 Hari",
+    "hargaModal": 21510,
+    "hargaJual": 22510,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645992",
+    "nama": "Smartfren Data 12 GB Kuota Malam 30 Hari",
+    "hargaModal": 22032,
+    "hargaJual": 23032,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Malam"
+  },
+  {
+    "sku": "pre30645997",
+    "nama": "by.U Data 3 GB 1 Hari",
+    "hargaModal": 7543,
+    "hargaJual": 8543,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645998",
+    "nama": "by.U Data 4 GB 3 Hari",
+    "hargaModal": 12045,
+    "hargaJual": 13045,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30645999",
+    "nama": "by.U Data 3 GB 3 Hari",
+    "hargaModal": 12005,
+    "hargaJual": 13005,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646001",
+    "nama": "by.U Data 4 GB 7 Hari",
+    "hargaModal": 12530,
+    "hargaJual": 13530,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646004",
+    "nama": "by.U Data 1 GB 30 Hari",
+    "hargaModal": 34300,
+    "hargaJual": 35800,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646022",
+    "nama": "by.U Data 12 GB 7 Hari",
+    "hargaModal": 26095,
+    "hargaJual": 27595,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646023",
+    "nama": "by.U Data 8 GB 14 Hari",
+    "hargaModal": 23325,
+    "hargaJual": 24325,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646025",
+    "nama": "by.U Data 7 GB 30 Hari",
+    "hargaModal": 32710,
+    "hargaJual": 34210,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646028",
+    "nama": "by.U Data 15 GB 30 Hari",
+    "hargaModal": 70100,
+    "hargaJual": 71600,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646029",
+    "nama": "by.U Data 11 GB 30 Hari",
+    "hargaModal": 45725,
+    "hargaJual": 47225,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646030",
+    "nama": "by.U Data 12 GB 30 Hari",
+    "hargaModal": 77275,
+    "hargaJual": 78775,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646033",
+    "nama": "by.U Data 33 GB 30 Hari",
+    "hargaModal": 74125,
+    "hargaJual": 75625,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646037",
+    "nama": "by.U Data 65 GB 28 Hari",
+    "hargaModal": 95225,
+    "hargaJual": 96725,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30646041",
+    "nama": "by.U Data 100 GB 30 Hari",
+    "hargaModal": 172025,
+    "hargaJual": 174025,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre30798326",
+    "nama": "Indosat Freedom Apps Fun 3 GB 7 Hari",
+    "hargaModal": 9561,
+    "hargaJual": 10561,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Apps"
+  },
+  {
+    "sku": "pre30798331",
+    "nama": "Indosat Freedom Apps Fun 10 GB 30 Hari",
+    "hargaModal": 41525,
+    "hargaJual": 43025,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Apps"
+  },
+  {
+    "sku": "pre30798659",
+    "nama": "Telkomsel Data GamesMax Ketengan Bulanan",
+    "hargaModal": 19830,
+    "hargaJual": 20830,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "GamesMAX"
+  },
+  {
+    "sku": "pre30881947",
+    "nama": "XL Xtra Combo Plus 3 GB 30 Hari",
+    "hargaModal": 35000,
+    "hargaJual": 36500,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Xtra Combo Plus"
+  },
+  {
+    "sku": "pre30884081",
+    "nama": "Indosat Data HiFi Air 500 GB 30 Hari",
+    "hargaModal": 219775,
+    "hargaJual": 221775,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "HiFi Air"
+  },
+  {
+    "sku": "pre30884133",
+    "nama": "XL Data Akrab Kuota Bersama 45 GB / 30 Hari",
+    "hargaModal": 193125,
+    "hargaJual": 195125,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Paket Akrab"
+  },
+  {
+    "sku": "pre30884137",
+    "nama": "XL Data FlexMax 100 GB 28 Hari",
+    "hargaModal": 118050,
+    "hargaJual": 120050,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "FlexMax"
+  },
+  {
+    "sku": "pre30884138",
+    "nama": "XL Data FlexMax 150 GB 28 Hari",
+    "hargaModal": 144169,
+    "hargaJual": 146169,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "FlexMax"
+  },
+  {
+    "sku": "pre30884173",
+    "nama": "XL Data FlexMax 500 GB 28 Hari",
+    "hargaModal": 287970,
+    "hargaJual": 289970,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "FlexMax"
+  },
+  {
+    "sku": "pre30974647",
+    "nama": "Indosat Freedom Kuota Harian 7 GB 7 Hari",
+    "hargaModal": 25055,
+    "hargaJual": 26555,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "pre30974650",
+    "nama": "Indosat Freedom Kuota Harian 14 GB 14 Hari",
+    "hargaModal": 44640,
+    "hargaJual": 46140,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "pre30974651",
+    "nama": "Indosat Data Gaspol 1 GB 1 Hari",
+    "hargaModal": 6100,
+    "hargaJual": 7100,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "gaspol"
+  },
+  {
+    "sku": "pre30974652",
+    "nama": "Indosat Data Gaspol 1 GB 3 Hari",
+    "hargaModal": 7100,
+    "hargaJual": 8100,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "gaspol"
+  },
+  {
+    "sku": "pre30974655",
+    "nama": "Axis Data SS 4 GB 3 Hari",
+    "hargaModal": 12151,
+    "hargaJual": 13151,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "pre30974658",
+    "nama": "Tri Data Happy 2.5 GB 1 Hari",
+    "hargaModal": 7346,
+    "hargaJual": 8346,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "pre30974660",
+    "nama": "Tri Data Happy 11 GB 28 Hari",
+    "hargaModal": 33125,
+    "hargaJual": 34625,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "pre30974661",
+    "nama": "Tri Data Happy 16 GB 28 Hari",
+    "hargaModal": 44250,
+    "hargaJual": 45750,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "pre30974664",
+    "nama": "Tri Data AlwaysOn 8 GB",
+    "hargaModal": 46080,
+    "hargaJual": 47580,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "AlwaysOn"
+  },
+  {
+    "sku": "pre30974665",
+    "nama": "Tri Data AlwaysOn 7 GB",
+    "hargaModal": 46125,
+    "hargaJual": 47625,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "AlwaysOn"
+  },
+  {
+    "sku": "pre30974666",
+    "nama": "Tri Data AlwaysOn 12 GB",
+    "hargaModal": 57925,
+    "hargaJual": 59425,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "AlwaysOn"
+  },
+  {
+    "sku": "pre30974668",
+    "nama": "Tri Data AlwaysOn Unlimited 26 GB",
+    "hargaModal": 71975,
+    "hargaJual": 73475,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "AlwaysOn"
+  },
+  {
+    "sku": "pre30974669",
+    "nama": "Tri Data AlwaysOn 16 GB + Unlimited",
+    "hargaModal": 138999,
+    "hargaJual": 140999,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "AlwaysOn"
+  },
+  {
+    "sku": "pre30974672",
+    "nama": "Smartfren Data Unlimited Nonstop 8 GB 1 Hari",
+    "hargaModal": 7768,
+    "hargaJual": 8768,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited Nonstop"
+  },
+  {
+    "sku": "pre30974674",
+    "nama": "Smartfren Data Unlimited Nonstop 10 GB 14 Hari",
+    "hargaModal": 26680,
+    "hargaJual": 28180,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited Nonstop"
+  },
+  {
+    "sku": "pre30974806",
+    "nama": "Smartfren Data Unlimited Nonstop 5 GB 30 Hari",
+    "hargaModal": 31460,
+    "hargaJual": 32960,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited Nonstop"
+  },
+  {
+    "sku": "pre30974808",
+    "nama": "Smartfren Data Unlimited Nonstop 12 GB 30 Hari",
+    "hargaModal": 47049,
+    "hargaJual": 48549,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited Nonstop"
+  },
+  {
+    "sku": "pre30983652",
+    "nama": "XL Data Flex Mini 10 GB 7 Hari",
+    "hargaModal": 22902,
+    "hargaJual": 23902,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex Mini"
+  },
+  {
+    "sku": "pre30983660",
+    "nama": "XL Data Flex Mini 3 GB 14 Hari",
+    "hargaModal": 18355,
+    "hargaJual": 19355,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Flex Mini"
+  },
+  {
+    "sku": "pre31076094",
+    "nama": "Indosat Yellow 1 GB 2 Hari",
+    "hargaModal": 5955,
+    "hargaJual": 6955,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Yellow"
+  },
+  {
+    "sku": "pre31076119",
+    "nama": "Indosat Freedom Internet 1.5 GB 1 Hari",
+    "hargaModal": 6754,
+    "hargaJual": 7754,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076121",
+    "nama": "Indosat Freedom Internet 4 GB 1 Hari",
+    "hargaModal": 5835,
+    "hargaJual": 6835,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076125",
+    "nama": "Indosat Freedom Internet 7 GB 1 Hari",
+    "hargaModal": 7646,
+    "hargaJual": 8646,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076128",
+    "nama": "Indosat Freedom Internet 2.5 GB 3 Hari",
+    "hargaModal": 12410,
+    "hargaJual": 13410,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076148",
+    "nama": "Indosat Freedom Internet 2 GB 15 Hari",
+    "hargaModal": 11800,
+    "hargaJual": 12800,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076150",
+    "nama": "Indosat Freedom Internet 9 GB 5 Hari",
+    "hargaModal": 17135,
+    "hargaJual": 18135,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076155",
+    "nama": "Indosat Freedom Internet 15 GB 7 Hari",
+    "hargaModal": 27705,
+    "hargaJual": 29205,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076194",
+    "nama": "Indosat Freedom Internet 21 GB 28 Hari",
+    "hargaModal": 65050,
+    "hargaJual": 66550,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076197",
+    "nama": "Indosat Freedom Internet 25 GB 28 Hari",
+    "hargaModal": 61950,
+    "hargaJual": 63450,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076201",
+    "nama": "Indosat Freedom Internet 36 GB 28 Hari",
+    "hargaModal": 69475,
+    "hargaJual": 70975,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076213",
+    "nama": "Indosat Freedom Internet 150 GB 28 Hari",
+    "hargaModal": 116975,
+    "hargaJual": 118975,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076219",
+    "nama": "Indosat Freedom Internet 120 GB 28 Hari",
+    "hargaModal": 139872,
+    "hargaJual": 141872,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076222",
+    "nama": "Indosat Freedom Internet Sensasi 150 GB 28 Hari",
+    "hargaModal": 136875,
+    "hargaJual": 138875,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076226",
+    "nama": "Indosat Freedom Internet 350 GB 28 Hari",
+    "hargaModal": 200000,
+    "hargaJual": 202000,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076227",
+    "nama": "Indosat Freedom Internet Sensasi 200 GB 28 Hari",
+    "hargaModal": 199999,
+    "hargaJual": 201999,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre31076239",
+    "nama": "Indosat Data Freedom Max 2 GB 30 Hari",
+    "hargaModal": 32660,
+    "hargaJual": 34160,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Max"
+  },
+  {
+    "sku": "pre31607346",
+    "nama": "Indosat Freedom U 5.5 GB 30 Hari",
+    "hargaModal": 35465,
+    "hargaJual": 36965,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom U"
+  },
+  {
+    "sku": "pre31607347",
+    "nama": "Indosat Freedom U 10 GB 30 Hari",
+    "hargaModal": 57015,
+    "hargaJual": 58515,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom U"
+  },
+  {
+    "sku": "pre31607348",
+    "nama": "Indosat Freedom U 20 GB 30 Hari",
+    "hargaModal": 79710,
+    "hargaJual": 81210,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom U"
+  },
+  {
+    "sku": "pre31834267",
+    "nama": "XL XTRA KUOTA 30 GB 30 HARI",
+    "hargaModal": 12600,
+    "hargaJual": 13600,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Xtra Kuota"
+  },
+  {
+    "sku": "pre31834268",
+    "nama": "XL XTRA KUOTA 2 GB 12 Jam",
+    "hargaModal": 9000,
+    "hargaJual": 10000,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Xtra Kuota"
+  },
+  {
+    "sku": "pre32257343",
+    "nama": "Telkomsel Data Serba Lima Ribu 6.000 1 Hari",
+    "hargaModal": 8810,
+    "hargaJual": 9810,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Serba Lima Ribu"
+  },
+  {
+    "sku": "pre32257344",
+    "nama": "Telkomsel Data Serba Lima Ribu 7.000 1 Hari",
+    "hargaModal": 6155,
+    "hargaJual": 7155,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Serba Lima Ribu"
+  },
+  {
+    "sku": "pre32257345",
+    "nama": "Telkomsel Data Serba Lima Ribu 10.000 1 Hari",
+    "hargaModal": 9355,
+    "hargaJual": 10355,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Serba Lima Ribu"
+  },
+  {
+    "sku": "pre32257347",
+    "nama": "Telkomsel Data UnlimitedMAX 20.000",
+    "hargaModal": 26650,
+    "hargaJual": 28150,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UnlimitedMAX"
+  },
+  {
+    "sku": "pre32257348",
+    "nama": "Telkomsel Data UnlimitedMAX 30.000",
+    "hargaModal": 36650,
+    "hargaJual": 38150,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UnlimitedMAX"
+  },
+  {
+    "sku": "pre32257349",
+    "nama": "Telkomsel Data UnlimitedMAX 50.000",
+    "hargaModal": 42520,
+    "hargaJual": 44020,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UnlimitedMAX"
+  },
+  {
+    "sku": "pre32257350",
+    "nama": "Telkomsel Data UnlimitedMAX 70.000",
+    "hargaModal": 62895,
+    "hargaJual": 64395,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UnlimitedMAX"
+  },
+  {
+    "sku": "pre32257351",
+    "nama": "Telkomsel Data UnlimitedMAX 100.000",
+    "hargaModal": 80110,
+    "hargaJual": 81610,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UnlimitedMAX"
+  },
+  {
+    "sku": "pre32257352",
+    "nama": "Telkomsel Data UnlimitedMAX 120.000",
+    "hargaModal": 109945,
+    "hargaJual": 111945,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UnlimitedMAX"
+  },
+  {
+    "sku": "pre32257353",
+    "nama": "Indosat Data Ramadan Satspam+ 20 GB 3 Hari",
+    "hargaModal": 16000,
+    "hargaJual": 17000,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SATSPAM+"
+  },
+  {
+    "sku": "pre32257354",
+    "nama": "Indosat Data Ramadan Satspam+ 30 GB 5 Hari",
+    "hargaModal": 24050,
+    "hargaJual": 25050,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SATSPAM+"
+  },
+  {
+    "sku": "pre32257355",
+    "nama": "Indosat Data Ramadan Satspam+ 75 GB 7 Hari",
+    "hargaModal": 43825,
+    "hargaJual": 45325,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SATSPAM+"
+  },
+  {
+    "sku": "pre32257356",
+    "nama": "Indosat Data Ramadan Satspam+ 150 GB 28 Hari",
+    "hargaModal": 133425,
+    "hargaJual": 135425,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SATSPAM+"
+  },
+  {
+    "sku": "pre32257357",
+    "nama": "Indosat Data Ramadan Satspam+ 300 GB 28 Hari",
+    "hargaModal": 177825,
+    "hargaJual": 179825,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SATSPAM+"
+  },
+  {
+    "sku": "pre32257358",
+    "nama": "Indosat Freedom Internet Kita 100 GB 28 Hari",
+    "hargaModal": 92525,
+    "hargaJual": 94025,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Kita"
+  },
+  {
+    "sku": "pre32813039",
+    "nama": "Telkomsel Data Bulk 1 GB / 30 Hari",
+    "hargaModal": 23150,
+    "hargaJual": 24150,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813041",
+    "nama": "Telkomsel Data Bulk 4.5 GB / 30 Hari",
+    "hargaModal": 81700,
+    "hargaJual": 83200,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813043",
+    "nama": "Telkomsel Data Bulk 8 GB / 30 Hari",
+    "hargaModal": 34350,
+    "hargaJual": 35850,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813044",
+    "nama": "Telkomsel Data Bulk 12 GB / 30 Hari",
+    "hargaModal": 50425,
+    "hargaJual": 51925,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813046",
+    "nama": "Telkomsel Data Bulk 17 GB / 30 Hari",
+    "hargaModal": 137200,
+    "hargaJual": 139200,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813047",
+    "nama": "Telkomsel Data Bulk 25 GB / 30 Hari",
+    "hargaModal": 90000,
+    "hargaJual": 91500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813048",
+    "nama": "Telkomsel Data Bulk 28 GB / 30 Hari",
+    "hargaModal": 134150,
+    "hargaJual": 136150,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813049",
+    "nama": "Telkomsel Data Bulk 50 GB / 30 Hari",
+    "hargaModal": 100000,
+    "hargaJual": 101500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Bulk"
+  },
+  {
+    "sku": "pre32813299",
+    "nama": "Telkomsel Data Flash 5.000",
+    "hargaModal": 5350,
+    "hargaJual": 6350,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813300",
+    "nama": "Telkomsel Data Flash 10.000",
+    "hargaModal": 8750,
+    "hargaJual": 9750,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813301",
+    "nama": "Telkomsel Data Flash 20.000",
+    "hargaModal": 12900,
+    "hargaJual": 13900,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813302",
+    "nama": "Telkomsel Data Flash 25.000",
+    "hargaModal": 15900,
+    "hargaJual": 16900,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813303",
+    "nama": "Telkomsel Data Flash 30.000",
+    "hargaModal": 27700,
+    "hargaJual": 29200,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813304",
+    "nama": "Telkomsel Data Flash 50.000",
+    "hargaModal": 39550,
+    "hargaJual": 41050,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813306",
+    "nama": "Telkomsel Data Flash 75.000",
+    "hargaModal": 60000,
+    "hargaJual": 61500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813308",
+    "nama": "Telkomsel Data Flash 100.000",
+    "hargaModal": 90000,
+    "hargaJual": 91500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Flash"
+  },
+  {
+    "sku": "pre32813369",
+    "nama": "Telkomsel Data Mini 4 GB 1 Hari",
+    "hargaModal": 9245,
+    "hargaJual": 10245,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813373",
+    "nama": "Telkomsel Data Mini 1 GB 3 Hari",
+    "hargaModal": 11010,
+    "hargaJual": 12010,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813377",
+    "nama": "Telkomsel Data Mini 1 GB 7 Hari",
+    "hargaModal": 12950,
+    "hargaJual": 13950,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813379",
+    "nama": "Telkomsel Data Mini 2 GB 3 Hari",
+    "hargaModal": 10500,
+    "hargaJual": 11500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813387",
+    "nama": "Telkomsel Data Mini 2 GB 7 Hari",
+    "hargaModal": 16020,
+    "hargaJual": 17020,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813392",
+    "nama": "Telkomsel Data Mini 2 GB 15 Hari",
+    "hargaModal": 19110,
+    "hargaJual": 20110,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813397",
+    "nama": "Telkomsel Data Mini 3.5 GB 7 Hari",
+    "hargaModal": 25450,
+    "hargaJual": 26950,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813411",
+    "nama": "Telkomsel Data Mini 15 GB 7 Hari",
+    "hargaModal": 40775,
+    "hargaJual": 42275,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813412",
+    "nama": "Telkomsel Data Mini 10 GB 3 Hari",
+    "hargaModal": 27600,
+    "hargaJual": 29100,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813414",
+    "nama": "Telkomsel Data Mini 17 GB 7 Hari",
+    "hargaModal": 55350,
+    "hargaJual": 56850,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813418",
+    "nama": "Telkomsel Data Mini 30 GB 7 Hari",
+    "hargaModal": 56825,
+    "hargaJual": 58325,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32813458",
+    "nama": "Telkomsel Data GamesMax Ketengan Harian",
+    "hargaModal": 6220,
+    "hargaJual": 7220,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "GamesMAX"
+  },
+  {
+    "sku": "pre32813459",
+    "nama": "Telkomsel Data GamesMax Ketengan Mingguan",
+    "hargaModal": 11320,
+    "hargaJual": 12320,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "GamesMAX"
+  },
+  {
+    "sku": "pre32813460",
+    "nama": "Telkomsel Data GamesMax Power Weekly FF",
+    "hargaModal": 17790,
+    "hargaJual": 18790,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "GamesMAX"
+  },
+  {
+    "sku": "pre32813461",
+    "nama": "Telkomsel Data GamesMax Power Weekly MLBB",
+    "hargaModal": 17790,
+    "hargaJual": 18790,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "GamesMAX"
+  },
+  {
+    "sku": "pre32813462",
+    "nama": "Telkomsel Data GamesMax Ketengan Bulanan",
+    "hargaModal": 19895,
+    "hargaJual": 20895,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "GamesMAX"
+  },
+  {
+    "sku": "pre32813463",
+    "nama": "Telkomsel Data GamesMax 25.000",
+    "hargaModal": 24540,
+    "hargaJual": 25540,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "GamesMAX"
+  },
+  {
+    "sku": "pre32813473",
+    "nama": "Telkomsel Data Ketengan OMG 15.000",
+    "hargaModal": 12010,
+    "hargaJual": 13010,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "OMG"
+  },
+  {
+    "sku": "pre32813474",
+    "nama": "Telkomsel Data Ketengan OMG 20.000",
+    "hargaModal": 14000,
+    "hargaJual": 15000,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "OMG"
+  },
+  {
+    "sku": "pre32813476",
+    "nama": "Telkomsel Data OMG 30.000",
+    "hargaModal": 30825,
+    "hargaJual": 32325,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "OMG"
+  },
+  {
+    "sku": "pre32813478",
+    "nama": "Telkomsel Data OMG 50.000",
+    "hargaModal": 30125,
+    "hargaJual": 31625,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "OMG"
+  },
+  {
+    "sku": "pre32813479",
+    "nama": "Telkomsel Data OMG 75.000",
+    "hargaModal": 73525,
+    "hargaJual": 75025,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "OMG"
+  },
+  {
+    "sku": "pre32813480",
+    "nama": "Telkomsel Data OMG 100.000",
+    "hargaModal": 68025,
+    "hargaJual": 69525,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "OMG"
+  },
+  {
+    "sku": "pre32813496",
+    "nama": "Telkomsel Data 2 GB 1 Hari (Jawa Timur)",
+    "hargaModal": 7410,
+    "hargaJual": 8410,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813498",
+    "nama": "Telkomsel Data 5 GB 1 Hari (Jawa Timur)",
+    "hargaModal": 8810,
+    "hargaJual": 9810,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813500",
+    "nama": "Telkomsel Data 5 GB 2 Hari (Jawa Timur)",
+    "hargaModal": 11160,
+    "hargaJual": 12160,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813501",
+    "nama": "Telkomsel Data 2 GB 3 Hari (Jawa Timur)",
+    "hargaModal": 11170,
+    "hargaJual": 12170,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813502",
+    "nama": "Telkomsel Data 3 GB 5 Hari (Jawa Timur)",
+    "hargaModal": 12680,
+    "hargaJual": 13680,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813503",
+    "nama": "Telkomsel Data 3 GB 3 Hari (Jawa Timur)",
+    "hargaModal": 13420,
+    "hargaJual": 14420,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813506",
+    "nama": "Telkomsel Data 3.5 GB 7 Hari (Jawa Timur)",
+    "hargaModal": 18550,
+    "hargaJual": 19550,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813510",
+    "nama": "Telkomsel Data 5 GB 7 Hari (Jawa Timur)",
+    "hargaModal": 20420,
+    "hargaJual": 21420,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813511",
+    "nama": "Telkomsel Data 5 GB 30 Hari (Jawa Timur)",
+    "hargaModal": 31820,
+    "hargaJual": 33320,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813512",
+    "nama": "Telkomsel Data 5 GB 14 Hari (Jawa Timur)",
+    "hargaModal": 22920,
+    "hargaJual": 23920,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813514",
+    "nama": "Telkomsel Data 4 GB 30 Hari (Jawa Timur)",
+    "hargaModal": 31550,
+    "hargaJual": 33050,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813515",
+    "nama": "Telkomsel Data 10 GB 7 Hari (Jawa Timur)",
+    "hargaModal": 34790,
+    "hargaJual": 36290,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "pre32813533",
+    "nama": "Telkomsel Data UKM Combo 8 GB 30 Hari",
+    "hargaModal": 40550,
+    "hargaJual": 42050,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UKM COMBO"
+  },
+  {
+    "sku": "pre32813534",
+    "nama": "Telkomsel Data UKM Combo 10 GB 30 Hari",
+    "hargaModal": 50250,
+    "hargaJual": 51750,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UKM COMBO"
+  },
+  {
+    "sku": "pre32813535",
+    "nama": "Telkomsel Data UKM Combo 5 GB + 5 GB Multimedia 30 Hari",
+    "hargaModal": 58050,
+    "hargaJual": 59550,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "UKM COMBO"
+  },
+  {
+    "sku": "pre32813555",
+    "nama": "Telkomsel Data Terbaik Untukmu 4 GB 30 Hari",
+    "hargaModal": 39675,
+    "hargaJual": 41175,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Terbaik Untukmu"
+  },
+  {
+    "sku": "pre32813558",
+    "nama": "Telkomsel Data Terbaik Untukmu 30 GB 30 Hari",
+    "hargaModal": 119095,
+    "hargaJual": 121095,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Terbaik Untukmu"
+  },
+  {
+    "sku": "pre32813566",
+    "nama": "Telkomsel Data Internet Sakti 1.5 GB 7 Hari",
+    "hargaModal": 15720,
+    "hargaJual": 16720,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813567",
+    "nama": "Telkomsel Data Internet Sakti 3 GB 7 Hari",
+    "hargaModal": 14500,
+    "hargaJual": 15500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813569",
+    "nama": "Telkomsel Data Internet Sakti 4 GB 30 Hari",
+    "hargaModal": 29320,
+    "hargaJual": 30820,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813572",
+    "nama": "Telkomsel Data Internet Sakti 5 GB 7 Hari",
+    "hargaModal": 19000,
+    "hargaJual": 20000,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813574",
+    "nama": "Telkomsel Data Internet Sakti 9 GB 7 Hari",
+    "hargaModal": 29650,
+    "hargaJual": 31150,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813576",
+    "nama": "Telkomsel Data Internet Sakti 11 GB 30 Hari",
+    "hargaModal": 50550,
+    "hargaJual": 52050,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813579",
+    "nama": "Telkomsel Data Internet Sakti 12 GB 7 Hari",
+    "hargaModal": 36050,
+    "hargaJual": 37550,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813582",
+    "nama": "Telkomsel Data Internet Sakti 18 GB 30 Hari",
+    "hargaModal": 76425,
+    "hargaJual": 77925,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813583",
+    "nama": "Telkomsel Data Internet Sakti 20 GB 30 Hari",
+    "hargaModal": 81475,
+    "hargaJual": 82975,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813585",
+    "nama": "Telkomsel Data Internet Sakti 24 GB 30 Hari",
+    "hargaModal": 89050,
+    "hargaJual": 90550,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Internet Sakti"
+  },
+  {
+    "sku": "pre32813603",
+    "nama": "Telkomsel Data Ketengan Utama 500 MB 1 Hari",
+    "hargaModal": 6505,
+    "hargaJual": 7505,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ketengan Utama"
+  },
+  {
+    "sku": "pre32813617",
+    "nama": "Telkomsel Data Ketengan Utama 17 GB 7 Hari",
+    "hargaModal": 74025,
+    "hargaJual": 75525,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Ketengan Utama"
+  },
+  {
+    "sku": "pre32813636",
+    "nama": "Telkomsel Data Mingguan 2 GB 7 Hari",
+    "hargaModal": 15850,
+    "hargaJual": 16850,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mingguan"
+  },
+  {
+    "sku": "pre32813641",
+    "nama": "Telkomsel Data Mingguan 45.000",
+    "hargaModal": 36000,
+    "hargaJual": 37500,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mingguan"
+  },
+  {
+    "sku": "pre32813644",
+    "nama": "Telkomsel Data Mingguan 17 GB 7 Hari",
+    "hargaModal": 49925,
+    "hargaJual": 51425,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Mingguan"
+  },
+  {
+    "sku": "pre32813648",
+    "nama": "Telkomsel Data InternetMAX 2 GB / 30 Hari",
+    "hargaModal": 15893,
+    "hargaJual": 16893,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "InternetMAX"
+  },
+  {
+    "sku": "pre32813649",
+    "nama": "Telkomsel Data InternetMax Lite 3 GB 30 Hari",
+    "hargaModal": 20620,
+    "hargaJual": 21620,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "InternetMAX"
+  },
+  {
+    "sku": "pre32813652",
+    "nama": "Telkomsel Data InternetMax 7 GB 30 Hari",
+    "hargaModal": 32200,
+    "hargaJual": 33700,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "InternetMAX"
+  },
+  {
+    "sku": "pre32813655",
+    "nama": "Telkomsel Data InternetMAX 16 GB / 30 Hari",
+    "hargaModal": 62600,
+    "hargaJual": 64100,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "InternetMAX"
+  },
+  {
+    "sku": "pre32813657",
+    "nama": "Telkomsel Data InternetMax 35 GB 30 Hari",
+    "hargaModal": 79613,
+    "hargaJual": 81113,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "InternetMAX"
+  },
+  {
+    "sku": "pre32813664",
+    "nama": "Telkomsel Paket Internet Whatsapp 2 GB 3 Hari",
+    "hargaModal": 11005,
+    "hargaJual": 12005,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Whatsapp"
+  },
+  {
+    "sku": "pre32813665",
+    "nama": "Telkomsel Paket Internet Whatsapp 1 GB 7 Hari",
+    "hargaModal": 11010,
+    "hargaJual": 12010,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Whatsapp"
+  },
+  {
+    "sku": "pre32813669",
+    "nama": "Telkomsel Paket Internet Whatsapp 3 GB 7 Hari",
+    "hargaModal": 19120,
+    "hargaJual": 20120,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Whatsapp"
+  },
+  {
+    "sku": "pre32813671",
+    "nama": "Telkomsel Paket Internet Whatsapp 5.5 GB 30 Hari",
+    "hargaModal": 36150,
+    "hargaJual": 37650,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Whatsapp"
+  },
+  {
+    "sku": "pre32813672",
+    "nama": "Telkomsel Paket Internet Whatsapp 10 GB 30 Hari",
+    "hargaModal": 51125,
+    "hargaJual": 52625,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Whatsapp"
+  },
+  {
+    "sku": "pre32815956",
+    "nama": "Indosat 1 GB 3 Hari",
+    "hargaModal": 5820,
+    "hargaJual": 6820,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32815967",
+    "nama": "Indosat 12 GB 30 Hari",
+    "hargaModal": 51550,
+    "hargaJual": 53050,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816002",
+    "nama": "Indosat 400 MB 30 Hari",
+    "hargaModal": 2876,
+    "hargaJual": 3876,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816004",
+    "nama": "Indosat 1 GB 7 Hari",
+    "hargaModal": 5785,
+    "hargaJual": 6785,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816005",
+    "nama": "Indosat 1 GB 14 Hari",
+    "hargaModal": 5725,
+    "hargaJual": 6725,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816008",
+    "nama": "Indosat 600 MB 30 Hari",
+    "hargaModal": 4035,
+    "hargaJual": 5035,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816019",
+    "nama": "Indosat 1 GB 30 Hari",
+    "hargaModal": 6860,
+    "hargaJual": 7860,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816023",
+    "nama": "Indosat 3 GB 30 Hari",
+    "hargaModal": 16960,
+    "hargaJual": 17960,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816025",
+    "nama": "Indosat 4 GB 30 Hari",
+    "hargaModal": 22610,
+    "hargaJual": 23610,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816027",
+    "nama": "Indosat 5 GB 30 Hari",
+    "hargaModal": 28275,
+    "hargaJual": 29775,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816029",
+    "nama": "Indosat 6 GB 30 Hari",
+    "hargaModal": 33585,
+    "hargaJual": 35085,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816032",
+    "nama": "Indosat 7.5 GB 30 Hari",
+    "hargaModal": 45950,
+    "hargaJual": 47450,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816042",
+    "nama": "Indosat 15 GB 30 Hari",
+    "hargaModal": 72650,
+    "hargaJual": 74150,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816044",
+    "nama": "Indosat 20 GB 30 Hari",
+    "hargaModal": 81375,
+    "hargaJual": 82875,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816136",
+    "nama": "Indosat GIFT DATA 4.5 GB 30 Hari",
+    "hargaModal": 30025,
+    "hargaJual": 31525,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Gift Data"
+  },
+  {
+    "sku": "pre32816137",
+    "nama": "Indosat GIFT DATA 5 GB 30 Hari",
+    "hargaModal": 28350,
+    "hargaJual": 29850,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Gift Data"
+  },
+  {
+    "sku": "pre32816142",
+    "nama": "Indosat GIFT DATA 7.5 GB 30 Hari",
+    "hargaModal": 45500,
+    "hargaJual": 47000,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Gift Data"
+  },
+  {
+    "sku": "pre32816143",
+    "nama": "Indosat GIFT DATA 8 GB 30 Hari",
+    "hargaModal": 45950,
+    "hargaJual": 47450,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Gift Data"
+  },
+  {
+    "sku": "pre32816147",
+    "nama": "Indosat GIFT DATA 10 GB 30 Hari",
+    "hargaModal": 43000,
+    "hargaJual": 44500,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Gift Data"
+  },
+  {
+    "sku": "pre32816148",
+    "nama": "Indosat GIFT DATA 12 GB 30 Hari",
+    "hargaModal": 44025,
+    "hargaJual": 45525,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Gift Data"
+  },
+  {
+    "sku": "pre32816160",
+    "nama": "Indosat Freedom Combo 10 GB 30 Hari",
+    "hargaModal": 42525,
+    "hargaJual": 44025,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Combo"
+  },
+  {
+    "sku": "pre32816163",
+    "nama": "Indosat Freedom Combo 30 GB 30 Hari",
+    "hargaModal": 79525,
+    "hargaJual": 81025,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Combo"
+  },
+  {
+    "sku": "pre32816164",
+    "nama": "Indosat Freedom Kuota Harian 7 GB 7 Hari",
+    "hargaModal": 23035,
+    "hargaJual": 24035,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "pre32816166",
+    "nama": "Indosat Freedom Kuota Harian 28 GB 28 Hari",
+    "hargaModal": 65000,
+    "hargaJual": 66500,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "pre32816167",
+    "nama": "Indosat Freedom Kuota Harian 30 GB 30 Hari",
+    "hargaModal": 52650,
+    "hargaJual": 54150,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "pre32816168",
+    "nama": "Indosat Freedom Kuota Harian 60 GB 30 Hari",
+    "hargaModal": 87025,
+    "hargaJual": 88525,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "pre32816191",
+    "nama": "Indosat Freedom Internet 4 GB 3 Hari",
+    "hargaModal": 13640,
+    "hargaJual": 14640,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre32816212",
+    "nama": "Indosat Freedom Internet 2.5 GB 28 Hari",
+    "hargaModal": 30460,
+    "hargaJual": 31960,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre32816218",
+    "nama": "Indosat Freedom Internet 7 GB 14 Hari",
+    "hargaModal": 23310,
+    "hargaJual": 24310,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre32816286",
+    "nama": "Indosat Freedom Internet 250 GB 28 Hari",
+    "hargaModal": 175000,
+    "hargaJual": 177000,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre32816287",
+    "nama": "Indosat Freedom Internet Sensasi 150 GB 28 Hari",
+    "hargaModal": 118625,
+    "hargaJual": 120625,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre32816293",
+    "nama": "Indosat Freedom Internet 1024 GB 360 Hari",
+    "hargaModal": 917050,
+    "hargaJual": 920050,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet"
+  },
+  {
+    "sku": "pre32816400",
+    "nama": "Indosat Data Gift Freedom U 5.5 GB 30 Hari",
+    "hargaModal": 35369,
+    "hargaJual": 36869,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom U Gift"
+  },
+  {
+    "sku": "pre32816401",
+    "nama": "Indosat Data Gift Freedom U 9.5 GB 30 Hari",
+    "hargaModal": 56884,
+    "hargaJual": 58384,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom U Gift"
+  },
+  {
+    "sku": "pre32816405",
+    "nama": "Indosat Data Gift Freedom U Jumbo 30 Hari",
+    "hargaModal": 147134,
+    "hargaJual": 149134,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom U Gift"
+  },
+  {
+    "sku": "pre32816430",
+    "nama": "Indosat Data Gift Freedom Internet 7 GB 7 Hari",
+    "hargaModal": 22101,
+    "hargaJual": 23101,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet Gift"
+  },
+  {
+    "sku": "pre32816433",
+    "nama": "Indosat Data Gift Freedom Internet 4 GB 28 Hari",
+    "hargaModal": 30475,
+    "hargaJual": 31975,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet Gift"
+  },
+  {
+    "sku": "pre32816460",
+    "nama": "Indosat Umroh Haji Combo 10 Hari",
+    "hargaModal": 257550,
+    "hargaJual": 259550,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umroh Haji Combo"
+  },
+  {
+    "sku": "pre32816462",
+    "nama": "Indosat Umroh Haji Combo 20 Hari",
+    "hargaModal": 405345,
+    "hargaJual": 408345,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umroh Haji Combo"
+  },
+  {
+    "sku": "pre32816463",
+    "nama": "Indosat Umroh Haji Combo 30 Hari",
+    "hargaModal": 485300,
+    "hargaJual": 488300,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umroh Haji Combo"
+  },
+  {
+    "sku": "pre32816465",
+    "nama": "Indosat Umroh Haji Internet 10 Hari",
+    "hargaModal": 196785,
+    "hargaJual": 198785,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umroh Haji Internet"
+  },
+  {
+    "sku": "pre32816466",
+    "nama": "Indosat Umroh Haji Internet 15 Hari",
+    "hargaModal": 260525,
+    "hargaJual": 262525,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umroh Haji Internet"
+  },
+  {
+    "sku": "pre32816467",
+    "nama": "Indosat Umroh Haji Internet 20 Hari",
+    "hargaModal": 281940,
+    "hargaJual": 283940,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umroh Haji Internet"
+  },
+  {
+    "sku": "pre32816468",
+    "nama": "Indosat Umroh Haji Internet 30 Hari",
+    "hargaModal": 400450,
+    "hargaJual": 403450,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Umroh Haji Internet"
+  },
+  {
+    "sku": "pre32816481",
+    "nama": "Indosat Data Gaspol 7 GB 7 Hari",
+    "hargaModal": 22420,
+    "hargaJual": 23420,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "gaspol"
+  },
+  {
+    "sku": "pre32816482",
+    "nama": "Indosat Data Gaspol 2 GB 30 Hari",
+    "hargaModal": 25325,
+    "hargaJual": 26825,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "gaspol"
+  },
+  {
+    "sku": "pre32816489",
+    "nama": "Indosat Community 2 GB 30 Hari",
+    "hargaModal": 20000,
+    "hargaJual": 21000,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Community"
+  },
+  {
+    "sku": "pre32816490",
+    "nama": "Indosat Community 6 GB 30 Hari",
+    "hargaModal": 35400,
+    "hargaJual": 36900,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Community"
+  },
+  {
+    "sku": "pre32816492",
+    "nama": "Indosat Pure Merdeka 2 GB + 5K Pulsa 30 Hari",
+    "hargaModal": 19670,
+    "hargaJual": 20670,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Pure Merdeka"
+  },
+  {
+    "sku": "pre32816493",
+    "nama": "Indosat Pure Merdeka 3 GB + 5K Pulsa 30 Hari",
+    "hargaModal": 25205,
+    "hargaJual": 26705,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Pure Merdeka"
+  },
+  {
+    "sku": "pre32816500",
+    "nama": "Indosat Pure Merdeka 10 GB + 5K Pulsa 30 Hari",
+    "hargaModal": 71875,
+    "hargaJual": 73375,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Pure Merdeka"
+  },
+  {
+    "sku": "pre32816503",
+    "nama": "Indosat Data SMB Pack 1.5 GB 1 Hari",
+    "hargaModal": 6755,
+    "hargaJual": 7755,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SMB"
+  },
+  {
+    "sku": "pre32816504",
+    "nama": "Indosat Data SMB Pack 6 GB 7 Hari",
+    "hargaModal": 18840,
+    "hargaJual": 19840,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SMB"
+  },
+  {
+    "sku": "pre32816505",
+    "nama": "Indosat Data SMB Pack 13 GB 30 Hari",
+    "hargaModal": 42725,
+    "hargaJual": 44225,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SMB"
+  },
+  {
+    "sku": "pre32816508",
+    "nama": "Indosat Data Ramadan 75 GB 7 Hari",
+    "hargaModal": 43250,
+    "hargaJual": 44750,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Ramadan"
+  },
+  {
+    "sku": "pre32816509",
+    "nama": "Indosat Data Ramadan 150 GB 28 Hari",
+    "hargaModal": 119725,
+    "hargaJual": 121725,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Ramadan"
+  },
+  {
+    "sku": "pre32816510",
+    "nama": "Indosat Data Ramadan 300 GB 28 Hari",
+    "hargaModal": 151600,
+    "hargaJual": 153600,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Ramadan"
+  },
+  {
+    "sku": "pre32816520",
+    "nama": "Indosat Data HiFi Air Booster 50 GB",
+    "hargaModal": 42965,
+    "hargaJual": 44465,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "HiFi Air"
+  },
+  {
+    "sku": "pre32816524",
+    "nama": "Indosat Data HiFi Air Booster 250 GB",
+    "hargaModal": 173489,
+    "hargaJual": 175489,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "HiFi Air"
+  },
+  {
+    "sku": "pre32816526",
+    "nama": "Indosat Data HiFi Air 1 TB 360 Hari",
+    "hargaModal": 857025,
+    "hargaJual": 860025,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "HiFi Air"
+  },
+  {
+    "sku": "pre32816527",
+    "nama": "Indosat Freedom Internet 5G 5 GB 1 Hari",
+    "hargaModal": 8705,
+    "hargaJual": 9705,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet 5G"
+  },
+  {
+    "sku": "pre32816530",
+    "nama": "Indosat Freedom Internet 5G 12 GB 5 Hari",
+    "hargaModal": 18062,
+    "hargaJual": 19062,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet 5G"
+  },
+  {
+    "sku": "pre32816531",
+    "nama": "Indosat Freedom Internet 5G 11 GB 3 Hari",
+    "hargaModal": 17310,
+    "hargaJual": 18310,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet 5G"
+  },
+  {
+    "sku": "pre32816535",
+    "nama": "Indosat Freedom Internet 5G 12 GB 30 Hari",
+    "hargaModal": 43595,
+    "hargaJual": 45095,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet 5G"
+  },
+  {
+    "sku": "pre32816537",
+    "nama": "Indosat Freedom Internet 5G 26 GB 30 Hari",
+    "hargaModal": 58295,
+    "hargaJual": 59795,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet 5G"
+  },
+  {
+    "sku": "pre32816539",
+    "nama": "Indosat Freedom Internet 5G 37 GB 30 Hari",
+    "hargaModal": 75395,
+    "hargaJual": 76895,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Internet 5G"
+  },
+  {
+    "sku": "pre32816545",
+    "nama": "Indosat Data Freedom Internet Spesial 60 GB 30 Hari",
+    "hargaModal": 87025,
+    "hargaJual": 88525,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Spesial"
+  },
+  {
+    "sku": "pre32816546",
+    "nama": "Indosat Data Freedom Internet Spesial 150 GB 30 Hari",
+    "hargaModal": 107800,
+    "hargaJual": 109800,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Spesial"
+  },
+  {
+    "sku": "pre32816551",
+    "nama": "Indosat Data Freedom Play 5 GB 7 Hari",
+    "hargaModal": 24970,
+    "hargaJual": 25970,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Play"
+  },
+  {
+    "sku": "pre32816552",
+    "nama": "Indosat Data Freedom Play 3.5 GB 30 Hari",
+    "hargaModal": 28600,
+    "hargaJual": 30100,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Play"
+  },
+  {
+    "sku": "pre32816562",
+    "nama": "Indosat Data Ramadan Satspam+ 300 GB 28 Hari",
+    "hargaModal": 176920,
+    "hargaJual": 178920,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "SATSPAM+"
+  },
+  {
+    "sku": "pre32816633",
+    "nama": "Axis Data 5 GB / 30 Hari",
+    "hargaModal": 29550,
+    "hargaJual": 31050,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816636",
+    "nama": "Axis Data 7 GB 30 Hari",
+    "hargaModal": 57625,
+    "hargaJual": 59125,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "pre32816659",
+    "nama": "Axis Data Mini 3 GB 5 Hari",
+    "hargaModal": 12010,
+    "hargaJual": 13010,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32816704",
+    "nama": "Axis Data Mini 23 GB 7 Hari",
+    "hargaModal": 29090,
+    "hargaJual": 30590,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32816715",
+    "nama": "Axis Data Mini 36 GB 14 Hari",
+    "hargaModal": 51320,
+    "hargaJual": 52820,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "pre32816730",
+    "nama": "Axis Data BRONET 1 GB 1 Hari",
+    "hargaModal": 6510,
+    "hargaJual": 7510,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet"
+  },
+  {
+    "sku": "pre32816867",
+    "nama": "OWSEM 1 GB + 1 GB 4G / 30 Hari",
+    "hargaModal": 20450,
+    "hargaJual": 21450,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Owsem"
+  },
+  {
+    "sku": "pre32816871",
+    "nama": "Axis OWSEM 16 GB + Unlimited Games / 30 Hari",
+    "hargaModal": 41550,
+    "hargaJual": 43050,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Owsem"
+  },
+  {
+    "sku": "pre32816873",
+    "nama": "Axis OWSEM 32 GB + Unlimited Games / 30 Hari",
+    "hargaModal": 49550,
+    "hargaJual": 51050,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Owsem"
+  },
+  {
+    "sku": "pre32816875",
+    "nama": "Axis OWSEM 48 GB + Unlimited Games / 30 Hari",
+    "hargaModal": 61250,
+    "hargaJual": 62750,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Owsem"
+  },
+  {
+    "sku": "pre32816878",
+    "nama": "Axis OWSEM 120 GB + Unlimited Games / 30 Hari",
+    "hargaModal": 95550,
+    "hargaJual": 97050,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Owsem"
+  },
+  {
+    "sku": "pre32816911",
+    "nama": "Axis Data Boostr Sosmed 1 GB 1 Hari",
+    "hargaModal": 2000,
+    "hargaJual": 3000,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Sosmed"
+  },
+  {
+    "sku": "pre32816915",
+    "nama": "Axis Data Boostr Sosmed 3 GB 7 Hari",
+    "hargaModal": 10960,
+    "hargaJual": 11960,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Sosmed"
+  },
+  {
+    "sku": "pre32816918",
+    "nama": "Axis Data Boostr Sosmed 5 GB 30 Hari",
+    "hargaModal": 17020,
+    "hargaJual": 18020,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Sosmed"
+  },
+  {
+    "sku": "pre32816934",
+    "nama": "Axis Data Harian 7 GB 3 Hari",
+    "hargaModal": 12422,
+    "hargaJual": 13422,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Harian"
+  },
+  {
+    "sku": "pre32816936",
+    "nama": "Axis Data Harian 6 GB 3 Hari",
+    "hargaModal": 12470,
+    "hargaJual": 13470,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Harian"
+  },
+  {
+    "sku": "pre32816950",
+    "nama": "Axis Data Harian 15 GB 7 Hari",
+    "hargaModal": 42300,
+    "hargaJual": 43800,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Harian"
+  },
+  {
+    "sku": "pre32816955",
+    "nama": "Axis Data Paket Warnet Unlimited 1 Jam",
+    "hargaModal": 1695,
+    "hargaJual": 2695,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "pre32816957",
+    "nama": "Axis Data Paket Warnet 3 GB 3 Jam",
+    "hargaModal": 2845,
+    "hargaJual": 3845,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "pre32816961",
+    "nama": "Axis Data Paket Warnet Unlimited 48 Jam",
+    "hargaModal": 18510,
+    "hargaJual": 19510,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "pre32816962",
+    "nama": "Axis Data Paket Warnet Unlimited 72 Jam",
+    "hargaModal": 23910,
+    "hargaJual": 24910,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Paket Warnet"
+  },
+  {
+    "sku": "pre32816963",
+    "nama": "Axis Data SS 1.5 GB 3 Hari",
+    "hargaModal": 9420,
+    "hargaJual": 10420,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "pre32816976",
+    "nama": "Axis Data SS 15 GB 3 Hari",
+    "hargaModal": 21480,
+    "hargaJual": 22480,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Aigo SS"
+  },
+  {
+    "sku": "pre32816982",
+    "nama": "Axis Data 5 GB 5 Hari (Jatim Bali Nusra)",
+    "hargaModal": 14203,
+    "hargaJual": 15203,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Jatim Bali Nusra"
+  },
+  {
+    "sku": "pre32817002",
+    "nama": "Axis Data Pure 4 GB 30 Hari",
+    "hargaModal": 33500,
+    "hargaJual": 35000,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Pure"
+  },
+  {
+    "sku": "pre32817003",
+    "nama": "Axis Data Pure 5 GB 30 Hari",
+    "hargaModal": 39050,
+    "hargaJual": 40550,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Pure"
+  },
+  {
+    "sku": "pre32817004",
+    "nama": "Axis Data Pure 6 GB 30 Hari",
+    "hargaModal": 46975,
+    "hargaJual": 48475,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Pure"
+  },
+  {
+    "sku": "pre32817005",
+    "nama": "Axis Data Pure 8 GB 30 Hari",
+    "hargaModal": 62525,
+    "hargaJual": 64025,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Pure"
+  },
+  {
+    "sku": "pre32817011",
+    "nama": "Axis Data DRP Games 2 GB 30 Hari",
+    "hargaModal": 10200,
+    "hargaJual": 11200,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "DRP Games"
+  },
+  {
+    "sku": "pre32817012",
+    "nama": "Axis Data DRP Games 3 GB 30 Hari",
+    "hargaModal": 15425,
+    "hargaJual": 16425,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "DRP Games"
+  },
+  {
+    "sku": "pre32817014",
+    "nama": "Axis Data DRP Games 6 GB 30 Hari",
+    "hargaModal": 29640,
+    "hargaJual": 31140,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "DRP Games"
+  },
+  {
+    "sku": "pre32817016",
+    "nama": "Axis Data DRP Games 10 GB 30 Hari",
+    "hargaModal": 46300,
+    "hargaJual": 47800,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "DRP Games"
+  },
+  {
+    "sku": "pre32817022",
+    "nama": "Axis Data Aigo Boy 7 GB 28 Hari (Salatiga Jatim Sulawesi)",
+    "hargaModal": 30220,
+    "hargaJual": 31720,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Salatiga Jatim Sulawesi"
+  },
+  {
+    "sku": "pre32817023",
+    "nama": "Axis Data Aigo Boy 16 GB 28 Hari (Salatiga Jatim Sulawesi)",
+    "hargaModal": 43520,
+    "hargaJual": 45020,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Salatiga Jatim Sulawesi"
+  },
+  {
+    "sku": "pre32817024",
+    "nama": "Axis Data BRONET 30 GB 3 Hari 5G",
+    "hargaModal": 22125,
+    "hargaJual": 23125,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet 5G"
+  },
+  {
+    "sku": "pre32817025",
+    "nama": "Axis Data BRONET 23 GB 7 Hari 5G",
+    "hargaModal": 32545,
+    "hargaJual": 34045,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet 5G"
+  },
+  {
+    "sku": "pre32817026",
+    "nama": "Axis Data BRONET 50 GB 5 Hari 5G",
+    "hargaModal": 37125,
+    "hargaJual": 38625,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet 5G"
+  },
+  {
+    "sku": "pre32817027",
+    "nama": "Axis Data BRONET 25 GB 14 Hari 5G",
+    "hargaModal": 46125,
+    "hargaJual": 47625,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet 5G"
+  },
+  {
+    "sku": "pre32817028",
+    "nama": "Axis Data BRONET 65 GB 28 Hari 5G",
+    "hargaModal": 90725,
+    "hargaJual": 92225,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet 5G"
+  },
+  {
+    "sku": "pre32817029",
+    "nama": "Axis Data BRONET 150 GB 28 Hari 5G",
+    "hargaModal": 144225,
+    "hargaJual": 146225,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet 5G"
+  },
+  {
+    "sku": "pre32817033",
+    "nama": "Axis Data Bagi Kuota 2 GB 5 Hari",
+    "hargaModal": 5660,
+    "hargaJual": 6660,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bagi Kuota"
+  },
+  {
+    "sku": "pre32817941",
+    "nama": "XL Data Bebas Puas 250 MB 1 Hari",
+    "hargaModal": 6330,
+    "hargaJual": 7330,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 2rb"
+  },
+  {
+    "sku": "pre32817971",
+    "nama": "XL Data Bebas Puas 500 MB 1 Hari",
+    "hargaModal": 6405,
+    "hargaJual": 7405,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 3rb"
+  },
+  {
+    "sku": "pre7382837",
+    "nama": "Indosat Data HiFi Air 200 GB 30 Hari",
+    "hargaModal": 130273,
+    "hargaJual": 132273,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "HiFi Air"
+  },
+  {
+    "sku": "segwrh",
+    "nama": "XL Data Bebas Puas 12.6 GB 7 Hari",
+    "hargaModal": 40336,
+    "hargaJual": 41836,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 5rb"
+  },
+  {
+    "sku": "Shkng",
+    "nama": "Axis Data Mini 15 GB 14 Hari",
+    "hargaModal": 34083,
+    "hargaJual": 35583,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Mini"
+  },
+  {
+    "sku": "smdu1",
+    "nama": "Smartfren Data Unlimited Harian 1 GB Berlaku 7 Hari",
+    "hargaModal": 19010,
+    "hargaJual": 20010,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited"
+  },
+  {
+    "sku": "smdu2",
+    "nama": "Smartfren Data Unlimited Harian 2 GB Berlaku 28 Hari",
+    "hargaModal": 92083,
+    "hargaJual": 93583,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited"
+  },
+  {
+    "sku": "TLK14",
+    "nama": "Telkomsel Data 14 GB 30 Hari (Jawa Timur)",
+    "hargaModal": 65525,
+    "hargaJual": 67025,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Jawa Timur"
+  },
+  {
+    "sku": "tu44",
+    "nama": "XL Data Bebas Puas 5 GB 10 Hari",
+    "hargaModal": 30050,
+    "hargaJual": 31550,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 3rb"
+  },
+  {
+    "sku": "TWA1",
+    "nama": "Telkomsel Paket Internet Whatsapp 5 GB 30 Hari",
+    "hargaModal": 36125,
+    "hargaJual": 37625,
+    "brand": "TELKOMSEL",
+    "kategori": "Data",
+    "tipe": "Whatsapp"
+  },
+  {
+    "sku": "Udjdj",
+    "nama": "Axis Data BRONET 3 GB 3 Hari",
+    "hargaModal": 8405,
+    "hargaJual": 9405,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Bronet"
+  },
+  {
+    "sku": "ueoendj",
+    "nama": "Smartfren Data Unlimited Harian 500 MB Berlaku 28 Hari",
+    "hargaModal": 61475,
+    "hargaJual": 62975,
+    "brand": "SMARTFREN",
+    "kategori": "Data",
+    "tipe": "Unlimited"
+  },
+  {
+    "sku": "Ugugug",
+    "nama": "Axis Data 2 GB 30 Hari",
+    "hargaModal": 14550,
+    "hargaJual": 15550,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Umum"
+  },
+  {
+    "sku": "Uguviu",
+    "nama": "Axis Data Jawa Bali Nusra 3.5 GB 5 Hari",
+    "hargaModal": 12910,
+    "hargaJual": 13910,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Jawa Bali Nusra"
+  },
+  {
+    "sku": "Uiuuhsh",
+    "nama": "Tri Data Happy 25 GB 28 Hari",
+    "hargaModal": 54325,
+    "hargaJual": 55825,
+    "brand": "TRI",
+    "kategori": "Data",
+    "tipe": "Happy"
+  },
+  {
+    "sku": "Uriir",
+    "nama": "by.U Data Kaget 2.5 GB 5 Hari",
+    "hargaModal": 10135,
+    "hargaJual": 11135,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Kaget"
+  },
+  {
+    "sku": "Usiso",
+    "nama": "by.U Data Kaget 7 GB 30 Hari",
+    "hargaModal": 38300,
+    "hargaJual": 39800,
+    "brand": "BY.U",
+    "kategori": "Data",
+    "tipe": "Kaget"
+  },
+  {
+    "sku": "Usjdo",
+    "nama": "Axis Data Boostr Games 5 GB 30 Hari",
+    "hargaModal": 16060,
+    "hargaJual": 17060,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Games"
+  },
+  {
+    "sku": "Vshsdj",
+    "nama": "Indosat Freedom Kuota Harian 30 GB 30 Hari",
+    "hargaModal": 53825,
+    "hargaJual": 55325,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "Vzhssj",
+    "nama": "Indosat Freedom Kuota Harian 60 GB 30 Hari",
+    "hargaModal": 88896,
+    "hargaJual": 90396,
+    "brand": "INDOSAT",
+    "kategori": "Data",
+    "tipe": "Freedom Harian"
+  },
+  {
+    "sku": "xcbf",
+    "nama": "XL Data Bebas Puas 5.4 GB 3 Hari",
+    "hargaModal": 17429,
+    "hargaJual": 18429,
+    "brand": "XL",
+    "kategori": "Data",
+    "tipe": "Bebas Puas 5rb"
+  },
+  {
+    "sku": "yugfxd",
+    "nama": "Axis Data Harian 5.5 GB 5 Hari",
+    "hargaModal": 15025,
+    "hargaJual": 16025,
+    "brand": "AXIS",
+    "kategori": "Data",
+    "tipe": "Harian"
+  }
+]

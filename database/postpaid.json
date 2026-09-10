@@ -1,0 +1,112 @@
+[
+  {
+    "sku": "post685472",
+    "name": "PDAM Kabupaten Kediri",
+    "category": "Pascabayar",
+    "brand": "PDAM",
+    "type": "postpaid",
+    "admin": 2500,
+    "komisi": 1120,
+    "is_active": 1,
+    "desc": "Jawa Timur"
+  },
+  {
+    "sku": "post685474",
+    "name": "PBB Kabupaten Kediri",
+    "category": "Pascabayar",
+    "brand": "PBB",
+    "type": "postpaid",
+    "admin": 2500,
+    "komisi": 540,
+    "is_active": 0,
+    "desc": "-"
+  },
+  {
+    "sku": "post685476",
+    "name": "Bpjs Kesehatan",
+    "category": "Pascabayar",
+    "brand": "BPJS KESEHATAN",
+    "type": "postpaid",
+    "admin": 2500,
+    "komisi": 1800,
+    "is_active": 1,
+    "desc": "-"
+  },
+  {
+    "sku": "post685479",
+    "name": "PLN Nontaglis",
+    "category": "Pascabayar",
+    "brand": "PLN NONTAGLIS",
+    "type": "postpaid",
+    "admin": 5000,
+    "komisi": 2940,
+    "is_active": 0,
+    "desc": "-"
+  },
+  {
+    "sku": "post685480",
+    "name": "Gopay Bebas Nominal",
+    "category": "Pascabayar",
+    "brand": "E-MONEY",
+    "type": "postpaid",
+    "admin": 1500,
+    "komisi": 500,
+    "is_active": 1,
+    "desc": "-"
+  },
+  {
+    "sku": "post685481",
+    "name": "Dana Bebas Nominal",
+    "category": "Pascabayar",
+    "brand": "E-MONEY",
+    "type": "postpaid",
+    "admin": 1500,
+    "komisi": 1200,
+    "is_active": 1,
+    "desc": "-"
+  },
+  {
+    "sku": "post685482",
+    "name": "Shopee Pay Bebas Nominal",
+    "category": "Pascabayar",
+    "brand": "E-MONEY",
+    "type": "postpaid",
+    "admin": 1500,
+    "komisi": 800,
+    "is_active": 1,
+    "desc": "-"
+  },
+  {
+    "sku": "post685483",
+    "name": "Ovo Bebas Nominal",
+    "category": "Pascabayar",
+    "brand": "E-MONEY",
+    "type": "postpaid",
+    "admin": 1500,
+    "komisi": 800,
+    "is_active": 1,
+    "desc": "-"
+  },
+  {
+    "sku": "post685485",
+    "name": "Gopay Driver Bebas Nominal",
+    "category": "Pascabayar",
+    "brand": "E-MONEY",
+    "type": "postpaid",
+    "admin": 1500,
+    "komisi": 700,
+    "is_active": 0,
+    "desc": "-"
+  },
+  {
+    "sku": "post685486",
+    "name": "Pln Pascabayar",
+    "category": "Pascabayar",
+    "brand": "PLN PASCABAYAR",
+    "type": "postpaid",
+    "admin": 4000,
+    "komisi": 1800,
+    "is_active": 1,
+    "desc": "-"
+  }
+]
