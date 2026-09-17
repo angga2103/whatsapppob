@@ -122,11 +122,49 @@ async function runInstaller() {
         await startPairingProcess();
     }
 
+    const isLinux = process.platform === 'linux';
+    let ranViaPm2 = false;
+    if (isLinux) {
+        console.log(`\n${C.cyan}──────────────────────────────────────────────────${C.reset}`);
+        console.log(`${C.bold}MANAJEMEN PROSES BACKGROUND (PM2)${C.reset}`);
+        console.log(`Agar bot tetap berjalan 24 jam nonstop meskipun terminal/SSH ditutup.`);
+        console.log(`${C.cyan}──────────────────────────────────────────────────${C.reset}\n`);
+
+        const pm2Choice = await ask(`${C.yellow}Jalankan bot sekarang di background via PM2? (Y/n): ${C.reset}`);
+        if (pm2Choice.toLowerCase() !== 'n') {
+            console.log(`\n${C.blue}Menyiapkan PM2...${C.reset}`);
+            try {
+                const { execSync } = require('child_process');
+                try {
+                    execSync('pm2 -v', { stdio: 'ignore' });
+                } catch (_) {
+                    console.log(`Memasang PM2 secara global...`);
+                    execSync('npm install -g pm2', { stdio: 'inherit' });
+                }
+                console.log(`Menjalankan bot via PM2...`);
+                execSync('pm2 delete bot-ppob 2>/dev/null || true', { stdio: 'ignore' });
+                execSync('pm2 start index.js --name "bot-ppob"', { stdio: 'inherit' });
+                execSync('pm2 save', { stdio: 'ignore' });
+                ranViaPm2 = true;
+                console.log(`${C.green}✓ Bot berhasil aktif 24 jam di background via PM2!${C.reset}`);
+            } catch (pm2Err) {
+                console.log(`${C.yellow}Peringatan: PM2 gagal dikonfigurasi otomatis (${pm2Err.message}). Anda tetap bisa menjalankannya via npm start.${C.reset}`);
+            }
+        }
+    }
+
     console.log(`\n${C.green}╔══════════════════════════════════════════════════════════════════╗${C.reset}`);
     console.log(`${C.green}║   ${C.bold}🎉 INSTALASI & SETUP BOT SELESAI DENGAN SUKSES!${C.reset}${C.green}               ║${C.reset}`);
     console.log(`${C.green}║                                                                  ║${C.reset}`);
-    console.log(`${C.green}║   Untuk menjalankan bot:                                         ║${C.reset}`);
-    console.log(`${C.green}║   👉 ${C.bold}npm start${C.reset}${C.green}  atau  ${C.bold}node index.js${C.reset}${C.green}                              ║${C.reset}`);
+    if (ranViaPm2) {
+        console.log(`${C.green}║   Status: ${C.bold}Bot aktif berjalan 24 jam di background (PM2)${C.reset}${C.green}         ║${C.reset}`);
+        console.log(`${C.green}║   • Cek status bot:  ${C.bold}pm2 status${C.reset}${C.green}                                  ║${C.reset}`);
+        console.log(`${C.green}║   • Cek log live:    ${C.bold}pm2 logs bot-ppob${C.reset}${C.green}                           ║${C.reset}`);
+        console.log(`${C.green}║   • Restart bot:     ${C.bold}pm2 restart bot-ppob${C.reset}${C.green}                        ║${C.reset}`);
+    } else {
+        console.log(`${C.green}║   Untuk menjalankan bot:                                         ║${C.reset}`);
+        console.log(`${C.green}║   👉 ${C.bold}npm start${C.reset}${C.green}  atau  ${C.bold}node index.js${C.reset}${C.green}                              ║${C.reset}`);
+    }
     console.log(`${C.green}║                                                                  ║${C.reset}`);
     console.log(`${C.green}║   Semua pengaturan (profit, API key, dll.) dapat diubah          ║${C.reset}`);
     console.log(`${C.green}║   langsung melalui chat WhatsApp dengan ketik: ${C.bold}.admin${C.reset}${C.green}            ║${C.reset}`);

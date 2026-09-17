@@ -61,12 +61,19 @@ Dilengkapi dengan **Interactive One-Click Installer**, **Pengaturan Penuh via Ch
 
 ## 🚀 Panduan Instalasi Cepat (One-Click Installer)
 
-### ⚡ Jalankan di Linux / VPS (Paling Mudah, Cepat & Aman)
-Cukup salin dan tempel **satu baris perintah** ini di terminal VPS Anda. Perintah ini otomatis memasang dependensi dasar (`git` & `curl`), membuat direktori terisolasi di `/var/www/bot-ppob`, memasang Node.js v20 (jika belum ada), dan menjalankan wizard instalasi:
+### ⚡ Jalankan di Linux / VPS (100% Otomatis, Anti-Gagal & Ramah Pemula)
+Cukup salin dan tempel **satu baris perintah** ini di terminal VPS Anda. 
+Perintah ini **otomatis** memasang dependensi sistem (`git`, `curl`, `Node.js 20 LTS`), otomatis memulihkan direktori jika koneksi sempat terputus (anti-bentrok), memasang dependensi project, memandu proses pairing WhatsApp, serta menyediakan opsi jalan 24 jam nonstop di background via PM2:
 
 ```bash
-apt update && apt install -y git curl && git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob && chmod +x install.sh && ./install.sh
+curl -fsSL https://raw.githubusercontent.com/angga2103/whatsapppob/main/install.sh | bash
 ```
+
+> [!TIP]
+> **Alternatif jika ingin meng-*clone* git secara manual:**
+> ```bash
+> apt update && apt install -y git curl && ( [ -d /var/www/bot-ppob/.git ] && cd /var/www/bot-ppob && git pull origin main || git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob ) && chmod +x install.sh && ./install.sh
+> ```
 
 ---
 
