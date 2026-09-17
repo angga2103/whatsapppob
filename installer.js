@@ -103,6 +103,7 @@ async function runInstaller() {
     const sessionDir = path.join(__dirname, 'session_bot');
     const hasSession = fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).length > 0;
 
+    let paired = false;
     if (hasSession) {
         console.log(`${C.green}✓ Folder sesi session_bot terdeteksi.${C.reset}`);
         const rePair = await ask(`${C.yellow}Apakah Anda ingin mereset sesi dan melakukan pairing baru? (y/N): ${C.reset}`);
@@ -111,15 +112,23 @@ async function runInstaller() {
             try {
                 fs.rmSync(sessionDir, { recursive: true, force: true });
                 console.log(`${C.green}✓ Sesi lama berhasil dibersihkan.${C.reset}`);
-                await startPairingProcess();
+                paired = await startPairingProcess();
             } catch (err) {
                 console.log(`${C.red}Gagal menghapus sesi: ${err.message}${C.reset}`);
             }
         } else {
             console.log(`${C.green}✓ Menggunakan sesi yang sudah ada.${C.reset}`);
+            paired = true;
         }
     } else {
-        await startPairingProcess();
+        paired = await startPairingProcess();
+    }
+
+    if (!paired) {
+        console.log(`\n${C.yellow}ℹ️ Pairing WhatsApp belum selesai. Anda dapat menjalankan pairing kapan saja dengan:${C.reset}`);
+        console.log(`   ${C.bold}node installer.js${C.reset}  atau  ${C.bold}npm start${C.reset}\n`);
+        closeRL();
+        process.exit(0);
     }
 
     const isLinux = process.platform === 'linux';
@@ -226,36 +235,49 @@ async function startPairingProcess() {
     console.log(`${C.cyan}──────────────────────────────────────────────────${C.reset}\n`);
 
     let phone = '';
-    while (!phone || phone.length < 10) {
-        phone = await ask(`${C.yellow}👉 Masukkan Nomor WhatsApp Bot (Contoh: 6281234567890): ${C.reset}`);
-        phone = phone.replace(/[^0-9]/g, '');
-        if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+    const sessionDir = path.join(__dirname, 'session_bot');
 
-        if (!phone || phone.length < 10) {
-            console.log(`${C.red}Nomor tidak valid. Minimal 10 digit dengan format internasional (awalan 62). Coba lagi.${C.reset}`);
+    while (true) {
+        while (!phone || phone.length < 10) {
+            phone = await ask(`${C.yellow}👉 Masukkan Nomor WhatsApp Bot (Contoh: 6281234567890): ${C.reset}`);
+            phone = phone.replace(/[^0-9]/g, '');
+            if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+
+            if (!phone || phone.length < 10) {
+                console.log(`${C.red}Nomor tidak valid. Minimal 10 digit dengan format internasional (awalan 62). Coba lagi.${C.reset}`);
+                phone = '';
+            }
         }
-    }
 
-    console.log(`\n${C.blue}⏳ Menghubungkan ke server WhatsApp dan meminta kode pairing...${C.reset}`);
-
-    const { state, saveCreds } = await useMultiFileAuthState('session_bot');
-    const { version } = await fetchLatestBaileysVersion();
-
-    const sock = makeWASocket({
-        version,
-        logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
-        auth: state,
-        browser: Browsers.ubuntu('Chrome'),
-        connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 10000
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    if (!sock.authState.creds.registered) {
+        // Bersihkan session lama untuk memastikan handshake fresh dan bersih
         try {
-            await new Promise(r => setTimeout(r, 2000));
+            fs.rmSync(sessionDir, { recursive: true, force: true });
+        } catch (_) {}
+
+        console.log(`\n${C.blue}⏳ Menghubungkan ke server WhatsApp dan meminta kode pairing untuk [${phone}]...${C.reset}`);
+
+        let sock = null;
+        let pairResult = null;
+
+        try {
+            const { state, saveCreds } = await useMultiFileAuthState('session_bot');
+            const { version } = await fetchLatestBaileysVersion();
+
+            sock = makeWASocket({
+                version,
+                logger: pino({ level: 'silent' }),
+                printQRInTerminal: false,
+                auth: state,
+                browser: Browsers.macOS('Desktop'),
+                connectTimeoutMs: 60000,
+                keepAliveIntervalMs: 10000
+            });
+
+            sock.ev.on('creds.update', saveCreds);
+
+            // Tunggu 3 detik agar WebSocket handshake stabil
+            await new Promise(r => setTimeout(r, 3000));
+
             const code = await sock.requestPairingCode(phone);
             const formatted = code?.match(/.{1,4}/g)?.join(' - ') || code;
 
@@ -271,29 +293,105 @@ async function startPairingProcess() {
             console.log(`${C.yellow}║  4. Pilih ${C.bold}"Tautkan dengan nomor telepon saja"${C.reset}${C.yellow}              ║${C.reset}`);
             console.log(`${C.yellow}║  5. Masukkan 8 digit kode di atas                           ║${C.reset}`);
             console.log(`${C.yellow}╚═════════════════════════════════════════════════════════════╝${C.reset}\n`);
-            console.log(`${C.dim}Menunggu Anda memasukkan kode di HP... (Masa aktif kode: ~2 menit)${C.reset}`);
+            console.log(`${C.dim}⏳ Menunggu verifikasi dari HP Anda (Masa aktif kode: ~120 detik)...${C.reset}`);
+            console.log(`${C.cyan}💡 TIPS JIKA LOADING LAMA / TIDAK BERHASIL:${C.reset}`);
+            console.log(`   • Tekan ${C.bold}[ENTER]${C.reset} atau ketik ${C.bold}'R'${C.reset} untuk ${C.bold}BUAT KODE PAIRING BARU${C.reset}`);
+            console.log(`   • Ketik ${C.bold}'G'${C.reset} untuk ${C.bold}GANTI NOMOR WHATSAPP${C.reset}`);
+            console.log(`   • Ketik ${C.bold}'Q'${C.reset} untuk ${C.bold}BATAL / KELUAR${C.reset}\n`);
+
+            pairResult = await new Promise((resolve) => {
+                let timer = null;
+                let resolved = false;
+
+                const cleanup = () => {
+                    if (timer) clearTimeout(timer);
+                    resolved = true;
+                };
+
+                // Listener 1: Update koneksi
+                sock.ev.on('connection.update', async (update) => {
+                    const { connection, lastDisconnect } = update;
+                    if (connection === 'open') {
+                        cleanup();
+                        resolve({ status: 'SUCCESS' });
+                    } else if (connection === 'close') {
+                        const statusCode = lastDisconnect?.error?.output?.statusCode;
+                        if (statusCode === 401 || statusCode === 408 || statusCode === 440) {
+                            cleanup();
+                            resolve({ status: 'DISCONNECTED', code: statusCode });
+                        }
+                    }
+                });
+
+                // Listener 2: Timeout 120 detik
+                timer = setTimeout(() => {
+                    if (!resolved) {
+                        cleanup();
+                        resolve({ status: 'TIMEOUT' });
+                    }
+                }, 120000);
+
+                // Listener 3: Input langsung dari keyboard
+                ask(`${C.yellow}👉 Aksi [Enter/R=Kode Baru, G=Ganti Nomor, Q=Keluar]: ${C.reset}`).then((userInput) => {
+                    if (!resolved) {
+                        cleanup();
+                        resolve({ status: 'USER_ACTION', input: (userInput || 'R').trim().toUpperCase() });
+                    }
+                });
+            });
+
         } catch (err) {
             console.log(`${C.red}✗ Gagal meminta kode pairing: ${err.message}${C.reset}`);
-            return;
+            pairResult = { status: 'ERROR', error: err.message };
+        } finally {
+            if (sock) {
+                try { await sock.end(); } catch (_) {}
+            }
+        }
+
+        if (pairResult?.status === 'SUCCESS') {
+            console.log(`\n${C.green}✅ BERHASIL TERHUBUNG DENGAN WHATSAPP!${C.reset}`);
+            console.log(`${C.green}Akun bot aktif: ${phone}${C.reset}`);
+            return true;
+        }
+
+        if (pairResult?.status === 'USER_ACTION') {
+            const cmd = pairResult.input;
+            if (cmd === 'Q') {
+                console.log(`${C.dim}Pairing dibatalkan.${C.reset}`);
+                return false;
+            } else if (cmd === 'G') {
+                phone = '';
+                console.log(`\n${C.cyan}🔄 Silakan masukkan nomor baru:${C.reset}`);
+                continue;
+            } else {
+                console.log(`\n${C.cyan}🔄 Mereset sesi dan membuat kode pairing baru...${C.reset}`);
+                continue;
+            }
+        }
+
+        if (pairResult?.status === 'TIMEOUT') {
+            console.log(`\n${C.yellow}⏰ Waktu pairing habis (kode kadaluarsa atau loading lama di HP).${C.reset}`);
+            const act = await ask(`${C.yellow}Apakah ingin membuat kode pairing baru lagi? (Y/n) atau ketik 'g' untuk ganti nomor: ${C.reset}`);
+            if (act.toLowerCase() === 'n') {
+                return false;
+            } else if (act.toLowerCase() === 'g') {
+                phone = '';
+            }
+            continue;
+        }
+
+        if (pairResult?.status === 'DISCONNECTED' || pairResult?.status === 'ERROR') {
+            console.log(`\n${C.yellow}⚠️ Koneksi pairing terputus / gagal terhubung.${C.reset}`);
+            const act = await ask(`${C.yellow}Buat kode pairing baru lagi? (Y/n) atau ketik 'g' untuk ganti nomor: ${C.reset}`);
+            if (act.toLowerCase() === 'n') {
+                return false;
+            } else if (act.toLowerCase() === 'g') {
+                phone = '';
+            }
+            continue;
         }
     }
-
-    return new Promise(resolve => {
-        sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
-            if (connection === 'open') {
-                console.log(`\n${C.green}✅ BERHASIL TERHUBUNG DENGAN WHATSAPP!${C.reset}`);
-                console.log(`${C.green}Akun: ${sock.user?.id?.split(':')[0] || phone}${C.reset}`);
-                await sock.end();
-                resolve();
-            } else if (connection === 'close') {
-                const statusCode = lastDisconnect?.error?.output?.statusCode;
-                if (statusCode && statusCode !== 401) {
-                    // Temporary disconnect during pairing
-                }
-            }
-        });
-    });
 }
 
 runInstaller().catch(err => {
