@@ -62,10 +62,10 @@ Dilengkapi dengan **Interactive One-Click Installer**, **Pengaturan Penuh via Ch
 ## 🚀 Panduan Instalasi Cepat (One-Click Installer)
 
 ### ⚡ Jalankan di Linux / VPS (Paling Mudah, Cepat & Aman)
-Cukup salin dan tempel **satu baris perintah** ini di terminal VPS Anda. Perintah ini otomatis membuat direktori terisolasi di `/var/www/bot-ppob` sehingga **100% aman dan tidak akan bentrok** dengan web aplikasi lain yang ada di VPS Anda:
+Cukup salin dan tempel **satu baris perintah** ini di terminal VPS Anda. Perintah ini otomatis memasang dependensi dasar (`git` & `curl`), membuat direktori terisolasi di `/var/www/bot-ppob`, memasang Node.js v20 (jika belum ada), dan menjalankan wizard instalasi:
 
 ```bash
-git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob && chmod +x install.sh && ./install.sh
+apt update && apt install -y git curl && git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob && chmod +x install.sh && ./install.sh
 ```
 
 ---
