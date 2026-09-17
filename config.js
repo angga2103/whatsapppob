@@ -51,16 +51,18 @@ const config = {
             pulsa: (s.profit && s.profit.pulsa !== undefined) ? Number(s.profit.pulsa) : 500,
             data: (s.profit && s.profit.data !== undefined) ? Number(s.profit.data) : 500,
             emoney: (s.profit && s.profit.emoney !== undefined) ? Number(s.profit.emoney) : 500,
-            pln: (s.profit && s.profit.pln !== undefined) ? Number(s.profit.pln) : 500
+            pln: (s.profit && s.profit.pln !== undefined) ? Number(s.profit.pln) : 500,
+            pasca: (s.profit && s.profit.pasca !== undefined) ? Number(s.profit.pasca) : 1500
         };
     },
     get profitTier() {
         const s = getSettings();
+        const tier = s.profitTier || s.marginTier || {};
         return {
-            kecil: (s.profitTier && s.profitTier.kecil !== undefined) ? Number(s.profitTier.kecil) : 1000,
-            sedang: (s.profitTier && s.profitTier.sedang !== undefined) ? Number(s.profitTier.sedang) : 1500,
-            besar: (s.profitTier && s.profitTier.besar !== undefined) ? Number(s.profitTier.besar) : 2000,
-            premium: (s.profitTier && s.profitTier.premium !== undefined) ? Number(s.profitTier.premium) : 3000
+            kecil: (tier.kecil !== undefined) ? Number(tier.kecil) : 1000,
+            sedang: (tier.sedang !== undefined) ? Number(tier.sedang) : 1500,
+            besar: (tier.besar !== undefined) ? Number(tier.besar) : 2000,
+            premium: (tier.premium !== undefined) ? Number(tier.premium) : 3000
         };
     }
 };

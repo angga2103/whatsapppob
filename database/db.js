@@ -140,8 +140,8 @@ const db = {
     getUser: (sender) => {
         const jid = db.normalizeJid(sender);
         if (!db.users[jid]) {
-            let phone = jid.split('@')[0].replace(/[^0-9]/g, '');
-            if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+            let phone = jid.includes('@lid') ? null : jid.split('@')[0].replace(/[^0-9]/g, '');
+            if (phone && phone.startsWith('0')) phone = '62' + phone.slice(1);
             db.users[jid] = { saldo: 0, phone: phone, history: [], date: Date.now() };
             db.saveUsers();
         }
@@ -168,7 +168,11 @@ const db = {
     },
 
     // 🛡️ REFUND ATOMIK & IDEMPOTEN (PENCEGAH DOUBLE REFUND 100%)
-    refundOrder: (order, reason = 'Transaksi Gagal') => {
+    refundOrder: (orderTarget, reason = 'Transaksi Gagal') => {
+        let order = orderTarget;
+        if (typeof orderTarget === 'string') {
+            order = (db.orders || []).find(o => o.id === orderTarget);
+        }
         if (!order) return { success: false, reason: 'Order tidak ditemukan' };
         
         // 🔒 PERISAI 1: Jangan pernah me-refund order yang sudah ditandai refunded
@@ -177,7 +181,10 @@ const db = {
             return { success: false, reason: 'Order sudah di-refund sebelumnya', alreadyRefunded: true };
         }
 
-        const refundAmount = Number(order.baseAmount || order.total || order.harga || 0);
+        // Jika metode pembayaran QRIS dan ada total bayar (termasuk fee/kode unik), refund total bayarnya
+        const refundAmount = (order.method === 'QRIS' && order.total)
+            ? Number(order.total)
+            : Number(order.baseAmount || order.total || order.harga || 0);
         if (refundAmount <= 0) {
             return { success: false, reason: 'Nominal refund 0' };
         }

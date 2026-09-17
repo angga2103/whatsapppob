@@ -48,18 +48,14 @@ function loadAlertState() {
 }
 
 function saveAlertState(data) {
-
-    fs.mkdirSync('./system',{
-        recursive:true
+    fs.mkdirSync('./system', {
+        recursive: true
     });
-
-    global.sock = sock;
 
     fs.writeFileSync(
         ALERT_FILE,
-        JSON.stringify(data,null,2)
+        JSON.stringify(data, null, 2)
     );
-
 }
 
 
@@ -476,23 +472,36 @@ if (!global.heartbeatStarted) {
                 )
                 .forEach(o => {
                     activeTransactions.add(
-                        o.buyer +
+                        (o.buyer || '') +
                         '-' +
-                        o.sku +
+                        (o.sku || o.item || 'ITEM') +
                         '-' +
-                        o.target
+                        (o.target || 'TARGET')
                     );
                 });
 
-      currentSock = sock;
+            currentSock = sock;
 
             console.log(
                 '[LOCK] Active transaction:',
                 activeTransactions.size
             );
-            db.orders.filter(o => o.status === 'pending').forEach(o => {
-                if (!activeCheckers.has(o.id)) startPolling(sock, o);
-            });
+
+            // Recover both pending and unpaid QRIS orders
+            db.orders
+                .filter(o => (o.status === 'pending' || o.status === 'unpaid') && !o.refunded)
+                .forEach(o => {
+                    if (!activeCheckers.has(o.id)) startPolling(sock, o);
+                });
+
+            // Recover pending deposits
+            if (Array.isArray(db.deposits)) {
+                db.deposits
+                    .filter(d => d.status === 'pending' && (Date.now() - (d.createdAt || 0) < 5 * 60 * 1000))
+                    .forEach(d => {
+                        resumeDepositPolling(sock, d);
+                    });
+            }
         }
     });
 
@@ -504,7 +513,14 @@ if (!global.heartbeatStarted) {
         try {
             const m = messages[0];
             if (!m.message || m.key.fromMe) return;
-            const sender = jidNormalizedUser(m.key.remoteJid);
+
+            // Filter out groups, broadcasts, and newsletters
+            const remoteJid = m.key.remoteJid || '';
+            if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast' || remoteJid.endsWith('@newsletter')) {
+                return;
+            }
+
+            const sender = jidNormalizedUser(remoteJid);
             const normSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
             const isOwner = (config.owner || []).some(o => {
                 const normO = db.normalizeJid ? db.normalizeJid(o) : o;
@@ -645,30 +661,28 @@ Terima kasih telah berbelanja.`
             const args = textBody.slice(rawCmd.length).trim();
 
             const adminCommands = [
-                'admin', 'pullppob', 'cekdigi', 'addsaldo', 'addmenu', 'adddata', 'delmenu', 
-                'editmenu', 'stok', 'listmenu', 'resend', 'member', 'info', 'topsaldo', 
+                'admin', 'pullppob', 'cekdigi', 'addsaldo', 'tariksaldo', 'addmenu', 'adddata', 'delmenu', 
+                'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
                 'settings', 'pengaturan', 'setdigi', 'setpayment', 'settg', 'setprofit', 
-                'settier', 'addowner', 'delowner', 'listowner', 'sync'
+                'settier', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal'
             ];
 
             if (isOwner && adminCommands.includes(cmd)) {
                 return handleAdmin(sock, sender, cmd, args, m);
             }
             if (
-    !isOwner &&
-    db.store &&
-    db.store.buka === false
-) {
-    return sock.sendMessage(sender,{
-        text:
+                !isOwner &&
+                db.store &&
+                db.store.buka === false
+            ) {
+                return sock.sendMessage(sender, {
+                    text:
 `🔴 *${db.store.namaToko || 'TOKO'} SEDANG OFFLINE*
 
 Silakan coba lagi nanti.`
-    });
-
-    global.sock = sock;
-}
+                });
+            }
 
 if (textBody)
     await handleUser(
@@ -696,35 +710,25 @@ async function processCheckout(sock, sender, session) {
     // SMART IDEMPOTENCY LOCK
     // ============================
     const item = session.tempItem;
+    const cleanBuyer = db.normalizeJid(sender);
+    const itemIdentifier = item.sku || item.nama || item.cleanName || 'ITEM';
+    const targetIdentifier = session.tempTarget || '-';
 
-    const trxKey =
-        sender +
-        '-' +
-        item.sku +
-        '-' +
-        session.tempTarget;
+    const trxKey = cleanBuyer + '-' + itemIdentifier + '-' + targetIdentifier;
 
     if (activeTransactions.has(trxKey)) {
-
         return sock.sendMessage(sender, {
-            text:
-`⚠️ Transaksi yang sama masih sedang diproses.
-
-Target:
-${session.tempTarget}
-
-Mohon tunggu beberapa saat.`
+            text: `⚠️ Transaksi yang sama masih sedang diproses.\n\nTarget:\n${targetIdentifier}\n\nMohon tunggu beberapa saat.`
         });
     }
 
     activeTransactions.add(trxKey);
 
     const isPpob = !!item.sku;
-    const qty = isPpob ? 1 : session.tempQty;
+    const qty = isPpob ? 1 : (session.tempQty || 1);
     let baseAmount = (isPpob ? item.hargaJual : item.harga) * qty;
 
     const oid = `INV-${Date.now()}`;
-    const cleanBuyer = db.normalizeJid(sender);
     const order = { 
         id: oid, 
         buyer: cleanBuyer, 
@@ -735,31 +739,41 @@ Mohon tunggu beberapa saat.`
         isPpob: isPpob, 
         isPasca: !!item.isPasca,
         sku: item.sku, 
-        target: session.tempTarget, 
+        target: session.tempTarget || '-', 
         timestamp: Date.now() 
     };
 
     // --- INJEKSI INQUIRY PASCABAYAR ---
     if (item.isPasca) {
-        await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengambil rincian tagihan dari server..." });
-        const postpaid = require('./lib/postpaid');
-        try {
-            const inq = await postpaid.inquiry(item.sku, session.tempTarget, oid);
-            if (inq && inq.data && inq.data.ref_id) {
-                order.digiflazz_oid = inq.data.ref_id;
-            }
-            if (!inq.data || inq.data.status === 'Gagal') {
+        if (!item.hargaJual) {
+            await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengambil rincian tagihan dari server..." });
+            const postpaid = require('./lib/postpaid');
+            try {
+                const inq = await postpaid.inquiry(item.sku, session.tempTarget, oid);
+                if (inq && inq.data && inq.data.ref_id) {
+                    order.digiflazz_oid = inq.data.ref_id;
+                }
+                if (!inq.data || inq.data.status === 'Gagal') {
+                    activeTransactions.delete(trxKey);
+                    return sock.sendMessage(sender, { text: `❌ *INQUIRY GAGAL*\nPesan: ${inq.data ? inq.data.message : 'ID Pelanggan salah atau sudah lunas.'}` });
+                }
+                const pascaProfit = (config.profit && config.profit.pasca !== undefined) ? Number(config.profit.pasca) : 1500;
+                baseAmount = Number(inq.data.selling_price || inq.data.price || 0) + pascaProfit;
+                item.hargaJual = baseAmount;
+                item.nama = inq.data.customer_name ? `${item.brand || item.name} (${inq.data.customer_name})` : (item.brand || item.name);
+                order.baseAmount = baseAmount;
+                order.item = item.nama;
+            } catch (e) {
                 activeTransactions.delete(trxKey);
-                return sock.sendMessage(sender, { text: `❌ *INQUIRY GAGAL*\nPesan: ${inq.data ? inq.data.message : 'ID Pelanggan salah atau sudah lunas.'}` });
+                return sock.sendMessage(sender, { text: "❌ *ERROR API:* Gagal terhubung ke Digiflazz." });
             }
-            baseAmount = inq.data.selling_price || inq.data.price;
-            item.hargaJual = baseAmount;
-            item.nama = inq.data.customer_name ? `${item.brand || item.name} (${inq.data.customer_name})` : (item.brand || item.name);
+        } else {
+            baseAmount = item.hargaJual;
             order.baseAmount = baseAmount;
             order.item = item.nama;
-        } catch (e) {
-            activeTransactions.delete(trxKey);
-            return sock.sendMessage(sender, { text: "❌ *ERROR API:* Gagal terhubung ke Digiflazz." });
+            if (session.tempInquiryRef) {
+                order.digiflazz_oid = session.tempInquiryRef;
+            }
         }
     }
 
@@ -818,15 +832,11 @@ function startPolling(sock, orderData) {
         if (Date.now() - order.timestamp > 5 * 60 * 1000) {
             clearInterval(checkerInterval); activeCheckers.delete(oid);
             order.status = 'cancelled'; 
-db.saveOrders();
+            db.saveOrders();
 
-activeTransactions.delete(
-    order.buyer +
-    '-' +
-    order.sku +
-    '-' +
-    order.target
-);
+            activeTransactions.delete(
+                (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+            );
             return sock.sendMessage(order.buyer, { text:
 `❌ QRIS EXPIRED
 
@@ -843,6 +853,66 @@ Silakan buat transaksi baru.` }).catch(()=>{});
         }
     }, 10000);
     activeCheckers.set(oid, checkerInterval);
+}
+
+// ================================
+// RECOVERY PENDING DEPOSITS
+// ================================
+function resumeDepositPolling(sock, dep) {
+    if (!dep || dep.status !== 'pending') return;
+    const depositId = dep.id;
+    const finalAmount = dep.finalAmount || dep.amount;
+    const targetJid = dep.buyer;
+    if (activeCheckers.has(depositId)) return;
+
+    const depositChecker = setInterval(async () => {
+        try {
+            const currentDep = (db.deposits || []).find(d => d.id === depositId);
+            if (!currentDep || currentDep.status !== 'pending') {
+                clearInterval(depositChecker);
+                activeCheckers.delete(depositId);
+                return;
+            }
+
+            if (Date.now() - (currentDep.createdAt || 0) > 5 * 60 * 1000) {
+                currentDep.status = 'expired';
+                if (db.saveDeposits) db.saveDeposits();
+                clearInterval(depositChecker);
+                activeCheckers.delete(depositId);
+                return sock.sendMessage(targetJid, {
+                    text: `❌ *DEPOSIT EXPIRED*\n\nID: \`${depositId}\`\nPembayaran melewati batas waktu 5 menit.`
+                }).catch(() => {});
+            }
+
+            const check = await api.checkQris(depositId, finalAmount);
+            if (check === 'PAID') {
+                currentDep.status = 'paid';
+                currentDep.paidAt = Date.now();
+                clearInterval(depositChecker);
+                activeCheckers.delete(depositId);
+
+                const user = db.getUser(targetJid);
+                user.saldo = (Number(user.saldo) || 0) + Number(currentDep.amount);
+                if (!Array.isArray(user.history)) user.history = [];
+                const dateStr = new Date().toLocaleDateString('id-ID');
+                user.history.push(`[${dateStr}] 🟢 Deposit QRIS (+Rp ${Number(currentDep.amount).toLocaleString('id-ID')})`);
+                if (db.saveDeposits) db.saveDeposits();
+                db.saveUsers();
+
+                await sock.sendMessage(targetJid, {
+                    text: `✅ *DEPOSIT BERHASIL*\n\n💰 Saldo Masuk: Rp ${Number(currentDep.amount).toLocaleString('id-ID')}\n🧾 ID: \`${depositId}\`\n💵 Saldo Baru: ${formatRupiah(user.saldo)}`
+                }).catch(() => {});
+
+                for (const owner of config.owner) {
+                    await sock.sendMessage(owner, {
+                        text: `💰 *DEPOSIT MASUK*\nUser: ${targetJid}\nNominal: Rp ${Number(currentDep.amount).toLocaleString('id-ID')}\nID: \`${depositId}\``
+                    }).catch(() => {});
+                }
+            }
+        } catch (_) {}
+    }, 5000);
+
+    activeCheckers.set(depositId, depositChecker);
 }
 
 // LOGIKA EKSEKUSI PRODUK (DIGIFLAZZ / LOKAL)
@@ -867,26 +937,19 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                     }
 
                 order.status = 'success'; 
-db.saveOrders();
+                order.sn = hit.data.sn || order.sn;
+                db.saveOrders();
 
-activeTransactions.delete(
-    order.buyer +
-    '-' +
-    order.sku +
-    '-' +
-    order.target
-);
+                activeTransactions.delete(
+                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+                );
                 await sock.sendMessage(targetJid, { text: `✅ *PPOB SUKSES*\n\nProduk: ${order.item}\nTujuan: ${order.target}\nSN/Ket: ${formatDigiflazzMessage(hit.data.sn || hit.data.message)}` });
             } else if (hit.data.status === 'Pending') {
                 order.status = 'processing'; if(typeof hit !== 'undefined' && hit.data && hit.data.ref_id) { order.digiflazz_oid = hit.data.ref_id; } db.saveOrders();
                 await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU PROVIDER*\n\nPembayaran LUNAS. Transaksi sedang diproses oleh server pusat. Mohon ditunggu ya kak, produk akan segera masuk.` });
             } else {
                 activeTransactions.delete(
-                    order.buyer +
-                    '-' +
-                    order.sku +
-                    '-' +
-                    order.target
+                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
                 );
 
                 const refundRes = db.refundOrder(order, hit.data.message || 'Gangguan Server');
@@ -1120,6 +1183,12 @@ setInterval(async () => {
         const configData = require('./config'); 
 
         for (let order of pendingOrders) {
+            // Anti-Conflict: Biarkan safeHitDigiflazz menyelesaikan siklus retry awalnya (< 45 detik)
+            const orderAge = Date.now() - (order.lastRetryAt || order.timestamp || 0);
+            if (orderAge < 45000) {
+                continue;
+            }
+
             // PRIORITAS: Gunakan OID asli dari Digiflazz yang baru kita tambal
             let oid = order.digiflazz_oid || order.ref_id || order.invoice || order.oid || order.refId || order.id; 
             if (!oid) continue;
@@ -1161,7 +1230,12 @@ setInterval(async () => {
 
             if (status === 'Sukses') {
                 order.status = 'success';
+                if (sn) order.sn = sn;
                 if (typeof db.saveOrders === 'function') db.saveOrders();
+
+                activeTransactions.delete(
+                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+                );
                 
                 let snText = sn ? `\nSN/Ket: ${sn}` : '';
                 await botSock.sendMessage(buyerJid, { text: `✅  *PPOB SUKSES*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}${snText}\n\nTerima kasih telah berbelanja!\n\n🌐 *Transaksi produk lebih lengkap kunjungi:* garudatel.my.id` });
@@ -1174,6 +1248,10 @@ setInterval(async () => {
                     console.log("[RADAR V4] ⚠️ Mengabaikan Gagal palsu karena OID lama.");
                     continue; 
                 }
+
+                activeTransactions.delete(
+                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+                );
 
                 const refundRes = db.refundOrder(order, sn || 'Gagal dari server Digiflazz');
                 if (refundRes.success) {

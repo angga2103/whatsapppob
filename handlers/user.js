@@ -1,4 +1,3 @@
-const { searchProducts } = require('../lib/search');
 const db = require('../database/db');
 const { formatRupiah, detectOperator } = require('../lib/utils');
 const api = require('../lib/api');
@@ -107,18 +106,12 @@ async function showProductList(sock, sender, session) {
         t += `*${globalIdx}.* ${p.cleanName}\n   💰 ${formatRupiah(p.hargaJual)}\n`;
     });
     
-    t += `\n👇 Ketik angka untuk pilih produk.`;
+    t += `\n👇 Balas angka pilihan Anda.`;
 
     if (session.tempSmartMode) {
-
-        t += `\n\n➡️ Ketik *Z* untuk melihat seluruh katalog ${session.tempOp}.`;
-
-    }
-
-    else if (maxPage > 0) {
-
-        t += `\n➡️ Ketik *Z* untuk melihat halaman selanjutnya.`;
-
+        t += `\n\n➡️ Ketik *LANJUT* atau *Z* untuk melihat seluruh katalog ${session.tempOp || session.tempBrand || ''}.`;
+    } else if (maxPage > 0) {
+        t += `\n➡️ Ketik *LANJUT* atau *Z* untuk halaman berikutnya (${session.tempPage + 1}/${maxPage + 1}).`;
     }
     
     await sock.sendMessage(sender, { text: t });
@@ -134,8 +127,8 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     if (['.HELP', '!HELP', 'HELP', '.BANTUAN', '!BANTUAN', 'BANTUAN'].includes(txt)) {
         let t = `📖 *PANDUAN TRANSAKSI INSTAN*\n\n`;
         t += `• *MENU* : Buka menu belanja interaktif\n`;
-        t += `• *.beli [SKU] [NoHP]* : Transaksi cepat instan\n`;
-        t += `• *.harga [Operator]* : Cek daftar harga & SKU\n`;
+        t += `• *.beli [Kode_Produk] [NoHP]* : Transaksi cepat instan\n`;
+        t += `• *.harga [Operator]* : Cek daftar harga & kode produk\n`;
         t += `• *.deposit* : Isi saldo akun via QRIS otomatis\n`;
         t += `• *.profil* : Cek saldo dompet Anda\n`;
         t += `• *.riwayat* : Cek 5 transaksi terakhir\n`;
@@ -146,22 +139,30 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         return sock.sendMessage(sender, { text: t });
     }
 
-    // FAST ORDER: .beli [SKU] [NoHP]
+    // FAST ORDER: .beli [Kode_Produk] [NoHP]
     if (['.BELI', '!BELI', 'BELI'].includes(cmdFirst)) {
         const sku = (parts[1] || '').trim();
         const target = (parts[2] || '').trim().replace(/[^0-9]/g, '');
         if (!sku || !target) {
             return sock.sendMessage(sender, {
-                text: `🛒 *FORMAT TRANSAKSI INSTAN:*\n.beli [SKU] [Nomor_Tujuan]\n\nContoh:\n• .beli S10 081234567890\n• .beli PLN20 123456789012\n\n_Ketik *.harga [operator]* untuk melihat daftar SKU._`
+                text: `🛒 *FORMAT TRANSAKSI INSTAN:*\n.beli [Kode_Produk] [Nomor_Tujuan]\n\nContoh:\n• .beli S10 081234567890\n• .beli PLN20 123456789012\n\n_Ketik *.harga [operator]* untuk melihat daftar kode produk aktif._`
             });
         }
         const product = (db.ppob || []).find(p => p.sku && p.sku.toUpperCase() === sku.toUpperCase())
                      || (db.menu || []).find(m => m.id == sku || (m.nama && m.nama.toUpperCase().includes(sku.toUpperCase())));
         if (!product) {
             return sock.sendMessage(sender, {
-                text: `❌ Produk dengan SKU *${sku}* tidak ditemukan.\nKetik *.harga* untuk melihat daftar produk aktif.`
+                text: `❌ Produk dengan kode *${sku}* tidak ditemukan.\nKetik *.harga* untuk melihat daftar produk aktif.`
             });
         }
+
+        // 🛡️ Cek stok untuk produk digital manual
+        if (!product.sku && (product.stok <= 0 || (product.data && product.data.length === 0))) {
+            return sock.sendMessage(sender, {
+                text: `❌ Maaf, stok untuk produk *${product.nama}* sedang habis.`
+            });
+        }
+
         session.tempItem = product;
         session.tempTarget = target;
         session.tempQty = 1;
@@ -401,10 +402,12 @@ if (session.step === S.INPUT_DEPOSIT) {
 
     if (!db.deposits) db.deposits = [];
 
+    const finalAmountNum = (qris.data && qris.data.total_bayar) ? Number(qris.data.total_bayar) : finalAmount;
     db.deposits.push({
         id: depositId,
         buyer: canonicalSender,
         amount: amount,
+        finalAmount: finalAmountNum,
         status: 'pending',
         createdAt: Date.now()
     });
@@ -475,6 +478,9 @@ ${depositId}`
 
             const user = db.getUser ? db.getUser(sender) : (db.users[sender] || (db.users[sender] = { saldo: 0 }));
             user.saldo = (user.saldo || 0) + amount;
+            if (!Array.isArray(user.history)) user.history = [];
+            const dateStr = new Date().toLocaleDateString('id-ID');
+            user.history.push(`[${dateStr}] 🟢 Deposit QRIS (+Rp ${amount.toLocaleString('id-ID')})`);
 
             if (db.saveDeposits) db.saveDeposits();
             db.saveUsers();
@@ -739,9 +745,11 @@ if (txt === 'PROFIL') {
             const customerName = data.customer_name || '-';
             const adminFee = Number(data.admin) || 2500;
             const billAmount = Number(data.price || data.selling_price || 0);
-            const totalAmount = billAmount;
+            const pascaProfit = (config.profit && typeof config.profit.pasca === 'number') ? config.profit.pasca : 1500;
+            const totalAmount = billAmount + pascaProfit;
             const period = data.period || '-';
 
+            session.tempInquiryRef = refId;
             session.tempItem = {
                 sku: product.sku,
                 nama: `${product.name} (${customerName})`,
@@ -761,7 +769,7 @@ if (txt === 'PROFIL') {
             invoiceText += `🎯 ID Pelanggan: *${target}*\n`;
             invoiceText += `📅 Periode: *${period}*\n`;
             invoiceText += `💵 Tagihan: *${formatRupiah(billAmount - adminFee)}*\n`;
-            invoiceText += `📑 Biaya Admin: *${formatRupiah(adminFee)}*\n`;
+            invoiceText += `📑 Biaya Admin & Layanan: *${formatRupiah(adminFee + pascaProfit)}*\n`;
             invoiceText += `────────────────────────\n`;
             invoiceText += `💰 *TOTAL BAYAR: ${formatRupiah(totalAmount)}*\n\n`;
             invoiceText += `💵 Saldo Dompet Anda: ${formatRupiah(userSaldo)}\n`;
@@ -1000,10 +1008,12 @@ if (
     session.step === S.PILIH_PRODUK_EMONEY
 ) {
 
+    const isNextCmd = ['Z', 'N', 'NEXT', 'L', 'LANJUT', '00', '>'].includes(txt);
+
     // MODE SEARCH
     if (
         !/^\d+$/.test(txt) &&
-        txt !== 'Z'
+        !isNextCmd
     ) {
 
         const keyword = txt.toLowerCase();
@@ -1093,8 +1103,7 @@ if (
             }
         }
 
-let hasil = sourceProducts.filter(p => {
-
+        let hasil = sourceProducts.filter(p => {
             const nama = p.nama.toLowerCase();
             const clean = (p.cleanName || '').toLowerCase();
             const group = (p.groupName || '').toLowerCase();
@@ -1104,16 +1113,13 @@ let hasil = sourceProducts.filter(p => {
                 clean.includes(keyword) ||
                 group.includes(keyword)
             );
-
         });
 
         // MULTI KEYWORD
         if (hasil.length === 0) {
-
             const words = keyword.split(' ');
 
             hasil = sourceProducts.filter(p => {
-
                 const gabung = (
                     p.nama + ' ' +
                     (p.cleanName || '') + ' ' +
@@ -1123,14 +1129,11 @@ let hasil = sourceProducts.filter(p => {
                 return words.every(w =>
                     gabung.includes(w)
                 );
-
             });
-
         }
 
         // SORT
         hasil.sort((a, b) => {
-
             const aExact =
                 a.nama.toLowerCase().includes(keyword)
                 ? 1 : 0;
@@ -1143,23 +1146,20 @@ let hasil = sourceProducts.filter(p => {
                 return bExact - aExact;
 
             return a.hargaJual - b.hargaJual;
-
         });
 
         if (hasil.length === 0) {
-
             return sock.sendMessage(sender, {
                 text:
-`⚠️ Paket "${txt}" tidak tersedia pada katalog ${session.tempOp || session.tempBrand} saat ini.
+`⚠️ Paket "${txt}" tidak ditemukan pada katalog ${session.tempOp || session.tempBrand || ''} saat ini.
 
-Contoh pencarian:
+💡 Tips pencarian:
 • 30gb  → cari kuota
 • 30h   → cari masa aktif
 • 25k   → cari harga
 
-Atau ketik Z untuk melihat katalog lengkap.`
+Atau ketik *LANJUT* / *Z* untuk melihat katalog lengkap.`
             });
-
         }
 
         session.tempList = hasil;
@@ -1170,46 +1170,29 @@ Atau ketik Z untuk melihat katalog lengkap.`
             sender,
             session
         );
-
     }
-
 }
 
-
-// 5. TANGKAP INPUT (PULSA & EMONEY) & LOGIKA NEXT (Z)
+// 5. TANGKAP INPUT (PULSA & EMONEY) & LOGIKA NEXT (Z/LANJUT/NEXT)
     if (session.step === S.PILIH_PRODUK_PULSA || session.step === S.PILIH_PRODUK_EMONEY) {
-        if (txt === 'Z') {
-
+        const isNextCmd = ['Z', 'N', 'NEXT', 'L', 'LANJUT', '00', '>'].includes(txt);
+        if (isNextCmd) {
             if (
                 session.tempSmartMode &&
                 session.tempAllProducts
             ) {
-
-                session.tempList =
-                    session.tempAllProducts;
-
+                session.tempList = session.tempAllProducts;
                 session.tempPage = 0;
-
                 session.tempSmartMode = false;
-
-                return showProductList(
-                    sock,
-                    sender,
-                    session
-                );
+                return showProductList(sock, sender, session);
             }
 
             session.tempPage += 1;
-
-            return showProductList(
-                sock,
-                sender,
-                session
-            );
+            return showProductList(sock, sender, session);
         }
         
         const idx = parseInt(txt) - 1;
-        if (isNaN(idx) || !session.tempList[idx]) return sock.sendMessage(sender, { text: `❌ Pilihan salah. Ketik *Z* untuk ganti halaman.` });
+        if (isNaN(idx) || !session.tempList[idx]) return sock.sendMessage(sender, { text: `❌ Pilihan tidak valid. Balas nomor produk, atau ketik *LANJUT* / *Z* untuk ganti halaman.` });
         
         session.tempItem = session.tempList[idx];
         session.step = S.CONFIRM;

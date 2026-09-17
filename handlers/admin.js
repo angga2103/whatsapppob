@@ -37,27 +37,27 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
     }
     
     if (cmd === 'toko') {
+        const mode = args.trim().toLowerCase();
+        const isOpen = ['on', 'buka', 'open'].includes(mode);
+        const isClose = ['off', 'tutup', 'close'].includes(mode);
 
-    const mode = args.trim().toLowerCase();
+        if (!isOpen && !isClose) {
+            return sock.sendMessage(sender, {
+                text: '❌ Format salah.\nContoh:\n• .toko on / .toko buka\n• .toko off / .toko tutup'
+            });
+        }
 
-    if (!['on','off'].includes(mode)) {
-        return sock.sendMessage(sender,{
-            text:'❌ Format:\n.toko on\n.toko off'
+        db.store.buka = isOpen;
+
+        if (db.saveStore) db.saveStore();
+        else if (db.save) db.save();
+
+        return sock.sendMessage(sender, {
+            text: db.store.buka
+                ? '✅ *TOKO BERHASIL DIBUKA* (Status: Online)'
+                : '🔴 *TOKO BERHASIL DITUTUP* (Status: Offline)'
         });
     }
-
-    db.store.buka = mode === 'on';
-
-    if (db.saveStore) db.saveStore();
-    else if (db.save) db.save();
-
-    return sock.sendMessage(sender,{
-        text:
-            db.store.buka
-            ? '✅ Toko dibuka'
-            : '🔴 Toko ditutup'
-    });
-}
 
 if (cmd === 'namatoko') {
 
@@ -157,14 +157,62 @@ if (cmd === 'namatoko') {
         return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditambah ${formatRupiah(nominal)}. Saldo baru: ${formatRupiah(user.saldo)}` });
     }
 
+    if (cmd === 'tariksaldo') {
+        const [phoneRaw, nomStr] = args.split(' ');
+        if (!phoneRaw || !nomStr) return sock.sendMessage(sender, { text: "❌ Format: .tariksaldo 62812xxx 50000" });
+        const nominal = parseInt(nomStr);
+        if (isNaN(nominal) || nominal <= 0) {
+            return sock.sendMessage(sender, { text: "❌ Nominal harus berupa angka valid lebih dari 0." });
+        }
+        let phone = phoneRaw.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+        if (phone.length < 10 || !phone.startsWith('62')) {
+            return sock.sendMessage(sender, { text: "❌ Nomor tujuan tidak valid. Format: 62812xxx (Min 10 digit)." });
+        }
+
+        const targetJid = `${phone}@s.whatsapp.net`;
+        const user = db.getUser(targetJid);
+        if ((Number(user.saldo) || 0) < nominal) {
+            return sock.sendMessage(sender, { text: `❌ Saldo member tidak mencukupi untuk ditarik. Saldo saat ini: ${formatRupiah(user.saldo || 0)}` });
+        }
+        user.saldo = (Number(user.saldo) || 0) - nominal;
+        if (!Array.isArray(user.history)) user.history = [];
+        const dateStr = new Date().toLocaleDateString('id-ID');
+        user.history.push(`[${dateStr}] 🔴 Penarikan/Koreksi Admin (-Rp ${nominal.toLocaleString('id-ID')})`);
+        db.saveUsers();
+
+        await sock.sendMessage(targetJid, { text: `⚠️ Saldo Anda dikoreksi/ditarik Admin sebesar ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` }).catch(()=>{});
+        return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditarik ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` });
+    }
+
     // --- FITUR CRUD MANUAL (DIJAMIN AKTIF) ---
     if (cmd === 'addmenu') {
-        const [nama, harga, stok] = args.split('|');
-        if (!nama || !harga) return sock.sendMessage(sender, { text: "❌ Format: .addmenu Nama|Harga|Stok" });
+        let nama, harga, stok;
+        if (args.includes('|')) {
+            [nama, harga, stok] = args.split('|').map(s => s ? s.trim() : '');
+        } else {
+            const parts = args.trim().split(/\s+/);
+            if (parts.length >= 2) {
+                const lastPart = parts[parts.length - 1];
+                const secondLast = parts[parts.length - 2];
+                if (!isNaN(parseInt(lastPart)) && !isNaN(parseInt(secondLast)) && parts.length >= 3) {
+                    stok = lastPart;
+                    harga = secondLast;
+                    nama = parts.slice(0, -2).join(' ');
+                } else if (!isNaN(parseInt(lastPart))) {
+                    harga = lastPart;
+                    stok = 0;
+                    nama = parts.slice(0, -1).join(' ');
+                }
+            }
+        }
+        if (!nama || !harga || isNaN(parseInt(harga))) {
+            return sock.sendMessage(sender, { text: "❌ Format salah.\nContoh:\n• .addmenu Netflix Premium 1 Bulan|35000|10\n• .addmenu Canva Pro 1 Bulan 15000 20" });
+        }
         const id = db.menu.length ? db.menu[db.menu.length - 1].id + 1 : 1;
         db.menu.push({ id, nama, harga: parseInt(harga), stok: parseInt(stok || 0), dataAkun: [] });
         db.saveMenu(); 
-        return sock.sendMessage(sender, { text: `✅ Produk Digital *${nama}* tersimpan (ID: ${id}).` });
+        return sock.sendMessage(sender, { text: `✅ Produk Digital *${nama}* tersimpan (ID: ${id}) dengan harga ${formatRupiah(parseInt(harga))} dan stok ${parseInt(stok || 0)}.` });
     }
     
     if (cmd === 'adddata') {
@@ -179,9 +227,37 @@ if (cmd === 'namatoko') {
             if (!item.dataAkun) item.dataAkun = [];
             for(let i=0; i<qty; i++) item.dataAkun.push(dataTxt);
             item.stok = item.dataAkun.length; db.saveMenu();
-            return sock.sendMessage(sender, { text: `✅ Berhasil memasukkan ${qty} data ke *${item.nama}*. Stok: ${item.stok}` });
+            return sock.sendMessage(sender, { text: `✅ Berhasil memasukkan ${qty} data ke *${item.nama}*. Stok sekarang: ${item.stok}` });
         }
         return sock.sendMessage(sender, { text: "❌ ID Produk Digital tidak ditemukan." });
+    }
+
+    if (cmd === 'cekdata') {
+        const idStr = parseInt(args.trim());
+        if (isNaN(idStr)) return sock.sendMessage(sender, { text: "❌ Format: .cekdata [ID_Produk]" });
+        const item = (db.menu || []).find(m => m.id === idStr);
+        if (!item) return sock.sendMessage(sender, { text: "❌ ID Produk tidak ditemukan." });
+        if (!item.dataAkun || item.dataAkun.length === 0) {
+            return sock.sendMessage(sender, { text: `📦 Produk *${item.nama}* belum memiliki data akun tersimpan.` });
+        }
+        let t = `📂 *DATA AKUN: ${item.nama}* (Total: ${item.dataAkun.length})\n\n`;
+        item.dataAkun.forEach((d, i) => {
+            t += `${i + 1}. \`${d}\`\n`;
+        });
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    if (cmd === 'listmenu') {
+        if (!db.menu || db.menu.length === 0) {
+            return sock.sendMessage(sender, { text: "📦 Belum ada produk digital lokal terdaftar.\nKetik .addmenu untuk menambahkan." });
+        }
+        let t = "📂 *DAFTAR PRODUK DIGITAL LOKAL*\n\n";
+        db.menu.forEach((m) => {
+            t += `• *ID ${m.id}*: ${m.nama}\n`;
+            t += `  Harga: ${formatRupiah(m.harga)} | Stok: ${m.stok || 0} akun\n\n`;
+        });
+        t += `_Gunakan .adddata [ID] [Qty] [Teks] untuk isi stok._\n_Gunakan .cekdata [ID] untuk cek akun mentah._`;
+        return sock.sendMessage(sender, { text: t });
     }
 
     if (cmd === 'delmenu') {
@@ -194,7 +270,7 @@ if (cmd === 'namatoko') {
         return sock.sendMessage(sender, { text: `✅ Berhasil menghapus produk *${namaProduk}* (ID: ${id}).` });
     }
 
-    if (cmd === 'editmenu') {
+    if (cmd === 'editmenu' || cmd === 'setharga') {
         const [idStr, hargaStr] = args.split(' ');
         if (!idStr || !hargaStr) return sock.sendMessage(sender, { text: "❌ Format salah. Contoh: .editmenu 4 15000" });
         const id = parseInt(idStr);
@@ -206,7 +282,7 @@ if (cmd === 'namatoko') {
         return sock.sendMessage(sender, { text: `✅ Harga *${item.nama}* berhasil diubah menjadi ${formatRupiah(harga)}.` });
     }
 
-    if (cmd === 'stok') {
+    if (cmd === 'stok' || cmd === 'setstok') {
         const [idStr, stokStr] = args.split(' ');
         if (!idStr || !stokStr) return sock.sendMessage(sender, { text: "❌ Format salah. Contoh: .stok 4 50" });
         const id = parseInt(idStr);
@@ -217,6 +293,31 @@ if (cmd === 'namatoko') {
         if (!item.dataAkun) item.dataAkun = [];
         db.saveMenu();
         return sock.sendMessage(sender, { text: `✅ Stok *${item.nama}* berhasil diubah menjadi ${stok}.` });
+    }
+
+    if (cmd === 'refund' || cmd === 'batal') {
+        const orderId = args.trim().toUpperCase();
+        if (!orderId) return sock.sendMessage(sender, { text: "❌ Format: .refund [ID_INVOICE]\nContoh: .refund INV-1726000000" });
+        const order = (db.orders || []).find(o => o.id && o.id.toUpperCase() === orderId);
+        if (!order) return sock.sendMessage(sender, { text: `❌ Order ${orderId} tidak ditemukan.` });
+        if (order.status === 'success') {
+            return sock.sendMessage(sender, { text: `⚠️ Order ${orderId} sudah berstatus SUKSES dan tidak dapat dibatalkan.` });
+        }
+        if (order.refunded) {
+            return sock.sendMessage(sender, { text: `⚠️ Order ${orderId} sudah pernah di-refund sebelumnya.` });
+        }
+        const refundRes = db.refundOrder(order, 'Dibatalkan Manual oleh Admin');
+        if (refundRes.success) {
+            await sock.sendMessage(sender, {
+                text: `✅ *ORDER DIBATALKAN & DIREFUND*\n\n🧾 Invoice: \`${order.id}\`\n📦 Produk: ${order.item || order.sku}\n💸 Refund: ${formatRupiah(refundRes.amount)}\n👤 Penerima: ${refundRes.buyerJid}\n💰 Saldo Baru Member: ${formatRupiah(refundRes.newSaldo)}`
+            });
+            await sock.sendMessage(refundRes.buyerJid, {
+                text: `❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda telah dibatalkan oleh Admin.\n\n📦 Produk: ${order.item || order.sku}\n🧾 Invoice: \`${order.id}\`\n💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.`
+            }).catch(() => {});
+        } else {
+            return sock.sendMessage(sender, { text: `❌ Gagal refund: ${refundRes.reason}` });
+        }
+        return;
     }
 
     if (cmd === 'resend') {
@@ -616,7 +717,8 @@ ${rate}%`
         t += `• Pulsa: ${formatRupiah(configData.profit.pulsa)}\n`;
         t += `• Data: ${formatRupiah(configData.profit.data)}\n`;
         t += `• E-Money: ${formatRupiah(configData.profit.emoney)}\n`;
-        t += `• PLN: ${formatRupiah(configData.profit.pln)}\n\n`;
+        t += `• PLN: ${formatRupiah(configData.profit.pln)}\n`;
+        t += `• Pascabayar: ${formatRupiah(configData.profit.pasca)}\n\n`;
         t += `📊 *KEUNTUNGAN TIER NOMINAL:*\n`;
         t += `• Kecil (≤ 25rb): ${formatRupiah(configData.profitTier.kecil)}\n`;
         t += `• Sedang (≤ 100rb): ${formatRupiah(configData.profitTier.sedang)}\n`;
@@ -665,8 +767,8 @@ ${rate}%`
         const [katRaw, nomStr] = args.trim().split(/\s+/);
         const kat = (katRaw || '').toLowerCase();
         const nom = parseInt(nomStr);
-        if (!['pulsa', 'data', 'emoney', 'pln'].includes(kat) || isNaN(nom) || nom < 0 || nom > 500000) {
-            return sock.sendMessage(sender, { text: "❌ Format salah. Margin harus antara Rp0 - Rp500.000.\nContoh: .setprofit pulsa 750" });
+        if (!['pulsa', 'data', 'emoney', 'pln', 'pasca'].includes(kat) || isNaN(nom) || nom < 0 || nom > 500000) {
+            return sock.sendMessage(sender, { text: "❌ Format salah. Margin harus antara Rp0 - Rp500.000.\nContoh: .setprofit pulsa 750\nKategori: pulsa, data, emoney, pln, pasca" });
         }
         if (!db.settings) db.settings = {};
         const configData = require('../config');
