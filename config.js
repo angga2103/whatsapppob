@@ -5,9 +5,23 @@ const path = require('path');
 const getSettings = () => {
     try {
         const file = path.join(__dirname, 'database', 'settings.json');
+        const backupFile = path.join(__dirname, 'database', 'settings.backup.json');
+        let s = {};
         if (fs.existsSync(file)) {
-            return JSON.parse(fs.readFileSync(file, 'utf8'));
+            try { s = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) {}
         }
+        if (fs.existsSync(backupFile)) {
+            try {
+                const b = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
+                if (!s.digiflazz?.username && b.digiflazz?.username) s.digiflazz = b.digiflazz;
+                if (!s.paymentkita?.merchantId && b.paymentkita?.merchantId) s.paymentkita = b.paymentkita;
+                if (!s.pakasir?.project && b.pakasir?.project) s.pakasir = b.pakasir;
+                if (!s.paymentGateway && b.paymentGateway) s.paymentGateway = b.paymentGateway;
+                if (!s.telegram?.token && b.telegram?.token) s.telegram = b.telegram;
+                if (!s.owner && b.owner) s.owner = b.owner;
+            } catch (_) {}
+        }
+        return s;
     } catch (_) {}
     return {};
 };

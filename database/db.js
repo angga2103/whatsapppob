@@ -37,6 +37,128 @@ checkFile('./database/store.json', '{"buka": true, "namaToko": "DIGITAL STORE"}'
 checkFile('./database/deposits.json', '[]');
 checkFile('./database/settings.json', '{}');
 
+const syncSettingsToEnv = (settings) => {
+    if (!settings || typeof settings !== 'object') return;
+    try {
+        const envPath = path.resolve(__dirname, '..', '.env');
+        let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+        
+        const updates = {};
+        if (settings.telegram?.token) updates['TELEGRAM_TOKEN'] = settings.telegram.token;
+        if (settings.telegram?.chatId) updates['TELEGRAM_CHAT_ID'] = settings.telegram.chatId;
+        if (settings.digiflazz?.username) updates['DIGIFLAZZ_USERNAME'] = settings.digiflazz.username;
+        if (settings.digiflazz?.key) updates['DIGIFLAZZ_KEY'] = settings.digiflazz.key;
+        if (settings.paymentkita?.merchantId) updates['PAYMENTKITA_MERCHANT_ID'] = settings.paymentkita.merchantId;
+        if (settings.paymentkita?.secret) updates['PAYMENTKITA_SECRET'] = settings.paymentkita.secret;
+        if (settings.pakasir?.project) updates['PAKASIR_PROJECT'] = settings.pakasir.project;
+        if (settings.pakasir?.key) updates['PAKASIR_KEY'] = settings.pakasir.key;
+        if (settings.paymentGateway) updates['PAYMENT_GATEWAY'] = settings.paymentGateway;
+
+        let lines = envContent ? envContent.split(/\r?\n/) : [];
+        for (const [key, val] of Object.entries(updates)) {
+            if (!val) continue;
+            let found = false;
+            lines = lines.map(line => {
+                if (line.trim().startsWith(`${key}=`)) {
+                    found = true;
+                    return `${key}=${val}`;
+                }
+                return line;
+            });
+            if (!found) {
+                lines.push(`${key}=${val}`);
+            }
+        }
+        fs.writeFileSync(envPath, lines.join('\n').trim() + '\n', 'utf8');
+    } catch (err) {
+        console.error('[ENV SYNC ERROR]', err.message);
+    }
+};
+
+const recoverSettings = () => {
+    let settings = safeReadJson('./database/settings.json', {});
+    const backupPath = './database/settings.backup.json';
+    const backupSettings = fs.existsSync(backupPath) ? safeReadJson(backupPath, {}) : {};
+
+    // 1. Pulihkan dari settings.backup.json jika kosong
+    if (!settings.digiflazz?.username && backupSettings.digiflazz?.username) {
+        settings.digiflazz = backupSettings.digiflazz;
+    }
+    if (!settings.paymentkita?.merchantId && backupSettings.paymentkita?.merchantId) {
+        settings.paymentkita = backupSettings.paymentkita;
+    }
+    if (!settings.pakasir?.project && backupSettings.pakasir?.project) {
+        settings.pakasir = backupSettings.pakasir;
+    }
+    if (!settings.paymentGateway && backupSettings.paymentGateway) {
+        settings.paymentGateway = backupSettings.paymentGateway;
+    }
+    if (!settings.telegram?.token && backupSettings.telegram?.token) {
+        settings.telegram = backupSettings.telegram;
+    }
+
+    // 2. Pulihkan dari .env jika masih kosong
+    const envPath = path.resolve(__dirname, '..', '.env');
+    if (fs.existsSync(envPath)) {
+        try {
+            const dotenv = require('dotenv');
+            const envConfig = dotenv.parse(fs.readFileSync(envPath));
+            if (!settings.digiflazz?.username && envConfig.DIGIFLAZZ_USERNAME) {
+                settings.digiflazz = { username: envConfig.DIGIFLAZZ_USERNAME, key: envConfig.DIGIFLAZZ_KEY || '' };
+            }
+            if (!settings.paymentkita?.merchantId && envConfig.PAYMENTKITA_MERCHANT_ID) {
+                settings.paymentkita = { merchantId: envConfig.PAYMENTKITA_MERCHANT_ID, secret: envConfig.PAYMENTKITA_SECRET || '' };
+            }
+            if (!settings.pakasir?.project && envConfig.PAKASIR_PROJECT) {
+                settings.pakasir = { project: envConfig.PAKASIR_PROJECT, key: envConfig.PAKASIR_KEY || '' };
+            }
+            if (!settings.paymentGateway && envConfig.PAYMENT_GATEWAY) {
+                settings.paymentGateway = envConfig.PAYMENT_GATEWAY;
+            }
+            if (!settings.telegram?.token && envConfig.TELEGRAM_TOKEN) {
+                settings.telegram = { token: envConfig.TELEGRAM_TOKEN, chatId: envConfig.TELEGRAM_CHAT_ID || '' };
+            }
+        } catch (_) {}
+    }
+
+    // 3. Pulihkan dari git stash jika sebelumnya ter-stash saat update di VPS
+    try {
+        const { execSync } = require('child_process');
+        const stashes = execSync('git stash list', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+        if (stashes && (!settings.digiflazz?.username || !settings.paymentkita?.merchantId)) {
+            const stashLines = stashes.split('\n');
+            for (let i = 0; i < Math.min(stashLines.length, 5); i++) {
+                try {
+                    const stashedStr = execSync(`git show stash@{${i}}:database/settings.json`, { stdio: 'pipe', encoding: 'utf-8' }).trim();
+                    if (stashedStr) {
+                        const stashedObj = JSON.parse(stashedStr);
+                        if (stashedObj.digiflazz?.username && !settings.digiflazz?.username) {
+                            settings.digiflazz = stashedObj.digiflazz;
+                            console.log(`[RECOVERY] 🛡️ Berhasil memulihkan akun Digiflazz dari git stash@{${i}}!`);
+                        }
+                        if (stashedObj.paymentkita?.merchantId && !settings.paymentkita?.merchantId) {
+                            settings.paymentkita = stashedObj.paymentkita;
+                            console.log(`[RECOVERY] 🛡️ Berhasil memulihkan akun PaymentKita dari git stash@{${i}}!`);
+                        }
+                        if (stashedObj.pakasir?.project && !settings.pakasir?.project) {
+                            settings.pakasir = stashedObj.pakasir;
+                            console.log(`[RECOVERY] 🛡️ Berhasil memulihkan akun Pakasir dari git stash@{${i}}!`);
+                        }
+                        if (stashedObj.paymentGateway && !settings.paymentGateway) {
+                            settings.paymentGateway = stashedObj.paymentGateway;
+                        }
+                    }
+                } catch (_) {}
+            }
+        }
+    } catch (_) {}
+
+    atomicWriteJson('./database/settings.json', settings);
+    atomicWriteJson(backupPath, settings);
+    syncSettingsToEnv(settings);
+    return settings;
+};
+
 const db = {
     menu: safeReadJson('./database/menu.json', []),
     ppob: safeReadJson('./database/ppob.json', []),
@@ -45,7 +167,7 @@ const db = {
     postpaid: safeReadJson('./database/postpaid.json', []),
     store: safeReadJson('./database/store.json', { buka: true, namaToko: "DIGITAL STORE" }),
     deposits: safeReadJson('./database/deposits.json', []),
-    settings: safeReadJson('./database/settings.json', {}),
+    settings: recoverSettings(),
     
     saveMenu: () => atomicWriteJson('./database/menu.json', db.menu),
     savePpob: () => atomicWriteJson('./database/ppob.json', db.ppob),
@@ -54,7 +176,11 @@ const db = {
     savePostpaid: () => atomicWriteJson('./database/postpaid.json', db.postpaid),
     saveStore: () => atomicWriteJson('./database/store.json', db.store),
     saveDeposits: () => atomicWriteJson('./database/deposits.json', db.deposits),
-    saveSettings: () => atomicWriteJson('./database/settings.json', db.settings),
+    saveSettings: () => {
+        atomicWriteJson('./database/settings.json', db.settings);
+        atomicWriteJson('./database/settings.backup.json', db.settings);
+        syncSettingsToEnv(db.settings);
+    },
     
     save: () => {
         db.saveStore();

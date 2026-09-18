@@ -110,16 +110,27 @@ async function runInstaller() {
         }
     }
 
-    // Tulis file .env lengkap dengan template aman
+    // Tulis file .env lengkap dengan template aman (baca konfigurasi yang ada agar tidak terhapus)
+    let existingSettings = {};
+    try {
+        const sPath = path.join(__dirname, 'database', 'settings.json');
+        const bPath = path.join(__dirname, 'database', 'settings.backup.json');
+        if (fs.existsSync(sPath)) existingSettings = JSON.parse(fs.readFileSync(sPath, 'utf8'));
+        if (fs.existsSync(bPath)) {
+            const b = JSON.parse(fs.readFileSync(bPath, 'utf8'));
+            existingSettings = { ...b, ...existingSettings };
+        }
+    } catch (_) {}
+
     const port = process.env.PORT || '3000';
-    const owner = process.env.OWNER_NUMBER || '';
-    const digiUser = process.env.DIGIFLAZZ_USERNAME || '';
-    const digiKey = process.env.DIGIFLAZZ_KEY || '';
-    const pMId = process.env.PAYMENTKITA_MERCHANT_ID || '';
-    const pSecret = process.env.PAYMENTKITA_SECRET || '';
-    const pksProj = process.env.PAKASIR_PROJECT || '';
-    const pksKey = process.env.PAKASIR_KEY || '';
-    const pGw = process.env.PAYMENT_GATEWAY || 'paymentkita';
+    const owner = (Array.isArray(existingSettings.owner) ? existingSettings.owner[0] : '') || process.env.OWNER_NUMBER || '';
+    const digiUser = existingSettings.digiflazz?.username || process.env.DIGIFLAZZ_USERNAME || '';
+    const digiKey = existingSettings.digiflazz?.key || process.env.DIGIFLAZZ_KEY || '';
+    const pMId = existingSettings.paymentkita?.merchantId || process.env.PAYMENTKITA_MERCHANT_ID || '';
+    const pSecret = existingSettings.paymentkita?.secret || process.env.PAYMENTKITA_SECRET || '';
+    const pksProj = existingSettings.pakasir?.project || process.env.PAKASIR_PROJECT || '';
+    const pksKey = existingSettings.pakasir?.key || process.env.PAKASIR_KEY || '';
+    const pGw = existingSettings.paymentGateway || process.env.PAYMENT_GATEWAY || 'paymentkita';
 
     const envContent = `# ==============================================================================
 # 🤖 KREDENSIAL BOT PPOB & TOKO DIGITAL
@@ -149,16 +160,18 @@ PAKASIR_KEY=${pksKey}
     fs.writeFileSync('.env', envContent, 'utf8');
     console.log(`${C.green}✓ Konfigurasi .env berhasil disimpan!${C.reset}`);
 
-    // Update settings.json agar sync
+    // Update settings.json agar sync tanpa menghapus akun lain
     try {
         const settingsPath = path.join(__dirname, 'database', 'settings.json');
-        let currentSettings = {};
+        const backupPath = path.join(__dirname, 'database', 'settings.backup.json');
+        let currentSettings = { ...existingSettings };
         if (fs.existsSync(settingsPath)) {
-            currentSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+            try { currentSettings = { ...currentSettings, ...JSON.parse(fs.readFileSync(settingsPath, 'utf8')) }; } catch (_) {}
         }
         currentSettings.telegram = { token: tgToken, chatId: tgChat };
         if (!currentSettings.paymentGateway) currentSettings.paymentGateway = pGw;
         fs.writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2), 'utf8');
+        fs.writeFileSync(backupPath, JSON.stringify(currentSettings, null, 2), 'utf8');
     } catch (_) {}
 
     // 4. Manajemen Proses Background (PM2)

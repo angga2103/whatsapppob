@@ -2384,11 +2384,43 @@ try {
 
                 try {
                     const { execSync } = require('child_process');
+                    const path = require('path');
                     let branch = 'main';
                     try {
                         branch = execSync('git rev-parse --abbrev-ref HEAD', { stdio: 'pipe', encoding: 'utf-8' }).trim() || 'main';
                     } catch (_) {}
 
+                    // 1. BACKUP DATA PENGGUNA & KREDENSIAL SEBELUM GIT PULL
+                    const backupDir = path.resolve('./system/.update_backup');
+                    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+                    const filesToProtect = [
+                        'database/settings.json',
+                        'database/settings.backup.json',
+                        'database/store.json',
+                        'database/menu.json',
+                        'database/ppob.json',
+                        'database/postpaid.json',
+                        'database/users.json',
+                        'database/orders.json',
+                        'database/deposits.json',
+                        '.env'
+                    ];
+
+                    const memoryBackups = {};
+                    for (const f of filesToProtect) {
+                        if (fs.existsSync(f)) {
+                            memoryBackups[f] = fs.readFileSync(f, 'utf8');
+                            try { fs.writeFileSync(path.join(backupDir, path.basename(f)), memoryBackups[f], 'utf8'); } catch (_) {}
+                        }
+                    }
+
+                    // 2. Discard local edits on tracked database files so git pull merges cleanly
+                    try {
+                        execSync('git checkout -- database/settings.json database/store.json database/menu.json database/ppob.json database/postpaid.json 2>/dev/null || true', { stdio: 'ignore' });
+                    } catch (_) {}
+
+                    // Simpan file non-database jika ada perubahan tak terlacak
                     const dirty = execSync('git status --porcelain', { stdio: 'pipe', encoding: 'utf-8' }).trim();
                     if (dirty) {
                         try { execSync('git stash', { stdio: 'pipe' }); } catch (_) {}
@@ -2396,6 +2428,27 @@ try {
 
                     const pullOutput = execSync(`git pull origin ${branch}`, { stdio: 'pipe', encoding: 'utf-8' }).trim();
                     const newCommit = execSync('git log -1 --pretty=format:"%h (%cd) - %s" --date=format:"%d/%m/%Y %H:%M"', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+
+                    // 3. RESTORE SEMUA DATA PENGGUNA SETELAH GIT PULL
+                    for (const f of filesToProtect) {
+                        if (memoryBackups[f]) {
+                            if (f === 'database/settings.json') {
+                                try {
+                                    const oldObj = JSON.parse(memoryBackups[f]);
+                                    const newObj = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : {};
+                                    const merged = { ...newObj, ...oldObj };
+                                    fs.writeFileSync(f, JSON.stringify(merged, null, 2), 'utf8');
+                                } catch (_) {
+                                    fs.writeFileSync(f, memoryBackups[f], 'utf8');
+                                }
+                            } else {
+                                fs.writeFileSync(f, memoryBackups[f], 'utf8');
+                            }
+                        }
+                    }
+
+                    // 4. Pastikan sinkronisasi kredensial ke .env dan backup
+                    if (db && db.saveSettings) db.saveSettings();
 
                     let npmNotice = '';
                     if (pullOutput.includes('package.json')) {
@@ -2411,6 +2464,7 @@ try {
                         `✅ *PEMBARUAN BERHASIL DITERAPKAN!*\n\n` +
                         `*Output Git:*\n\`\`\`\n${pullOutput.slice(0, 300)}\n\`\`\`\n` +
                         `*Commit Terbaru:*\n\`${newCommit}\`${npmNotice}\n\n` +
+                        `🛡️ *Kredensial & Database:* Utuh & Terlindungi 100%\n` +
                         `🔄 *Sistem sedang merestart proses (PM2)...*\nBot WhatsApp & Telegram akan kembali online dalam 3-5 detik!`,
                         { parse_mode: 'Markdown' }
                     );
