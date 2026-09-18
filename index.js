@@ -228,14 +228,6 @@ async function startBot(targetPhone = null, tgChatId = null) {
     if (!sock.authState.creds.registered) {
         let phoneToPair = targetPhone;
 
-        // Jika tidak ada nomor dari Telegram, dan kita berada di terminal interaktif TTY
-        if (!phoneToPair && process.stdin.isTTY) {
-            console.log('\n🤖 [WHATSAPP LOGIN] Silakan masukkan nomor WhatsApp Bot...');
-            const input = await question('Masukan Nomor HP Bot (Format 628xxx): ');
-            phoneToPair = (input || '').replace(/[^0-9]/g, '');
-            if (phoneToPair.startsWith('0')) phoneToPair = '62' + phoneToPair.slice(1);
-        }
-
         if (phoneToPair && phoneToPair.length >= 10 && phoneToPair.startsWith('62')) {
             console.log(`[PAIRING] ⏳ Menunggu 3 detik agar socket stabil sebelum memanggil requestPairingCode...`);
             // ATURAN EMAS 3: Jeda minimal 3000ms untuk stabilisasi koneksi
@@ -1163,16 +1155,24 @@ try {
     
     // Mencegah bentrok / double polling jika file dimuat ulang
     if (!global.botTg && config.telegram.token && config.telegram.token.includes(':')) {
-        global.botTg = new TelegramBot(config.telegram.token, {polling: true});
+        global.botTg = new TelegramBot(config.telegram.token, { polling: true });
         global.awaitingPhoneNumber = false;
+
+        // Tangkap polling error agar tidak crash dan mudah dilacak
+        global.botTg.on('polling_error', (error) => {
+            console.warn('⚠️ [TELEGRAM POLLING]:', error.code || error.message);
+        });
 
         global.botTg.on('callback_query', async (query) => {
             const chatId = String(query.message?.chat?.id || query.from?.id || '');
-            const authorizedChatId = String(config.telegram.chatId || '');
+            const authorizedChatId = String(config.telegram.chatId || '').trim();
 
-            if (!authorizedChatId || chatId !== authorizedChatId) {
+            if (authorizedChatId && chatId !== authorizedChatId) {
                 console.warn(`[SECURITY] Unauthorized Telegram callback attempt from Chat ID: ${chatId}`);
-                return global.botTg.answerCallbackQuery(query.id, { text: "❌ Akses ditolak! Anda bukan Administrator.", show_alert: true });
+                return global.botTg.answerCallbackQuery(query.id, { 
+                    text: `❌ Akses ditolak! Chat ID Anda (${chatId}) tidak terdaftar sebagai Admin.`, 
+                    show_alert: true 
+                });
             }
 
             const action = query.data;
@@ -1212,28 +1212,83 @@ try {
 
         global.botTg.on('message', async (msg) => {
             const chatId = String(msg.chat?.id || '');
-            const authorizedChatId = String(config.telegram.chatId || '');
-            if (!authorizedChatId || chatId !== authorizedChatId) return;
-
+            const authorizedChatId = String(config.telegram.chatId || '').trim();
             const text = (msg.text || '').trim();
 
-            // Perintah manual /pair
-            if (text === '/pair') {
-                global.awaitingPhoneNumber = true;
-                return global.botTg.sendMessage(chatId, "📱 *TAUTKAN NOMOR BARU*\n\nSilakan balas pesan ini dengan nomor WhatsApp baru Anda menggunakan awalan *62*:\n\nContoh: `6281234567890`", {parse_mode: "Markdown"});
+            if (!text) return;
+
+            // 1. Cek Chat ID (selalu diizinkan agar admin bisa mengetahui Chat ID-nya)
+            if (/^\/id(@\w+)?$/i.test(text)) {
+                return global.botTg.sendMessage(chatId, `🆔 *Chat ID Telegram Anda:* \`${chatId}\``, { parse_mode: 'Markdown' });
             }
 
-            // Jika bot sedang menunggu input nomor HP
-            if (global.awaitingPhoneNumber && text) {
-                let cleanPhone = text.replace(/[^0-9]/g, '');
+            // 2. Validasi Hak Akses Admin
+            if (!authorizedChatId) {
+                console.warn(`[TELEGRAM] Pesan diterima tapi TELEGRAM_CHAT_ID belum diisi di .env! Pengirim: ${chatId}`);
+                return global.botTg.sendMessage(chatId,
+                    `⚠️ *TELEGRAM CHAT ID BELUM DIATUR*\n\n` +
+                    `Chat ID Telegram Anda: \`${chatId}\`\n\n` +
+                    `Untuk mengaktifkan kendali bot, masukkan baris berikut ke file \`.env\` di VPS:\n` +
+                    `\`TELEGRAM_CHAT_ID=${chatId}\`\n\n` +
+                    `Lalu restart bot dengan: \`pm2 restart all\` atau \`npm start\``,
+                    { parse_mode: 'Markdown' }
+                );
+            }
+
+            if (chatId !== authorizedChatId) {
+                console.warn(`[SECURITY] Pesan '${text}' dari Chat ID ${chatId} ditolak (Admin: ${authorizedChatId})`);
+                return global.botTg.sendMessage(chatId,
+                    `❌ *Akses Ditolak!*\n\n` +
+                    `Chat ID Anda: \`${chatId}\`\n` +
+                    `Chat ID Admin di .env: \`${authorizedChatId}\`\n\n` +
+                    `Jika ini akun Anda, ubah \`TELEGRAM_CHAT_ID=${chatId}\` di file \`.env\` VPS lalu restart bot.`,
+                    { parse_mode: 'Markdown' }
+                );
+            }
+
+            // 3. Menu Utama (/start, /menu, /help)
+            if (/^\/start(@\w+)?$/i.test(text) || /^\/menu(@\w+)?$/i.test(text) || /^\/help(@\w+)?$/i.test(text)) {
+                return global.botTg.sendMessage(chatId,
+                    `🤖 *COMMAND CENTER BOT PPOB*\n\n` +
+                    `Halo Admin! Sistem bot aktif dan siap menerima perintah.\n\n` +
+                    `📋 *Daftar Perintah:*\n` +
+                    `• \`/pair\` - Tautkan nomor WhatsApp baru\n` +
+                    `• \`/pair 628xxx\` - Langsung kirim nomor untuk pairing\n` +
+                    `• \`/id\` - Cek Chat ID Telegram Anda\n\n` +
+                    `Silakan klik tombol di bawah untuk tindakan cepat:`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '📱 TAUTKAN NOMOR BARU', callback_data: 'cmd_pair_new' }],
+                                [{ text: '📦 AUTO RESTORE BACKUP', callback_data: 'cmd_restore' }]
+                            ]
+                        }
+                    }
+                );
+            }
+
+            // Fungsi Pembantu: Eksekusi Pairing WhatsApp
+            const triggerPairing = async (rawPhone) => {
+                let cleanPhone = (rawPhone || '').replace(/[^0-9]/g, '');
                 if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
 
                 if (!cleanPhone.startsWith('62') || cleanPhone.length < 10) {
-                    return global.botTg.sendMessage(chatId, "❌ *Format Nomor Tidak Valid!*\n\nNomor harus diawali angka *62* dan minimal 10 digit (contoh: `6281234567890`).\n\nSilakan kirim ulang nomor WhatsApp Anda:", {parse_mode: 'Markdown'});
+                    return global.botTg.sendMessage(chatId, 
+                        `❌ *Format Nomor Tidak Valid!*\n\n` +
+                        `Nomor harus diawali angka *62* dan minimal 10 digit (contoh: \`6281234567890\`).\n\n` +
+                        `Silakan ketik ulang nomor WhatsApp Anda:`, 
+                        { parse_mode: 'Markdown' }
+                    );
                 }
 
                 global.awaitingPhoneNumber = false;
-                await global.botTg.sendMessage(chatId, `⏳ *Menghubungkan ke server WhatsApp...*\n\nNomor target: \`${cleanPhone}\`\n\n_Menyiapkan socket dan meminta kode pairing (mohon tunggu 3-5 detik)..._`, {parse_mode: 'Markdown'});
+                await global.botTg.sendMessage(chatId, 
+                    `⏳ *Menghubungkan ke server WhatsApp...*\n\n` +
+                    `Nomor target: \`${cleanPhone}\`\n\n` +
+                    `_Menyiapkan socket Baileys dan meminta kode pairing (mohon tunggu 3-5 detik)..._`, 
+                    { parse_mode: 'Markdown' }
+                );
 
                 try {
                     // Tutup sesi socket lama jika ada
@@ -1251,17 +1306,44 @@ try {
                     await startBot(cleanPhone, chatId);
                 } catch (err) {
                     console.error('[TELEGRAM PAIRING ERROR]:', err);
-                    global.botTg.sendMessage(chatId, `❌ *Gagal Memulai Pairing:*\n\`${err.message}\`\n\nSilakan ulangi proses dengan menekan tombol di bawah:`, {
-                        parse_mode: 'Markdown',
-                        reply_markup: {
-                            inline_keyboard: [[{ text: '🔄 Coba Tautkan Ulang', callback_data: 'cmd_pair_new' }]]
+                    global.botTg.sendMessage(chatId, 
+                        `❌ *Gagal Memulai Pairing:*\n\`${err.message}\`\n\n` +
+                        `Silakan ulangi proses dengan menekan tombol di bawah:`, 
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [[{ text: '🔄 Coba Tautkan Ulang', callback_data: 'cmd_pair_new' }]]
+                            }
                         }
-                    });
+                    );
                 }
+            };
+
+            // 4. Perintah /pair atau /pair 628xxx (dengan regex fleksibel)
+            const pairMatch = text.match(/^\/pair(@\w+)?(?:\s+(.+))?$/i);
+            if (pairMatch) {
+                const argPhone = pairMatch[2] ? pairMatch[2].trim() : '';
+                if (argPhone) {
+                    return triggerPairing(argPhone);
+                } else {
+                    global.awaitingPhoneNumber = true;
+                    return global.botTg.sendMessage(chatId, 
+                        `📱 *TAUTKAN NOMOR BARU*\n\n` +
+                        `Silakan balas pesan ini dengan nomor WhatsApp yang ingin dijadikan bot (Format *62*, contoh: \`6281234567890\`):`, 
+                        { parse_mode: "Markdown" }
+                    );
+                }
+            }
+
+            // 5. Menangkap balasan nomor saat bot sedang menunggu input
+            if (global.awaitingPhoneNumber) {
+                return triggerPairing(text);
             }
         });
         
-        console.log('[SYSTEM] 🎧 Telinga Telegram Command Center Berhasil Aktif!');
+        console.log(`[SYSTEM] 🎧 Telinga Telegram Command Center Berhasil Aktif! (Admin ID: ${config.telegram.chatId || 'Belum Diatur'})`);
+    } else if (!config.telegram.token || !config.telegram.token.includes(':')) {
+        console.warn('⚠️ [TELEGRAM] TELEGRAM_TOKEN belum diatur di file .env. Command Center Telegram dinonaktifkan.');
     }
 } catch (e) {
     console.log('[SYSTEM ERROR] Gagal memuat Telegram Listener:', e.message);
