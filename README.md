@@ -66,7 +66,7 @@ Cukup salin dan tempel **satu baris perintah** ini di terminal VPS Anda.
 Perintah ini **otomatis** memasang dependensi sistem (`git`, `curl`, `Node.js 20 LTS`), mengunduh repo secara idempoten, memasang modul NPM, dan **hanya menanyakan Telegram Bot Token & Chat ID Admin**. Seluruh konfigurasi lainnya (Pairing WhatsApp, akun Digiflazz, pemilihan Payment Gateway PaymentKita/Pakasir) diatur langsung lewat **Tombol Inline Bot Telegram**:
 
 ```bash
-git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob && chmod +x install.sh && ./install.sh
+[ -d /var/www/bot-ppob/.git ] && (cd /var/www/bot-ppob && git fetch origin && git reset --hard origin/main) || git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob; cd /var/www/bot-ppob && chmod +x install.sh && ./install.sh
 ```
 
 > [!TIP]
