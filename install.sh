@@ -4,11 +4,6 @@
 # Otomatis: Install Git, Curl, Node.js 20 LTS, Clone/Update Idempoten, dan Setup
 # ==============================================================================
 
-# Jika script dijalankan lewat pipe (contoh: curl ... | bash), arahkan input ke tty
-if [ ! -t 0 ] && [ -e /dev/tty ]; then
-    exec < /dev/tty
-fi
-
 set -e
 
 REPO_URL="https://github.com/angga2103/whatsapppob.git"
@@ -121,4 +116,8 @@ fi
 # 5. Jalankan wizard instalasi & pairing WhatsApp
 echo ""
 echo "Menjalankan wizard instalasi dan pairing WhatsApp..."
-node installer.js
+if [ -e /dev/tty ]; then
+    node installer.js < /dev/tty
+else
+    node installer.js
+fi

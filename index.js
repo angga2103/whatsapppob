@@ -212,7 +212,7 @@ async function startBot() {
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false, // Kita matikan QR, ganti ke Pairing
         auth: state, 
-        browser: Browsers.macOS('Desktop'), 
+        browser: Browsers.ubuntu('Chrome'), 
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
         keepAliveIntervalMs: 10000

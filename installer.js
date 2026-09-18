@@ -268,15 +268,19 @@ async function startPairingProcess() {
                 logger: pino({ level: 'silent' }),
                 printQRInTerminal: false,
                 auth: state,
-                browser: Browsers.macOS('Desktop'),
+                browser: Browsers.ubuntu('Chrome'),
                 connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 10000
             });
 
             sock.ev.on('creds.update', saveCreds);
 
-            // Tunggu 3 detik agar WebSocket handshake stabil
-            await new Promise(r => setTimeout(r, 3000));
+            // Tunggu hingga koneksi ke server WhatsApp siap menerima pairing code
+            try {
+                await sock.waitForConnectionUpdate(update => !!update.qr || update.connection === 'open', 15000);
+            } catch (_) {
+                await new Promise(r => setTimeout(r, 4000));
+            }
 
             const code = await sock.requestPairingCode(phone);
             const formatted = code?.match(/.{1,4}/g)?.join(' - ') || code;
