@@ -108,6 +108,7 @@ Perintah ini **otomatis** memasang dependensi sistem (`git`, `curl`, `Node.js 20
 - **[⏳ Antrian Order]** : Monitor transaksi pending/processing.
 - **[⚙️ Margin & Owner]** : Atur profit margin kategori/tiering dan tambah nomor Admin/Owner.
 - **[📦 Backup Data]** : Buat arsip backup database dan kirimkan langsung ke Telegram.
+- **[🚀 Cek Pembaruan / Update Bot]** : Cek versi bot terbaru di GitHub dan terapkan pembaruan (git pull + restart otomatis) cukup dengan 1 tombol di Telegram atau perintah `/update`.
 - **[📱 Hubungkan / Re-Pairing WA]** : Generate 8-digit kode pairing WhatsApp langsung ke Telegram.
 
 ---

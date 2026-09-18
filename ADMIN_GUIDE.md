@@ -66,6 +66,14 @@ Selain melalui chat WhatsApp, **seluruh pengaturan toko, member, produk, transak
 - **[📦 Backup Data]**: Buat arsip zip database dan kirimkan langsung ke Telegram untuk restore darurat.
 - **[📱 Hubungkan / Re-Pairing WA]**: Hubungkan nomor bot baru, kode pairing 8-digit langsung dikirimkan ke Telegram.
 
+### 8. 🚀 Cek & Pasang Pembaruan Otomatis (1-Click Updater)
+- **[🚀 Cek Pembaruan / Update Bot]** (atau ketik `/update`):
+  - Bot secara otomatis memeriksa pembaruan repositori Git dari GitHub (`origin/main`) tanpa memutus layanan yang sedang berjalan.
+  - Jika bot sudah pada versi paling baru, bot menampilkan info `✅ Up to date` lengkap dengan commit hash dan tanggal update.
+  - Jika ada pembaruan baru yang dirilis, bot merangkum jumlah commit dan ringkasan perubahannya (changelog), disertai tombol aksi **[⚡ Update Sekarang & Restart]**.
+- **[⚡ Update Sekarang & Restart]**:
+  - Menjalankan `git pull origin`, memperbarui paket dependensi jika ada perubahan `package.json`, dan otomatis merestart proses daemon (PM2) dalam 2-3 detik. Admin tidak perlu lagi repot-repot membuka terminal SSH VPS hanya untuk update bot!
+
 ---
 
 ## 2. Pengaturan Margin Keuntungan (Profit)

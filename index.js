@@ -1223,6 +1223,61 @@ try {
             return { connected, phone };
         };
 
+        const performCheckGitUpdate = () => {
+            const { execSync } = require('child_process');
+            let branch = 'main';
+            try {
+                branch = execSync('git rev-parse --abbrev-ref HEAD', { stdio: 'pipe', encoding: 'utf-8' }).trim() || 'main';
+            } catch (_) {}
+
+            // 1. Fetch remote changes dari branch aktif
+            execSync(`git fetch origin ${branch}`, { stdio: 'pipe', timeout: 30000 });
+
+            // 2. Cek commit saat ini
+            const currentCommit = execSync('git log -1 --pretty=format:"%h (%cd) - %s" --date=format:"%d/%m/%Y %H:%M"', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+
+            // 3. Hitung jumlah commit tertinggal dari origin/<branch>
+            const behindCount = parseInt(execSync(`git rev-list HEAD..origin/${branch} --count`, { stdio: 'pipe', encoding: 'utf-8' }).trim(), 10) || 0;
+
+            if (behindCount === 0) {
+                return {
+                    isUpToDate: true,
+                    currentCommit,
+                    behindCount: 0,
+                    text: `🚀 *SISTEM SUDAH VERSI TERBARU!*\n\n` +
+                        `• Branch: \`${branch}\`\n` +
+                        `• Commit Saat Ini: \`${currentCommit}\`\n` +
+                        `• Status Git: ✅ *Up to date* (Tidak ada pembaruan baru di GitHub).\n\n` +
+                        `_Seluruh fitur bot, gateway pembayaran, dan patch keamanan sudah menggunakan versi terbaru._`,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Cek Ulang', callback_data: 'tg_check_update' }],
+                            [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                        ]
+                    }
+                };
+            } else {
+                const changelog = execSync(`git log -n 5 --pretty=format:"• \`%h\`: %s" HEAD..origin/${branch}`, { stdio: 'pipe', encoding: 'utf-8' }).trim();
+
+                return {
+                    isUpToDate: false,
+                    currentCommit,
+                    behindCount,
+                    text: `🚀 *PEMBARUAN TERSEDIA DI GITHUB!*\n\n` +
+                        `Ditemukan *${behindCount} commit pembaruan baru* pada branch \`${branch}\`.\n\n` +
+                        `*Versi Lokal Saat Ini:*\n\`${currentCommit}\`\n\n` +
+                        `*Log Pembaruan Baru:*\n${changelog}\n\n` +
+                        `_Klik tombol di bawah untuk mengunduh pembaruan dan merestart bot secara otomatis._`,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '⚡ Update Sekarang & Restart', callback_data: 'tg_apply_update' }],
+                            [{ text: '⬅️ Kembali ke Dashboard', callback_data: 'tg_menu' }]
+                        ]
+                    }
+                };
+            }
+        };
+
         const renderTelegramDashboard = () => {
             const wa = getWaStatus();
             const activeGw = (config.paymentGateway || 'paymentkita').toLowerCase();
@@ -1272,6 +1327,9 @@ try {
                     [
                         { text: '⚙️ Margin & Owner', callback_data: 'tg_settings_menu' },
                         { text: '📦 Backup Data', callback_data: 'tg_backup' }
+                    ],
+                    [
+                        { text: '🚀 Cek Pembaruan / Update Bot', callback_data: 'tg_check_update' }
                     ],
                     [
                         { text: wa.connected ? '📱 Re-Pairing WA' : '📱 Hubungkan WA', callback_data: 'tg_pair' },
@@ -2288,6 +2346,83 @@ try {
                     global.botTg.sendMessage(chatId, "❌ *Gagal Restore:* " + err.message);
                 }
             }
+
+            if (action === 'tg_check_update') {
+                global.botTg.answerCallbackQuery(query.id, { text: '🔍 Memeriksa pembaruan repository Git...' });
+                try {
+                    const result = performCheckGitUpdate();
+                    return updateOrSend(chatId, query.message.message_id, result);
+                } catch (err) {
+                    const errMsg = (err.stderr ? err.stderr.toString() : err.message);
+                    return updateOrSend(chatId, query.message.message_id, {
+                        text: `❌ *Gagal Memeriksa Update Git*\n\n` +
+                            `Detail Error:\n\`\`\`\n${errMsg.slice(0, 500)}\n\`\`\`\n\n` +
+                            `_Pastikan bot dijalankan dalam repositori Git dan memiliki koneksi internet._`,
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]]
+                        }
+                    });
+                }
+            }
+
+            if (action === 'tg_apply_update') {
+                global.botTg.answerCallbackQuery(query.id, { text: '⚡ Memulai proses update...' });
+                await global.botTg.sendMessage(chatId, 
+                    `⏳ *SEDANG MENERAPKAN PEMBARUAN...*\n\n` +
+                    `1. Mengunduh kode terbaru (\`git pull origin\`)\n` +
+                    `2. Memeriksa pembaharuan dependensi (\`npm install\` jika diperlukan)\n` +
+                    `3. Merestart proses bot secara otomatis (PM2)\n\n` +
+                    `_Mohon tunggu beberapa detik hingga bot aktif kembali..._`,
+                    { parse_mode: 'Markdown' }
+                );
+
+                try {
+                    const { execSync } = require('child_process');
+                    let branch = 'main';
+                    try {
+                        branch = execSync('git rev-parse --abbrev-ref HEAD', { stdio: 'pipe', encoding: 'utf-8' }).trim() || 'main';
+                    } catch (_) {}
+
+                    const dirty = execSync('git status --porcelain', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+                    if (dirty) {
+                        try { execSync('git stash', { stdio: 'pipe' }); } catch (_) {}
+                    }
+
+                    const pullOutput = execSync(`git pull origin ${branch}`, { stdio: 'pipe', encoding: 'utf-8' }).trim();
+                    const newCommit = execSync('git log -1 --pretty=format:"%h (%cd) - %s" --date=format:"%d/%m/%Y %H:%M"', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+
+                    let npmNotice = '';
+                    if (pullOutput.includes('package.json')) {
+                        try {
+                            execSync('npm install --omit=dev --no-audit', { stdio: 'pipe', timeout: 60000 });
+                            npmNotice = '\n📦 Dependensi npm berhasil diperbarui.';
+                        } catch (npmErr) {
+                            npmNotice = `\n⚠️ Gagal update npm: ${npmErr.message}`;
+                        }
+                    }
+
+                    await global.botTg.sendMessage(chatId,
+                        `✅ *PEMBARUAN BERHASIL DITERAPKAN!*\n\n` +
+                        `*Output Git:*\n\`\`\`\n${pullOutput.slice(0, 300)}\n\`\`\`\n` +
+                        `*Commit Terbaru:*\n\`${newCommit}\`${npmNotice}\n\n` +
+                        `🔄 *Sistem sedang merestart proses (PM2)...*\nBot WhatsApp & Telegram akan kembali online dalam 3-5 detik!`,
+                        { parse_mode: 'Markdown' }
+                    );
+
+                    setTimeout(() => {
+                        process.exit(0);
+                    }, 2000);
+                } catch (err) {
+                    const errMsg = (err.stderr ? err.stderr.toString() : err.message);
+                    return global.botTg.sendMessage(chatId,
+                        `❌ *GAGAL MENERAPKAN UPDATE GIT*\n\n` +
+                        `Terjadi kendala saat \`git pull origin\`:\n\`\`\`\n${errMsg.slice(0, 600)}\n\`\`\`\n\n` +
+                        `💡 *Tips Pemulihan di Terminal VPS:*\n` +
+                        `\`cd /var/www/bot-ppob && git stash && git pull origin main && pm2 restart all\``,
+                        { parse_mode: 'Markdown' }
+                    );
+                }
+            }
         });
 
         // 📩 MESSAGE LISTENER (INTERACTIVE TEXT & COMMANDS)
@@ -3055,7 +3190,24 @@ try {
                 }
             }
 
-            // 5. Default: Render Dashboard Interaktif Inline Keyboard
+            // 5. Perintah /update atau update langsung
+            if (/^\/?update(@\w+)?$/i.test(text)) {
+                try {
+                    const res = performCheckGitUpdate();
+                    return global.botTg.sendMessage(chatId, res.text, {
+                        parse_mode: 'Markdown',
+                        reply_markup: res.reply_markup
+                    });
+                } catch (err) {
+                    const errMsg = (err.stderr ? err.stderr.toString() : err.message);
+                    return global.botTg.sendMessage(chatId,
+                        `❌ *Gagal Memeriksa Update Git*\n\n\`\`\`\n${errMsg.slice(0, 500)}\n\`\`\``,
+                        { parse_mode: 'Markdown' }
+                    );
+                }
+            }
+
+            // 6. Default: Render Dashboard Interaktif Inline Keyboard
             return updateOrSend(chatId, null, renderTelegramDashboard());
         });
         
