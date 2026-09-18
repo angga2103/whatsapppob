@@ -5,9 +5,15 @@
 # ==============================================================================
 
 set -e
+export DEBIAN_FRONTEND=noninteractive
 
 REPO_URL="https://github.com/angga2103/whatsapppob.git"
 TARGET_DIR="/var/www/bot-ppob"
+
+# 0. Pulihkan kunci dpkg/apt jika sebelumnya instalasi terputus paksa
+if command -v dpkg &> /dev/null; then
+    dpkg --configure -a 2>/dev/null || true
+fi
 
 echo ""
 echo "=================================================================="
@@ -36,7 +42,7 @@ if [ -n "$MISSING_PKGS" ]; then
 fi
 echo "✓ Dependensi dasar siap."
 
-# 2. Siapkan direktori kerja & repository secara idempoten (Anti-Error Kasus Folder Sudah Ada)
+# 2. Siapkan direktori kerja & repository secara idempoten (Anti-Error Kasus Terputus di Tengah Jalan)
 echo ""
 echo "[2/4] Menyiapkan direktori bot..."
 
@@ -52,15 +58,22 @@ else
         if [ -d "$PROJECT_DIR/.git" ]; then
             echo "ℹ️ Folder $PROJECT_DIR sudah ada. Memperbarui ke versi terbaru..."
             cd "$PROJECT_DIR"
-            git fetch --all
-            git reset --hard origin/main
+            git fetch origin main
+            git checkout main 2>/dev/null || true
             git pull origin main || true
         else
-            echo "⚠️ Folder $PROJECT_DIR sudah ada namun bukan repository git valid (terputus saat clone)."
-            echo "Membersihkan dan mengunduh ulang secara bersih..."
+            echo "⚠️ Folder $PROJECT_DIR ada namun belum lengkap (terputus saat clone sebelumnya)."
+            echo "Mengunduh ulang repository secara bersih..."
+            if [ -f "$PROJECT_DIR/.env" ]; then
+                cp "$PROJECT_DIR/.env" /tmp/.bot_env_backup 2>/dev/null || true
+            fi
             rm -rf "$PROJECT_DIR"
             git clone "$REPO_URL" "$PROJECT_DIR"
             cd "$PROJECT_DIR"
+            if [ -f /tmp/.bot_env_backup ]; then
+                mv /tmp/.bot_env_backup "$PROJECT_DIR/.env"
+                rm -f /tmp/.bot_env_backup
+            fi
         fi
     else
         echo "Mengunduh repository ke $PROJECT_DIR..."
@@ -113,7 +126,65 @@ else
     npm install --no-audit --no-fund
 fi
 
-# 5. Jalankan wizard instalasi & pairing WhatsApp
+# 5. Pasang pintasan perintah sistem 'bot-ppob' (Bisa dipanggil dari direktori mana saja)
+if [ -w /usr/local/bin ] 2>/dev/null; then
+    cat << 'EOF' > /usr/local/bin/bot-ppob
+#!/usr/bin/env bash
+TARGET="/var/www/bot-ppob"
+if [ ! -d "$TARGET" ]; then
+    echo "[ERROR] Direktori $TARGET tidak ditemukan."
+    exit 1
+fi
+cd "$TARGET"
+
+case "$1" in
+    status)
+        pm2 status bot-ppob 2>/dev/null || npm run status 2>/dev/null || pm2 status
+        ;;
+    logs|log)
+        pm2 logs bot-ppob
+        ;;
+    restart)
+        pm2 restart bot-ppob
+        ;;
+    stop)
+        pm2 stop bot-ppob
+        ;;
+    start)
+        pm2 start index.js --name "bot-ppob" 2>/dev/null || npm start
+        ;;
+    setup|pairing|login)
+        node installer.js
+        ;;
+    update)
+        git pull origin main && npm install --no-audit --no-fund && pm2 restart bot-ppob
+        ;;
+    *)
+        echo ""
+        echo "=================================================="
+        echo "   🤖 BOT PPOB & TOKO DIGITAL WHATSAPP - CLI"
+        echo "=================================================="
+        echo "Perintah cepat yang dapat dijalankan dari mana saja:"
+        echo "  bot-ppob status   : Cek status bot di background (PM2)"
+        echo "  bot-ppob logs     : Cek log pesan & transaksi live"
+        echo "  bot-ppob restart  : Restart proses bot"
+        echo "  bot-ppob stop     : Hentikan proses bot"
+        echo "  bot-ppob setup    : Buka wizard konfigurasi / pairing ulang"
+        echo "  bot-ppob update   : Tarik pembaruan terbaru dari Git"
+        echo "=================================================="
+        echo ""
+        read -p "Buka wizard instalasi / pairing sekarang? (Y/n): " opt
+        if [ "$opt" != "n" ] && [ "$opt" != "N" ]; then
+            node installer.js
+        fi
+        ;;
+esac
+EOF
+    chmod +x /usr/local/bin/bot-ppob 2>/dev/null || true
+    echo "✓ Pintasan perintah sistem 'bot-ppob' berhasil dipasang."
+fi
+
+# 6. Jalankan wizard instalasi & pairing WhatsApp
 echo ""
 echo "Menjalankan wizard instalasi dan pairing WhatsApp..."
 if [ -e /dev/tty ]; then

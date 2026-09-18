@@ -101,26 +101,43 @@ async function runInstaller() {
     // 4. WhatsApp Pairing Wizard
     console.log(`\n${C.blue}[4/4] Proses Pairing WhatsApp Bot...${C.reset}`);
     const sessionDir = path.join(__dirname, 'session_bot');
-    const hasSession = fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).length > 0;
+    const credsPath = path.join(sessionDir, 'creds.json');
+    let hasValidSession = false;
+    let registeredUser = '';
+
+    if (fs.existsSync(credsPath)) {
+        try {
+            const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+            if (creds && creds.registered === true && creds.me?.id) {
+                hasValidSession = true;
+                registeredUser = creds.me.id.split(':')[0] || creds.me.id.split('@')[0];
+            }
+        } catch (_) {}
+    }
 
     let paired = false;
-    if (hasSession) {
-        console.log(`${C.green}✓ Folder sesi session_bot terdeteksi.${C.reset}`);
-        const rePair = await ask(`${C.yellow}Apakah Anda ingin mereset sesi dan melakukan pairing baru? (y/N): ${C.reset}`);
+    if (hasValidSession) {
+        console.log(`${C.green}✓ Sesi WhatsApp aktif terverifikasi (${registeredUser}).${C.reset}`);
+        const rePair = await ask(`${C.yellow}Apakah Anda ingin mengganti nomor dan melakukan pairing baru? (y/N): ${C.reset}`);
         if (rePair.toLowerCase() === 'y') {
-            console.log(`${C.yellow}Menghapus sesi lama...${C.reset}`);
+            console.log(`${C.yellow}Membersihkan sesi lama...${C.reset}`);
             try {
                 fs.rmSync(sessionDir, { recursive: true, force: true });
                 console.log(`${C.green}✓ Sesi lama berhasil dibersihkan.${C.reset}`);
-                paired = await startPairingProcess();
-            } catch (err) {
-                console.log(`${C.red}Gagal menghapus sesi: ${err.message}${C.reset}`);
-            }
+            } catch (_) {}
+            paired = await startPairingProcess();
         } else {
-            console.log(`${C.green}✓ Menggunakan sesi yang sudah ada.${C.reset}`);
+            console.log(`${C.green}✓ Melanjutkan dengan sesi WhatsApp yang sudah terhubung.${C.reset}`);
             paired = true;
         }
     } else {
+        if (fs.existsSync(sessionDir)) {
+            console.log(`${C.yellow}ℹ️ Terdeteksi sesi pairing yang belum selesai / sempat terputus sebelumnya.${C.reset}`);
+            console.log(`${C.cyan}Membersihkan sisa sesi dan menyiapkan kode pairing baru...${C.reset}`);
+            try {
+                fs.rmSync(sessionDir, { recursive: true, force: true });
+            } catch (_) {}
+        }
         paired = await startPairingProcess();
     }
 
