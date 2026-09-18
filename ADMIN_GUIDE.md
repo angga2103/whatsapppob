@@ -17,7 +17,7 @@ Seluruh konfigurasi, margin profit, API key, multi-owner, dan manajemen produk b
 | `.setpakasir [project] [apiKey]` | Mengubah kredensial Pakasir (QRIS) | `.setpakasir myproject 98a7bc...` |
 | `.setdigi [username] [apiKey]` | Mengubah kredensial API Digiflazz | `.setdigi user123 32d4-xxxx-xxxx` |
 | `.settg [token] [chatId]` | Mengubah bot token & chat ID Telegram | `.settg 847009:AAExxx 723611` |
-| `.namatoko [nama]` | Mengubah nama toko bot | `.namatoko GarudaTel PPOB` |
+| `.namatoko [nama]` | Mengubah nama toko bot | `.namatoko Bintang PPOB` |
 | `.toko [on\|off]` | Mengatur status buka / tutup toko | `.toko on` atau `.toko off` |
 | `.cekdigi` | Cek sisa saldo akun Digiflazz | `.cekdigi` |
 

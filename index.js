@@ -3357,7 +3357,7 @@ setInterval(async () => {
                 );
                 
                 let snText = sn ? `\nSN/Ket: ${sn}` : '';
-                await botSock.sendMessage(buyerJid, { text: `✅  *PPOB SUKSES*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}${snText}\n\nTerima kasih telah berbelanja!\n\n🌐 *Transaksi produk lebih lengkap kunjungi:* garudatel.my.id` });
+                await botSock.sendMessage(buyerJid, { text: `✅  *PPOB SUKSES*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}${snText}\n\nTerima kasih telah berbelanja di *${db.store.namaToko || 'Toko Kami'}*!` });
                 console.log("[RADAR V4] ✅ Sukses! Pesan terkirim.");
             } 
             else if (status === 'Gagal') {

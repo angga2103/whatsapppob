@@ -301,7 +301,7 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     // 1. MAIN MENU
     if (['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT'].includes(txt)) {
         session.step = S.PILIH_KATEGORI;
-        let t = `╭── 🛍️ *${db.store.namaToko || 'GARUDATEL STORE'}* ──\n│\n`;
+        let t = `╭── 🛍️ *${db.store.namaToko || 'DIGITAL STORE'}* ──\n│\n`;
         t += `├ *1.* 🌐 Pulsa Reguler (Prabayar)\n`;
         t += `├ *2.* 📶 Paket Data Internet\n`;
         t += `├ *3.* 💸 Topup E-Money & E-Wallet\n`;
@@ -637,7 +637,7 @@ if (txt === 'PROFIL') {
             t += `• *.transfer [NoHP] [Nominal]* : Kirim saldo ke sesama member\n`;
             t += `• *.status [Invoice]* : Cek status / token transaksi\n`;
             t += `• *B* atau *0* : Batalkan transaksi kapan saja\n\n`;
-            t += `🏪 *${db.store.namaToko || 'GARUDATEL STORE'}* - Aman, Cepat, dan Otomatis.`;
+            t += `🏪 *${db.store.namaToko || 'DIGITAL STORE'}* - Aman, Cepat, dan Otomatis.`;
             return sock.sendMessage(sender, { text: t });
         }
     }
