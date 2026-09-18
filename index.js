@@ -1158,6 +1158,7 @@ setInterval(() => {
 // ==========================================
 try {
     const TelegramBot = require('node-telegram-bot-api');
+    const { exec, spawnSync } = require('child_process');
     
     // Mencegah bentrok / double polling jika file dimuat ulang
     if (!global.botTg && config.telegram.token && config.telegram.token.includes(':')) {
@@ -1170,6 +1171,39 @@ try {
         });
 
         const maskSecret = (str = '') => (str && str.length > 8 ? str.slice(0, 4) + '••••' + str.slice(-4) : (str ? '••••••••' : '-'));
+
+        const cleanMd = (str = '') => String(str || '').replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+
+        const normalizePhone = (raw) => {
+            let p = String(raw || '').replace(/[^0-9]/g, '');
+            if (p.startsWith('0')) p = '62' + p.slice(1);
+            return p;
+        };
+
+        const findMember = (rawPhone) => {
+            const clean = normalizePhone(rawPhone);
+            if (!clean || clean.length < 9) return null;
+            const directJid = `${clean}@s.whatsapp.net`;
+            if (db.users && db.users[directJid]) return { jid: directJid, user: db.users[directJid], phone: clean };
+            for (const [j, u] of Object.entries(db.users || {})) {
+                if (u && (u.phone === clean || j.startsWith(clean))) {
+                    return { jid: j, user: u, phone: clean };
+                }
+            }
+            return null;
+        };
+
+        const getUniqueUserPhones = () => {
+            const set = new Set();
+            for (const [jid, u] of Object.entries(db.users || {})) {
+                let p = u?.phone || (jid.includes('@s.whatsapp.net') ? jid.split('@')[0] : '');
+                p = normalizePhone(p);
+                if (p && p.startsWith('62') && p.length >= 10) {
+                    set.add(p);
+                }
+            }
+            return Array.from(set);
+        };
 
         const getWaStatus = () => {
             let connected = false;
@@ -1195,6 +1229,7 @@ try {
             const storeStatus = db.store.buka ? "🟢 BUKA" : "🔴 TUTUP (Offline)";
             const totalUsers = Object.keys(db.users || {}).length;
             const totalProducts = (db.ppob || []).length;
+            const totalDigital = (db.menu || []).length;
             const pendingOrders = (db.orders || []).filter(o => o.status === 'pending' || o.status === 'processing').length;
 
             let text = `🤖 *COMMAND CENTER BOT PPOB & TOKO DIGITAL*\n`;
@@ -1203,16 +1238,24 @@ try {
             text += `📱 *WhatsApp:* ${wa.connected ? `🟢 Terhubung (\`+${wa.phone}\`)` : '🔴 Belum Terhubung'}\n`;
             text += `💳 *Gateway:* *${activeGw.toUpperCase()}*\n`;
             text += `⚡ *Digiflazz:* ${config.digiflazz.username ? `🟢 \`${config.digiflazz.username}\`` : '🔴 Belum Diatur'}\n`;
-            text += `📦 *Katalog:* ${totalProducts} Produk | ⏳ *Antrian:* ${pendingOrders} Trx\n`;
-            text += `👥 *Pengguna:* ${totalUsers} Akun Terdaftar\n`;
+            text += `📦 *Katalog:* ${totalProducts} PPOB | ${totalDigital} Digital\n`;
+            text += `⏳ *Antrian:* ${pendingOrders} Trx | 👥 *Member:* ${totalUsers} Akun\n`;
             text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
             text += `_Silakan pilih menu kendali melalui tombol di bawah:_`;
 
             const reply_markup = {
                 inline_keyboard: [
                     [
-                        { text: wa.connected ? '📱 Re-Pairing WA' : '📱 Hubungkan WA', callback_data: 'tg_pair' },
-                        { text: db.store.buka ? '🔴 Tutup Toko' : '🟢 Buka Toko', callback_data: 'tg_toggletoko' }
+                        { text: '👥 Manajemen Member', callback_data: 'tg_member_menu' },
+                        { text: '🏪 Pengaturan Toko', callback_data: 'tg_store_menu' }
+                    ],
+                    [
+                        { text: '📦 Produk Digital / Akun', callback_data: 'tg_digital_menu' },
+                        { text: '🔍 Cari & Resend Trx', callback_data: 'tg_trx_menu' }
+                    ],
+                    [
+                        { text: '📢 Broadcast Pesan WA', callback_data: 'tg_broadcast_menu' },
+                        { text: `⏳ Antrian Order (${pendingOrders})`, callback_data: 'tg_lunas' }
                     ],
                     [
                         { text: `💳 Gateway: ${activeGw.toUpperCase()}`, callback_data: 'tg_gw_menu' },
@@ -1227,16 +1270,145 @@ try {
                         { text: '📈 Statistik Omzet', callback_data: 'tg_stats' }
                     ],
                     [
-                        { text: `⏳ Antrian Order (${pendingOrders})`, callback_data: 'tg_lunas' },
+                        { text: '⚙️ Margin & Owner', callback_data: 'tg_settings_menu' },
                         { text: '📦 Backup Data', callback_data: 'tg_backup' }
                     ],
                     [
-                        { text: '⚙️ Pengaturan & Margin', callback_data: 'tg_settings_menu' },
+                        { text: wa.connected ? '📱 Re-Pairing WA' : '📱 Hubungkan WA', callback_data: 'tg_pair' },
                         { text: '🔄 Refresh', callback_data: 'tg_menu' }
                     ]
                 ]
             };
 
+            return { text, reply_markup };
+        };
+
+        const renderStoreMenu = () => {
+            const storeStatus = db.store.buka ? "🟢 BUKA (Menerima Pesanan)" : "🔴 TUTUP (Toko Offline)";
+            let text = `🏪 *PENGATURAN TOKO DIGITAL*\n\n`;
+            text += `• Nama Toko: *${db.store.namaToko || "DIGITAL STORE"}*\n`;
+            text += `• Status Operasional: *${storeStatus}*\n`;
+            text += `• Total Produk PPOB: *${(db.ppob || []).length} SKU*\n`;
+            text += `• Total Produk Digital: *${(db.menu || []).length} Item*\n\n`;
+            text += `_Pilih aksi pengaturan toko di bawah:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: db.store.buka ? '🔴 Tutup Toko' : '🟢 Buka Toko', callback_data: 'tg_toggletoko' },
+                        { text: '🏷️ Ubah Nama Toko', callback_data: 'tg_input_namatoko' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderMemberMenu = () => {
+            const totalUsers = Object.keys(db.users || {}).length;
+            const totalSaldo = Object.values(db.users || {}).reduce((acc, u) => acc + (Number(u.saldo) || 0), 0);
+
+            let text = `👥 *MANAJEMEN PENGGUNA & MEMBER*\n\n`;
+            text += `• Total Member Terdaftar: *${totalUsers} pengguna*\n`;
+            text += `• Total Saldo Mengendap: *${formatRupiah(totalSaldo)}*\n\n`;
+            text += `_Pilih aksi manajemen member di bawah:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '🔍 Cek Profil Member', callback_data: 'tg_input_cekuser' },
+                        { text: '🏆 Top Member', callback_data: 'tg_topmember' }
+                    ],
+                    [
+                        { text: '💳 Edit Saldo (+ / -)', callback_data: 'tg_input_editsaldo' },
+                        { text: '➕ Tambah Member Manual', callback_data: 'tg_input_addmember' }
+                    ],
+                    [
+                        { text: '📋 10 Member Terbaru', callback_data: 'tg_listmember' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderDigitalMenu = () => {
+            const items = db.menu || [];
+            const totalRawData = items.reduce((acc, m) => acc + (m.dataAkun?.length || 0), 0);
+
+            let text = `📦 *MANAJEMEN PRODUK DIGITAL & AKUN*\n\n`;
+            text += `• Jumlah Produk: *${items.length} item*\n`;
+            text += `• Total Stok Data Mentah: *${totalRawData} akun/voucher*\n\n`;
+            text += `_Pilih aksi manajemen produk digital di bawah:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '📂 Daftar Produk Digital', callback_data: 'tg_listproduk' },
+                        { text: '➕ Tambah Produk', callback_data: 'tg_input_addmenu' }
+                    ],
+                    [
+                        { text: '📥 Isi Stok Data Akun', callback_data: 'tg_input_adddata' },
+                        { text: '🗑️ Hapus Produk', callback_data: 'tg_input_delmenu' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderTrxMenu = () => {
+            const orders = db.orders || [];
+            const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'processing').length;
+            const successOrders = orders.filter(o => o.status === 'success').length;
+
+            let text = `🔍 *PENCARIAN TRANSAKSI & RESEND SN*\n\n`;
+            text += `• Total Transaksi: *${orders.length} order*\n`;
+            text += `• Transaksi Sukses: *${successOrders} order*\n`;
+            text += `• Antrian Pending/Proses: *${pendingOrders} order*\n\n`;
+            text += `_Pilih aksi di bawah untuk mencari invoice atau refund order:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '🔍 Cari Invoice & Resend SN', callback_data: 'tg_input_cekinv' },
+                        { text: '💸 Batalkan & Refund Order', callback_data: 'tg_input_refund' }
+                    ],
+                    [
+                        { text: `⏳ Cek Antrian Pending (${pendingOrders})`, callback_data: 'tg_lunas' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderBroadcastMenu = () => {
+            const phones = getUniqueUserPhones();
+            let text = `📢 *BROADCAST PESAN WHATSAPP MASSAL*\n\n`;
+            text += `Kirimkan pengumuman atau promosi ke seluruh kontak WhatsApp member yang tersimpan di database.\n\n`;
+            text += `• Total Penerima Terdaftar: *${phones.length} nomor*\n`;
+            text += `• Kecepatan Pengiriman: *1 detik / pesan (Pacing Anti-Banned)*\n\n`;
+            text += `_Tekan tombol di bawah untuk mulai menulis pesan broadcast:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '✍️ Tulis Pesan Broadcast', callback_data: 'tg_input_broadcast' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
             return { text, reply_markup };
         };
 
@@ -1423,6 +1595,13 @@ try {
                 return updateOrSend(chatId, messageId, renderTelegramDashboard());
             }
 
+            // === TOKO ===
+            if (action === 'tg_store_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderStoreMenu());
+            }
+
             if (action === 'tg_toggletoko') {
                 db.store.buka = !db.store.buka;
                 if (db.saveStore) db.saveStore();
@@ -1430,7 +1609,380 @@ try {
                 global.botTg.answerCallbackQuery(query.id, { 
                     text: db.store.buka ? '🟢 Toko berhasil DIBUKA!' : '🔴 Toko berhasil DITUTUP!' 
                 });
-                return updateOrSend(chatId, messageId, renderTelegramDashboard());
+                return updateOrSend(chatId, messageId, renderStoreMenu());
+            }
+
+            // === MEMBER ===
+            if (action === 'tg_member_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderMemberMenu());
+            }
+
+            if (action === 'tg_listmember') {
+                global.botTg.answerCallbackQuery(query.id);
+                const users = Object.entries(db.users || {})
+                    .map(([jid, u]) => ({ jid, ...u }))
+                    .sort((a, b) => (b.date || 0) - (a.date || 0))
+                    .slice(0, 10);
+
+                let text = `👥 *10 MEMBER TERBARU*\n\n`;
+                if (users.length === 0) {
+                    text += `_Belum ada member terdaftar di database._`;
+                } else {
+                    users.forEach((u, i) => {
+                        const p = u.phone || (u.jid ? u.jid.split('@')[0] : '-');
+                        const nameStr = u.name ? ` (${u.name})` : '';
+                        const dateStr = u.date ? new Date(u.date).toLocaleDateString('id-ID') : '-';
+                        text += `${i + 1}. \`+${p}\`${nameStr}\n   💰 ${formatRupiah(u.saldo || 0)} | 📅 ${dateStr}\n\n`;
+                    });
+                }
+
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: '➕ Tambah Member', callback_data: 'tg_input_addmember' },
+                                { text: '🔍 Cek Member', callback_data: 'tg_input_cekuser' }
+                            ],
+                            [
+                                { text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }
+                            ]
+                        ]
+                    }
+                });
+            }
+
+            if (action === 'tg_topmember') {
+                global.botTg.answerCallbackQuery(query.id);
+                const topSaldo = Object.entries(db.users || {})
+                    .filter(([_, u]) => (Number(u.saldo) || 0) > 0)
+                    .sort((a, b) => (Number(b[1].saldo) || 0) - (Number(a[1].saldo) || 0))
+                    .slice(0, 5);
+
+                const spendingMap = {};
+                (db.orders || []).forEach(o => {
+                    if (o.status !== 'success') return;
+                    const buyer = o.buyer || o.sender || '';
+                    if (!buyer) return;
+                    const amount = Number(o.baseAmount || o.total || 0);
+                    spendingMap[buyer] = (spendingMap[buyer] || 0) + amount;
+                });
+                const topSpender = Object.entries(spendingMap)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+
+                let text = `🏆 *TOP MEMBER BOT PPOB*\n\n`;
+                text += `💰 *TOP 5 SALDO TERTINGGI:*\n`;
+                if (topSaldo.length === 0) {
+                    text += `_Belum ada member dengan saldo tersimpan._\n`;
+                } else {
+                    topSaldo.forEach(([jid, u], i) => {
+                        const p = u.phone || jid.split('@')[0];
+                        text += `${i + 1}. \`+${p}\` : *${formatRupiah(u.saldo || 0)}*\n`;
+                    });
+                }
+
+                text += `\n🔥 *TOP 5 TOTAL BELANJA (SUKSES):*\n`;
+                if (topSpender.length === 0) {
+                    text += `_Belum ada transaksi sukses tercatat._\n`;
+                } else {
+                    topSpender.forEach(([buyer, total], i) => {
+                        let clean = buyer.replace(/[^0-9]/g, '');
+                        text += `${i + 1}. \`+${clean}\` : *${formatRupiah(total)}*\n`;
+                    });
+                }
+
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Refresh Top Member', callback_data: 'tg_topmember' }],
+                            [{ text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }]
+                        ]
+                    }
+                });
+            }
+
+            if (action === 'tg_input_cekuser') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_cekuser', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🔍 *CEK PROFIL MEMBER*\n\n` +
+                    `Silakan balas pesan ini dengan nomor WhatsApp member yang ingin dicek:\n` +
+                    `Contoh: \`6281234567890\` atau \`081234567890\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                    }
+                );
+            }
+
+            if (action === 'tg_input_editsaldo') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_editsaldo', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `💳 *EDIT SALDO MEMBER (+ / -)*\n\n` +
+                    `Kirimkan nomor dan nominal perubahan saldo:\n` +
+                    `Format: \`<NOMOR> <+ / -><NOMINAL>\`\n\n` +
+                    `• Tambah Saldo: \`6281234567890 +50000\`\n` +
+                    `• Tarik Saldo: \`6281234567890 -25000\`\n\n` +
+                    `_Sistem akan otomatis mengirimkan notifikasi WA ke member bersangkutan._`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                    }
+                );
+            }
+
+            if (action.startsWith('tg_salplus_')) {
+                const phone = action.replace('tg_salplus_', '');
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'quick_saldo', mode: 'plus', phone, chatId };
+                return global.botTg.sendMessage(chatId,
+                    `➕ *TAMBAH SALDO MEMBER*\n\n` +
+                    `Target: \`+${phone}\`\n\n` +
+                    `Ketik nominal yang ingin ditambahkan (contoh: \`50000\`):`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                    }
+                );
+            }
+
+            if (action.startsWith('tg_salmin_')) {
+                const phone = action.replace('tg_salmin_', '');
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'quick_saldo', mode: 'minus', phone, chatId };
+                return global.botTg.sendMessage(chatId,
+                    `➖ *TARIK / KURANGI SALDO MEMBER*\n\n` +
+                    `Target: \`+${phone}\`\n\n` +
+                    `Ketik nominal yang ingin ditarik (contoh: \`20000\`):`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                    }
+                );
+            }
+
+            if (action === 'tg_input_addmember') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_addmember', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `➕ *TAMBAH MEMBER MANUAL*\n\n` +
+                    `Kirimkan data member baru dipisahkan spasi:\n` +
+                    `Format: \`<NOMOR> <NAMA> <SALDO_AWAL>\`\n` +
+                    `Contoh: \`62812345678 Budi 50000\`\n` +
+                    `_Catatan: Saldo awal boleh diisi 0._`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                    }
+                );
+            }
+
+            // === PRODUK DIGITAL / AKUN ===
+            if (action === 'tg_digital_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderDigitalMenu());
+            }
+
+            if (action === 'tg_listproduk') {
+                global.botTg.answerCallbackQuery(query.id);
+                const items = db.menu || [];
+                let text = `📂 *DAFTAR PRODUK DIGITAL LOKAL*\n\n`;
+                if (items.length === 0) {
+                    text += `_Belum ada produk digital lokal terdaftar._\n_Gunakan tombol Tambah Produk untuk mulai menambahkan._`;
+                } else {
+                    items.forEach((m) => {
+                        const rawCount = (m.dataAkun && m.dataAkun.length) ? m.dataAkun.length : 0;
+                        text += `• *[ID ${m.id}]* *${m.nama}*\n`;
+                        text += `  💵 Harga: ${formatRupiah(m.harga)} | 📦 Stok: ${m.stok || 0} (Akun mentah: ${rawCount})\n\n`;
+                    });
+                }
+
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: '➕ Tambah Produk', callback_data: 'tg_input_addmenu' },
+                                { text: '📥 Isi Stok Akun', callback_data: 'tg_input_adddata' }
+                            ],
+                            [
+                                { text: '🗑️ Hapus Produk', callback_data: 'tg_input_delmenu' },
+                                { text: '⬅️ Menu Digital', callback_data: 'tg_digital_menu' }
+                            ]
+                        ]
+                    }
+                });
+            }
+
+            if (action === 'tg_input_addmenu') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_addmenu', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `➕ *TAMBAH PRODUK DIGITAL BARU*\n\n` +
+                    `Kirimkan nama produk, harga modal/jual, dan estimasi stok awal dipisahkan garis vertikal (\`|\`):\n` +
+                    `Format: \`<NAMA_PRODUK>|<HARGA>|<STOK>\`\n` +
+                    `Contoh: \`Netflix Premium 1 Bulan|35000|10\`\n` +
+                    `Contoh: \`Canva Pro Lifetime|20000|5\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                    }
+                );
+            }
+
+            if (action === 'tg_input_adddata') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_adddata', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `📥 *ISI STOK DATA AKUN / VOUCHER*\n\n` +
+                    `Kirimkan ID produk dan isi akun yang ingin dimasukkan:\n` +
+                    `Format: \`<ID_PRODUK> <DATA_AKUN>\`\n` +
+                    `Atau Isi Banyak: \`<ID_PRODUK> <JUMLAH> <DATA_AKUN>\`\n\n` +
+                    `Contoh: \`1 user@mail.com:pass123\`\n` +
+                    `Contoh Voucher: \`2 10 KODE-VOUCHER-TEST\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                    }
+                );
+            }
+
+            if (action === 'tg_input_delmenu') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_delmenu', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🗑️ *HAPUS PRODUK DIGITAL*\n\n` +
+                    `Ketik ID Produk Digital yang ingin dihapus:\n` +
+                    `Contoh: \`1\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                    }
+                );
+            }
+
+            // === PENCARIAN TRANSAKSI & RESEND ===
+            if (action === 'tg_trx_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTrxMenu());
+            }
+
+            if (action === 'tg_input_cekinv') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_cekinv', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🔍 *CARI INVOICE TRANSAKSI*\n\n` +
+                    `Ketik ID Invoice transaksi yang ingin dicek:\n` +
+                    `Contoh: \`INV-1726000000\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_trx_menu' }]] }
+                    }
+                );
+            }
+
+            if (action.startsWith('tg_resend_')) {
+                const orderId = action.replace('tg_resend_', '');
+                const order = (db.orders || []).find(o => o.id === orderId);
+                if (!order) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '❌ Order tidak ditemukan.', show_alert: true });
+                }
+                if (!order.sn) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '❌ Order ini belum memiliki SN/Token!', show_alert: true });
+                }
+                const targetJid = db.normalizeJid ? db.normalizeJid(order.buyer || order.sender) : (order.buyer || order.sender);
+                if (global.sock && typeof global.sock.sendMessage === 'function') {
+                    await global.sock.sendMessage(targetJid, {
+                        text: `✅ *KIRIM ULANG TRANSAKSI*\n\n` +
+                              `🧾 Invoice: \`${order.id}\`\n` +
+                              `📦 Produk: ${order.item || order.sku}\n` +
+                              `🎯 Tujuan: ${order.target || '-'}\n` +
+                              `🔑 *SN/TOKEN/AKUN:*\n\`${order.sn}\`\n\n` +
+                              `Terima kasih telah berbelanja di *${db.store.namaToko || 'DIGITAL STORE'}*!`
+                    }).catch(() => {});
+                    return global.botTg.answerCallbackQuery(query.id, { text: `✅ SN berhasil dikirim ulang ke pembeli!`, show_alert: true });
+                } else {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '⚠️ WhatsApp bot sedang tidak terhubung.', show_alert: true });
+                }
+            }
+
+            if (action.startsWith('tg_refund_')) {
+                const orderId = action.replace('tg_refund_', '');
+                const order = (db.orders || []).find(o => o.id === orderId);
+                if (!order) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '❌ Order tidak ditemukan.', show_alert: true });
+                }
+                if (order.refunded) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '⚠️ Order ini sudah pernah di-refund!', show_alert: true });
+                }
+                if (order.status === 'success') {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '⚠️ Order berstatus SUKSES tidak dapat di-refund!', show_alert: true });
+                }
+                const refundRes = db.refundOrder(order, 'Dibatalkan oleh Admin via Telegram');
+                if (refundRes.success) {
+                    if (global.sock && typeof global.sock.sendMessage === 'function') {
+                        await global.sock.sendMessage(refundRes.buyerJid, {
+                            text: `❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda telah dibatalkan oleh Admin.\n\n📦 Produk: ${order.item || order.sku}\n🧾 Invoice: \`${order.id}\`\n💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.`
+                        }).catch(() => {});
+                    }
+                    global.botTg.answerCallbackQuery(query.id, { text: `✅ Order ${order.id} berhasil di-refund!`, show_alert: true });
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *ORDER BERHASIL DIREFUND*\n\n` +
+                        `🧾 Invoice: \`${order.id}\`\n` +
+                        `📦 Produk: ${order.item || order.sku}\n` +
+                        `💸 Refund: *${formatRupiah(refundRes.amount)}*\n` +
+                        `👤 Pembeli: \`${refundRes.buyerJid}\`\n` +
+                        `💰 Saldo Baru Member: *${formatRupiah(refundRes.newSaldo)}*`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '🔍 Menu Trx', callback_data: 'tg_trx_menu' }]] }
+                        }
+                    );
+                } else {
+                    return global.botTg.answerCallbackQuery(query.id, { text: `❌ Gagal refund: ${refundRes.reason}`, show_alert: true });
+                }
+            }
+
+            if (action === 'tg_input_refund') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_refund', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `💸 *BATALKAN & REFUND ORDER*\n\n` +
+                    `Ketik ID Invoice yang ingin dibatalkan dan dikembalikan saldonya:\n` +
+                    `Contoh: \`INV-1726000000\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_trx_menu' }]] }
+                    }
+                );
+            }
+
+            // === BROADCAST PESAN WA ===
+            if (action === 'tg_broadcast_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderBroadcastMenu());
+            }
+
+            if (action === 'tg_input_broadcast') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_broadcast', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `📢 *TULIS PESAN BROADCAST WHATSAPP*\n\n` +
+                    `Ketik isi pesan teks yang ingin dikirimkan secara massal ke seluruh member WhatsApp:\n\n` +
+                    `_Tips: Pesan akan dikirim dengan jeda aman 1 detik per nomor untuk mencegah blokir WhatsApp._`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_broadcast_menu' }]] }
+                    }
+                );
             }
 
             if (action === 'tg_pair' || action === 'cmd_pair_new') {
@@ -1782,6 +2334,579 @@ try {
                     return triggerPairing(chatId, text);
                 }
 
+                // === AWAITING CEK USER ===
+                if (stateType === 'awaiting_cekuser') {
+                    const found = findMember(text);
+                    global.tgInputState = null;
+                    if (!found) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Member Tidak Ditemukan!*\n\n` +
+                            `Nomor \`${text}\` belum terdaftar di database.\n` +
+                            `Apakah Anda ingin mendaftarkannya secara manual?`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '➕ Daftarkan Member Ini', callback_data: 'tg_input_addmember' }],
+                                        [{ text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    }
+
+                    const orders = (db.orders || []).filter(o => 
+                        o.buyer === found.jid || o.sender === found.jid || (found.phone && o.buyer && o.buyer.includes(found.phone))
+                    );
+                    const successCount = orders.filter(o => o.status === 'success').length;
+                    const failedCount = orders.filter(o => o.status === 'failed' || o.status === 'cancelled').length;
+                    const totalBelanja = orders.filter(o => o.status === 'success').reduce((acc, o) => acc + Number(o.baseAmount || o.total || 0), 0);
+                    const lastOrder = orders[orders.length - 1];
+                    const lastDate = lastOrder ? new Date(lastOrder.timestamp || lastOrder.doneAt || 0).toLocaleString('id-ID') : '-';
+                    const dateJoin = found.user.date ? new Date(found.user.date).toLocaleDateString('id-ID') : '-';
+                    let histStr = '';
+                    if (Array.isArray(found.user.history) && found.user.history.length > 0) {
+                        histStr = '\n\n📜 *3 Riwayat Terakhir:*\n' + found.user.history.slice(-3).map(h => `• ${cleanMd(h)}`).join('\n');
+                    }
+
+                    let report = `👤 *PROFIL LENGKAP MEMBER*\n\n` +
+                        `📱 *Nomor:* \`+${found.phone}\`\n` +
+                        `👤 *Nama:* *${found.user.name || '-'}*\n` +
+                        `💰 *Saldo:* *${formatRupiah(found.user.saldo || 0)}*\n` +
+                        `📅 *Terdaftar Sejak:* ${dateJoin}\n` +
+                        `📦 *Total Transaksi:* ${orders.length} order (${successCount} sukses, ${failedCount} gagal)\n` +
+                        `💵 *Total Belanja Sukses:* ${formatRupiah(totalBelanja)}\n` +
+                        `🕒 *Trx Terakhir:* ${lastDate}${histStr}`;
+
+                    return global.botTg.sendMessage(chatId, report, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: '➕ Tambah Saldo', callback_data: `tg_salplus_${found.phone}` },
+                                    { text: '➖ Tarik Saldo', callback_data: `tg_salmin_${found.phone}` }
+                                ],
+                                [
+                                    { text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }
+                                ]
+                            ]
+                        }
+                    });
+                }
+
+                // === QUICK SALDO (+ / -) ===
+                if (stateType === 'quick_saldo') {
+                    const mode = global.tgInputState.mode;
+                    const phone = global.tgInputState.phone;
+                    const nom = parseInt(text.replace(/[^0-9]/g, ''), 10);
+
+                    if (isNaN(nom) || nom <= 0) {
+                        return global.botTg.sendMessage(chatId, `❌ *Nominal tidak valid!* Masukkan angka positif saja.\nContoh: \`50000\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                        });
+                    }
+
+                    const found = findMember(phone);
+                    if (!found) {
+                        global.tgInputState = null;
+                        return global.botTg.sendMessage(chatId, `❌ Member \`+${phone}\` tidak ditemukan.`);
+                    }
+
+                    const targetJid = found.jid;
+                    const user = found.user;
+
+                    if (mode === 'plus') {
+                        user.saldo = (Number(user.saldo) || 0) + nom;
+                        if (!Array.isArray(user.history)) user.history = [];
+                        const dateStr = new Date().toLocaleDateString('id-ID');
+                        user.history.push(`[${dateStr}] 🟢 Topup Admin Telegram (+Rp ${nom.toLocaleString('id-ID')})`);
+                        db.saveUsers();
+                        global.tgInputState = null;
+
+                        if (global.sock && typeof global.sock.sendMessage === 'function') {
+                            await global.sock.sendMessage(targetJid, {
+                                text: `✅ *SALDO DITAMBAHKAN ADMIN*\n\nSaldo Anda telah ditambah sebesar *${formatRupiah(nom)}* oleh Admin.\n💵 Sisa Saldo Anda: *${formatRupiah(user.saldo)}*`
+                            }).catch(() => {});
+                        }
+
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *Saldo Member Berhasil Ditambah!*\n\n` +
+                            `• Target: \`+${phone}\`\n` +
+                            `• Tambahan: *+${formatRupiah(nom)}*\n` +
+                            `• Saldo Baru: *${formatRupiah(user.saldo)}*\n` +
+                            `• Notifikasi WA: ${global.sock ? '🟢 Terkirim' : '🟡 Bot WA Offline'}`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '🔍 Cek Profil Member', callback_data: 'tg_input_cekuser' }],
+                                        [{ text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    } else if (mode === 'minus') {
+                        if ((Number(user.saldo) || 0) < nom) {
+                            return global.botTg.sendMessage(chatId,
+                                `❌ *Saldo Tidak Mencukupi!*\n\nSaldo member \`+${phone}\` saat ini hanya *${formatRupiah(user.saldo || 0)}*, tidak dapat ditarik *${formatRupiah(nom)}*.`,
+                                {
+                                    parse_mode: 'Markdown',
+                                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                                }
+                            );
+                        }
+
+                        user.saldo = (Number(user.saldo) || 0) - nom;
+                        if (!Array.isArray(user.history)) user.history = [];
+                        const dateStr = new Date().toLocaleDateString('id-ID');
+                        user.history.push(`[${dateStr}] 🔴 Penarikan Admin Telegram (-Rp ${nom.toLocaleString('id-ID')})`);
+                        db.saveUsers();
+                        global.tgInputState = null;
+
+                        if (global.sock && typeof global.sock.sendMessage === 'function') {
+                            await global.sock.sendMessage(targetJid, {
+                                text: `⚠️ *SALDO DIKURANGI/DITARIK ADMIN*\n\nSaldo Anda telah dikurangi sebesar *${formatRupiah(nom)}* oleh Admin.\n💵 Sisa Saldo Anda: *${formatRupiah(user.saldo)}*`
+                            }).catch(() => {});
+                        }
+
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *Saldo Member Berhasil Dikurangi!*\n\n` +
+                            `• Target: \`+${phone}\`\n` +
+                            `• Penarikan: *-${formatRupiah(nom)}*\n` +
+                            `• Sisa Saldo: *${formatRupiah(user.saldo)}*\n` +
+                            `• Notifikasi WA: ${global.sock ? '🟢 Terkirim' : '🟡 Bot WA Offline'}`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '🔍 Cek Profil Member', callback_data: 'tg_input_cekuser' }],
+                                        [{ text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    }
+                }
+
+                // === AWAITING EDIT SALDO (+ / -) ===
+                if (stateType === 'awaiting_editsaldo') {
+                    const match = text.match(/^(\+?\d+)\s+([+-])\s*(\d+)$/);
+                    if (!match) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format salah!*\n\nFormat: \`<NOMOR> <+ / -><NOMINAL>\`\nContoh Tambah: \`6281234567890 +50000\`\nContoh Tarik: \`6281234567890 -25000\``,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                            }
+                        );
+                    }
+
+                    const rawPhone = match[1];
+                    const sign = match[2];
+                    const nom = parseInt(match[3], 10);
+                    const found = findMember(rawPhone);
+
+                    if (!found) {
+                        return global.botTg.sendMessage(chatId, `❌ Member \`${rawPhone}\` tidak ditemukan di database.`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                        });
+                    }
+
+                    const user = found.user;
+                    const phone = found.phone;
+                    const targetJid = found.jid;
+
+                    if (sign === '+') {
+                        user.saldo = (Number(user.saldo) || 0) + nom;
+                        if (!Array.isArray(user.history)) user.history = [];
+                        const dateStr = new Date().toLocaleDateString('id-ID');
+                        user.history.push(`[${dateStr}] 🟢 Topup Admin Telegram (+Rp ${nom.toLocaleString('id-ID')})`);
+                        db.saveUsers();
+                        global.tgInputState = null;
+
+                        if (global.sock && typeof global.sock.sendMessage === 'function') {
+                            await global.sock.sendMessage(targetJid, {
+                                text: `✅ *SALDO DITAMBAHKAN ADMIN*\n\nSaldo Anda telah ditambah sebesar *${formatRupiah(nom)}* oleh Admin.\n💵 Sisa Saldo Anda: *${formatRupiah(user.saldo)}*`
+                            }).catch(() => {});
+                        }
+
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *Saldo Member Berhasil Ditambah!*\n\n` +
+                            `• Target: \`+${phone}\`\n` +
+                            `• Tambahan: *+${formatRupiah(nom)}*\n` +
+                            `• Saldo Baru: *${formatRupiah(user.saldo)}*`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '👥 Menu Member', callback_data: 'tg_member_menu' }]] }
+                            }
+                        );
+                    } else {
+                        if ((Number(user.saldo) || 0) < nom) {
+                            return global.botTg.sendMessage(chatId,
+                                `❌ *Saldo Tidak Mencukupi!*\n\nSaldo member \`+${phone}\` saat ini hanya *${formatRupiah(user.saldo || 0)}*.`,
+                                {
+                                    parse_mode: 'Markdown',
+                                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                                }
+                            );
+                        }
+
+                        user.saldo = (Number(user.saldo) || 0) - nom;
+                        if (!Array.isArray(user.history)) user.history = [];
+                        const dateStr = new Date().toLocaleDateString('id-ID');
+                        user.history.push(`[${dateStr}] 🔴 Penarikan Admin Telegram (-Rp ${nom.toLocaleString('id-ID')})`);
+                        db.saveUsers();
+                        global.tgInputState = null;
+
+                        if (global.sock && typeof global.sock.sendMessage === 'function') {
+                            await global.sock.sendMessage(targetJid, {
+                                text: `⚠️ *SALDO DIKURANGI/DITARIK ADMIN*\n\nSaldo Anda telah dikurangi sebesar *${formatRupiah(nom)}* oleh Admin.\n💵 Sisa Saldo Anda: *${formatRupiah(user.saldo)}*`
+                            }).catch(() => {});
+                        }
+
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *Saldo Member Berhasil Dikurangi!*\n\n` +
+                            `• Target: \`+${phone}\`\n` +
+                            `• Penarikan: *-${formatRupiah(nom)}*\n` +
+                            `• Sisa Saldo: *${formatRupiah(user.saldo)}*`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '👥 Menu Member', callback_data: 'tg_member_menu' }]] }
+                            }
+                        );
+                    }
+                }
+
+                // === AWAITING ADD MEMBER MANUAL ===
+                if (stateType === 'awaiting_addmember') {
+                    const parts = text.split(/\s+/);
+                    if (parts.length < 2) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format salah!*\nFormat: \`<NOMOR> <NAMA> <SALDO_AWAL>\`\nContoh: \`62812345678 Budi 50000\``,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                            }
+                        );
+                    }
+
+                    const rawPhone = parts[0];
+                    const cleanPhone = normalizePhone(rawPhone);
+                    if (!cleanPhone.startsWith('62') || cleanPhone.length < 10) {
+                        return global.botTg.sendMessage(chatId, `❌ *Format nomor tidak valid!* Harus diawali 62 dan minimal 10 digit.`);
+                    }
+
+                    let saldoAwal = 0;
+                    let name = '';
+                    const lastPart = parts[parts.length - 1];
+                    if (!isNaN(parseInt(lastPart, 10)) && parts.length >= 3) {
+                        saldoAwal = parseInt(lastPart, 10);
+                        name = parts.slice(1, -1).join(' ');
+                    } else {
+                        name = parts.slice(1).join(' ');
+                    }
+
+                    const targetJid = `${cleanPhone}@s.whatsapp.net`;
+                    const user = db.getUser(targetJid);
+                    user.name = name;
+                    user.phone = cleanPhone;
+                    if (saldoAwal > 0) {
+                        user.saldo = (Number(user.saldo) || 0) + saldoAwal;
+                        if (!Array.isArray(user.history)) user.history = [];
+                        const dateStr = new Date().toLocaleDateString('id-ID');
+                        user.history.push(`[${dateStr}] 🟢 Saldo Awal Admin (+Rp ${saldoAwal.toLocaleString('id-ID')})`);
+                    }
+                    db.saveUsers();
+                    global.tgInputState = null;
+
+                    if (global.sock && typeof global.sock.sendMessage === 'function') {
+                        await global.sock.sendMessage(targetJid, {
+                            text: `🎉 *SELAMAT DATANG DI ${db.store.namaToko || 'DIGITAL STORE'}*\n\n` +
+                                  `Akun Anda telah berhasil didaftarkan oleh Admin.\n` +
+                                  `• Nama: *${name}*\n` +
+                                  `• Saldo: *${formatRupiah(user.saldo || 0)}*\n\n` +
+                                  `Ketik *menu* untuk melihat daftar produk & layanan.`
+                        }).catch(() => {});
+                    }
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *Member Berhasil Didaftarkan!*\n\n` +
+                        `• Nomor: \`+${cleanPhone}\`\n` +
+                        `• Nama: *${name}*\n` +
+                        `• Saldo Awal: *${formatRupiah(user.saldo || 0)}*\n` +
+                        `• Status WA: ${global.sock ? '🟢 Notifikasi Terkirim' : '🟡 Bot WA Offline'}`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '🔍 Cek Profil Member', callback_data: 'tg_input_cekuser' }],
+                                    [{ text: '👥 Menu Member', callback_data: 'tg_member_menu' }]
+                                ]
+                            }
+                        }
+                    );
+                }
+
+                // === AWAITING ADD MENU (PRODUK DIGITAL) ===
+                if (stateType === 'awaiting_addmenu') {
+                    let nama, harga, stok;
+                    if (text.includes('|')) {
+                        [nama, harga, stok] = text.split('|').map(s => s ? s.trim() : '');
+                    } else {
+                        const parts = text.split(/\s+/);
+                        if (parts.length >= 2) {
+                            const lastPart = parts[parts.length - 1];
+                            const secondLast = parts[parts.length - 2];
+                            if (!isNaN(parseInt(lastPart, 10)) && !isNaN(parseInt(secondLast, 10)) && parts.length >= 3) {
+                                stok = lastPart;
+                                harga = secondLast;
+                                nama = parts.slice(0, -2).join(' ');
+                            } else if (!isNaN(parseInt(lastPart, 10))) {
+                                harga = lastPart;
+                                stok = 0;
+                                nama = parts.slice(0, -1).join(' ');
+                            }
+                        }
+                    }
+
+                    if (!nama || !harga || isNaN(parseInt(harga, 10))) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format salah!*\nFormat: \`<NAMA>|<HARGA>|<STOK>\`\nContoh: \`Netflix Premium 1 Bulan|35000|10\``,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                            }
+                        );
+                    }
+
+                    const id = db.menu.length ? db.menu[db.menu.length - 1].id + 1 : 1;
+                    db.menu.push({ id, nama, harga: parseInt(harga, 10), stok: parseInt(stok || 0, 10), dataAkun: [] });
+                    db.saveMenu();
+                    global.tgInputState = null;
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *Produk Digital Berhasil Ditambahkan!*\n\n` +
+                        `• ID: *${id}*\n` +
+                        `• Produk: *${nama}*\n` +
+                        `• Harga: *${formatRupiah(parseInt(harga, 10))}*\n` +
+                        `• Stok Awal: *${parseInt(stok || 0, 10)} akun*`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '📥 Isi Stok Akun Ini', callback_data: 'tg_input_adddata' }],
+                                    [{ text: '📂 Daftar Produk', callback_data: 'tg_listproduk' }]
+                                ]
+                            }
+                        }
+                    );
+                }
+
+                // === AWAITING ADD DATA (ISI STOK AKUN MENTAH) ===
+                if (stateType === 'awaiting_adddata') {
+                    const parts = text.split(/\s+/);
+                    const idStr = parseInt(parts[0], 10);
+                    let qty = parseInt(parts[1], 10);
+                    let dataTxt = (!isNaN(qty) && parts.length > 2) ? parts.slice(2).join(' ') : parts.slice(1).join(' ');
+                    if (isNaN(qty)) qty = 1;
+
+                    const item = (db.menu || []).find(m => m.id === idStr);
+                    if (!item) {
+                        return global.botTg.sendMessage(chatId, `❌ *ID Produk ${idStr} tidak ditemukan!* Cek ID lewat tombol List Produk.`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                        });
+                    }
+
+                    if (!item.dataAkun) item.dataAkun = [];
+                    for (let i = 0; i < qty; i++) item.dataAkun.push(dataTxt);
+                    item.stok = item.dataAkun.length;
+                    db.saveMenu();
+                    global.tgInputState = null;
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *Stok Akun Berhasil Dimasukkan!*\n\n` +
+                        `• Produk: *${item.nama}* (ID: ${item.id})\n` +
+                        `• Data Baru Ditambahkan: *${qty} data*\n` +
+                        `• Total Stok Sekarang: *${item.stok} akun*`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '📂 List Produk Digital', callback_data: 'tg_listproduk' }],
+                                    [{ text: '📦 Menu Digital', callback_data: 'tg_digital_menu' }]
+                                ]
+                            }
+                        }
+                    );
+                }
+
+                // === AWAITING DEL MENU ===
+                if (stateType === 'awaiting_delmenu') {
+                    const id = parseInt(text.trim(), 10);
+                    const index = (db.menu || []).findIndex(m => m.id === id);
+                    if (index === -1) {
+                        return global.botTg.sendMessage(chatId, `❌ ID Produk Digital *${text}* tidak ditemukan.`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                        });
+                    }
+
+                    const namaProduk = db.menu[index].nama;
+                    db.menu.splice(index, 1);
+                    db.saveMenu();
+                    global.tgInputState = null;
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *Produk Digital Berhasil Dihapus!*\n\n• ID: *${id}*\n• Nama: *${namaProduk}*`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '📦 Menu Digital', callback_data: 'tg_digital_menu' }]] }
+                        }
+                    );
+                }
+
+                // === AWAITING CEK INVOICE ===
+                if (stateType === 'awaiting_cekinv') {
+                    const invId = text.trim().toUpperCase();
+                    const order = (db.orders || []).find(o => o.id && o.id.toUpperCase() === invId);
+                    global.tgInputState = null;
+
+                    if (!order) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Invoice Tidak Ditemukan!*\n\nID Invoice \`${invId}\` tidak ada dalam riwayat database.`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '🔍 Cari Lagi', callback_data: 'tg_input_cekinv' }]] }
+                            }
+                        );
+                    }
+
+                    const buyerPhone = (order.buyer || order.sender || '').replace(/[^0-9]/g, '');
+                    const dateStr = order.timestamp ? new Date(order.timestamp).toLocaleString('id-ID') : '-';
+                    const amountStr = formatRupiah(order.baseAmount || order.total || order.harga || 0);
+
+                    let detail = `🧾 *DETAIL TRANSAKSI*\n\n` +
+                        `• Invoice: \`${order.id}\`\n` +
+                        `• Status: *${order.status.toUpperCase()}* ${order.refunded ? '(REFUNDED)' : ''}\n` +
+                        `• Produk: *${order.item || order.sku}*\n` +
+                        `• Target / No HP: \`${order.target || '-'}\`\n` +
+                        `• Pembeli: \`+${buyerPhone || '-'}\`\n` +
+                        `• Total Bayar: *${amountStr}*\n` +
+                        `• Waktu: ${dateStr}\n` +
+                        `• SN / Akun: \`${order.sn || '(Belum ada / Tidak tersedia)'}\``;
+
+                    const actionButtons = [];
+                    if (order.sn && (order.buyer || order.sender)) {
+                        actionButtons.push([{ text: '📲 Kirim Ulang SN ke Pembeli', callback_data: `tg_resend_${order.id}` }]);
+                    }
+                    if (order.status !== 'success' && !order.refunded) {
+                        actionButtons.push([{ text: '💸 Batalkan & Refund Saldo', callback_data: `tg_refund_${order.id}` }]);
+                    }
+                    actionButtons.push([{ text: '⬅️ Kembali ke Menu Trx', callback_data: 'tg_trx_menu' }]);
+
+                    return global.botTg.sendMessage(chatId, detail, {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: actionButtons }
+                    });
+                }
+
+                // === AWAITING REFUND ORDER ===
+                if (stateType === 'awaiting_refund') {
+                    const invId = text.trim().toUpperCase();
+                    const order = (db.orders || []).find(o => o.id && o.id.toUpperCase() === invId);
+                    global.tgInputState = null;
+
+                    if (!order) {
+                        return global.botTg.sendMessage(chatId, `❌ Order \`${invId}\` tidak ditemukan.`);
+                    }
+                    if (order.refunded) {
+                        return global.botTg.sendMessage(chatId, `⚠️ Order \`${invId}\` sudah pernah di-refund sebelumnya.`);
+                    }
+                    if (order.status === 'success') {
+                        return global.botTg.sendMessage(chatId, `⚠️ Order \`${invId}\` sudah berstatus SUKSES dan tidak dapat di-refund.`);
+                    }
+
+                    const refundRes = db.refundOrder(order, 'Dibatalkan Manual oleh Admin via Telegram');
+                    if (refundRes.success) {
+                        if (global.sock && typeof global.sock.sendMessage === 'function') {
+                            await global.sock.sendMessage(refundRes.buyerJid, {
+                                text: `❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda telah dibatalkan oleh Admin.\n\n📦 Produk: ${order.item || order.sku}\n🧾 Invoice: \`${order.id}\`\n💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.`
+                            }).catch(() => {});
+                        }
+
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *ORDER BERHASIL DIREFUND!*\n\n` +
+                            `• Invoice: \`${order.id}\`\n` +
+                            `• Produk: ${order.item || order.sku}\n` +
+                            `• Saldo Dikembalikan: *${formatRupiah(refundRes.amount)}*\n` +
+                            `• Penerima: \`${refundRes.buyerJid}\`\n` +
+                            `• Saldo Baru Member: *${formatRupiah(refundRes.newSaldo)}*`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '🔍 Menu Trx', callback_data: 'tg_trx_menu' }]] }
+                            }
+                        );
+                    } else {
+                        return global.botTg.sendMessage(chatId, `❌ Gagal refund: ${refundRes.reason}`);
+                    }
+                }
+
+                // === AWAITING BROADCAST WA ===
+                if (stateType === 'awaiting_broadcast') {
+                    const broadcastMsg = text;
+                    global.tgInputState = null;
+
+                    const phones = getUniqueUserPhones();
+                    if (phones.length === 0) {
+                        return global.botTg.sendMessage(chatId, `❌ Tidak ada nomor WhatsApp member yang tersimpan di database.`);
+                    }
+
+                    await global.botTg.sendMessage(chatId,
+                        `🚀 *BROADCAST WHATSAPP SEDANG BERJALAN...*\n\n` +
+                        `• Total Sasaran: *${phones.length} member*\n` +
+                        `• Estimasi Waktu: *~${phones.length} detik*\n\n` +
+                        `_Sistem mengirim dengan jeda 1 detik per nomor agar aman anti-banned. Laporan hasil akan dikirim setelah selesai._`,
+                        { parse_mode: 'Markdown' }
+                    );
+
+                    // Jalankan background broadcast dengan pacing 1000ms
+                    (async () => {
+                        let sent = 0;
+                        let failed = 0;
+                        for (const p of phones) {
+                            const targetJid = `${p}@s.whatsapp.net`;
+                            try {
+                                if (global.sock && typeof global.sock.sendMessage === 'function') {
+                                    await global.sock.sendMessage(targetJid, { text: broadcastMsg });
+                                    sent++;
+                                } else {
+                                    failed++;
+                                }
+                            } catch (_) {
+                                failed++;
+                            }
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+
+                        global.botTg.sendMessage(chatId,
+                            `✅ *BROADCAST WHATSAPP SELESAI!*\n\n` +
+                            `• Berhasil Terkirim: *${sent} nomor*\n` +
+                            `• Gagal / Offline: *${failed} nomor*\n` +
+                            `• Total Sasaran: *${phones.length} member*\n\n` +
+                            `_Seluruh pesan pengumuman telah tuntas dikirimkan._`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]] }
+                            }
+                        );
+                    })();
+
+                    return;
+                }
+
                 if (stateType === 'set_paymentkita') {
                     const [mId, secret] = text.split(/\s+/);
                     if (!mId || !secret || mId.length < 3 || secret.length < 6) {
@@ -1858,7 +2983,12 @@ try {
                     global.tgInputState = null;
                     return global.botTg.sendMessage(chatId, `✅ *Nama Toko Diperbarui:* ${text}`, {
                         parse_mode: 'Markdown',
-                        reply_markup: { inline_keyboard: [[{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]] }
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '🏪 Menu Toko', callback_data: 'tg_store_menu' }],
+                                [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                            ]
+                        }
                     });
                 }
 

@@ -94,16 +94,21 @@ Perintah ini **otomatis** memasang dependensi sistem (`git`, `curl`, `Node.js 20
 ---
 
 ### 🤖 Model Tombol Inline (Interactive Telegram Command Center):
-- **[📱 Hubungkan / Re-Pairing WA]** : Generate 8-digit kode pairing WhatsApp langsung ke Telegram.
-- **[🏪 Buka / Tutup Toko]** : Buka/tutup toko dalam 1-klik tanpa restart bot.
+- **[👥 Manajemen Member]** : Cek profil member by nomor, top member (saldo & belanja), edit saldo (+ / -) dengan notifikasi otomatis ke WhatsApp, tambah member manual, dan daftar 10 member terbaru.
+- **[🏪 Pengaturan Toko]** : Buka/tutup toko dalam 1-klik dan ubah nama toko digital.
+- **[📦 Produk Digital / Akun]** : Lihat katalog produk digital lokal, tambah produk baru (`Nama|Harga|Stok`), isi stok akun/voucher mentah, dan hapus produk.
+- **[🔍 Cari & Resend Trx]** : Cari invoice transaksi (`INV-xxx`), kirim ulang token PLN/SN/akun ke pembeli via WA secara instan, dan batalkan & refund order langsung ke saldo pembeli.
+- **[📢 Broadcast Pesan WA]** : Kirim pengumuman/promo massal ke seluruh member WhatsApp yang terdaftar dengan jeda aman 1 detik (Anti-Banned).
 - **[💳 Gateway: PAYMENTKITA / PAKASIR]** : Ganti payment gateway secara instan & input kredensial API.
 - **[⚡ Menu Digiflazz]** : Set Username & Key, cek saldo realtime, dan sinkronisasi produk.
-- **[💰 Cek Saldo Digi]** : Menampilkan sisa saldo Digiflazz.
+- **[💰 Cek Saldo Digi]** : Menampilkan sisa saldo Digiflazz realtime.
 - **[🔄 Sync Produk PPOB]** : Sinkronisasi produk prabayar & pascabayar otomatis.
-- **[📊 Status & Health]** : Cek CPU, RAM, koneksi Baileys WA, dan database.
-- **[📈 Statistik Omzet]** : Pantau omzet harian & total transaksi.
+- **[📊 Status & Health]** : Cek RAM, CPU uptime, koneksi Baileys WA, dan database.
+- **[📈 Statistik Omzet]** : Pantau omzet harian & total transaksi all-time.
 - **[⏳ Antrian Order]** : Monitor transaksi pending/processing.
+- **[⚙️ Margin & Owner]** : Atur profit margin kategori/tiering dan tambah nomor Admin/Owner.
 - **[📦 Backup Data]** : Buat arsip backup database dan kirimkan langsung ke Telegram.
+- **[📱 Hubungkan / Re-Pairing WA]** : Generate 8-digit kode pairing WhatsApp langsung ke Telegram.
 
 ---
 

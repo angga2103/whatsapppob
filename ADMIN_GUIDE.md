@@ -23,20 +23,48 @@ Seluruh konfigurasi, margin profit, API key, multi-owner, dan manajemen produk b
 
 ---
 
-## 🤖 1B. Telegram Command Center (Model Tombol Inline)
+## 🤖 1B. Telegram Command Center (Model Tombol Inline Penuh)
 
-Selain melalui chat WhatsApp, **seluruh pengaturan dan operasional bot dapat dikendalikan langsung lewat Telegram** dengan **Model Tombol Inline (Inline Keyboard)** tanpa perlu mengetik perintah:
+Selain melalui chat WhatsApp, **seluruh pengaturan toko, member, produk, transaksi, dan operasional bot dapat dikendalikan 100% langsung lewat Telegram** menggunakan **Model Tombol Inline (Inline Keyboard)** interaktif:
 
-- **[📱 Hubungkan / Re-Pairing WA]**: Menghubungkan nomor WhatsApp baru, kode pairing 8-digit langsung dikirimkan ke Telegram!
-- **[🏪 Buka / Tutup Toko]**: Mengubah status toko online/offline seketika dengan 1 klik.
-- **[💳 Gateway: PAYMENTKITA / PAKASIR]**: Buka menu pilihan gateway dan input kredensial Merchant ID / Secret Key / Project Slug.
+### 1. 👥 Manajemen Member & Pengguna
+- **[🔍 Cek Profil Member]**: Masukkan nomor HP (contoh: `6281234567890`). Bot menampilkan info saldo, status pendaftaran, statistik total belanja, transaksi sukses/gagal, dan riwayat mutasi terakhir.
+- **[➕ Tambah / ➖ Tarik Saldo Cepat]**: Tombol cepat di profil member atau format input `[Nomor] [+ / -][Nominal]` (contoh: `62812xxx +50000` atau `62812xxx -25000`). Sistem otomatis memperbarui saldo, mencatat riwayat audit, dan mengirim pesan konfirmasi ke WhatsApp member!
+- **[🏆 Top Member]**: Menampilkan Top 5 Member dengan saldo tertinggi serta Top 5 Member dengan total transaksi belanja sukses terbanyak.
+- **[➕ Tambah Member Manual]**: Daftarkan member baru langsung dari Telegram dengan format `[Nomor] [Nama] [SaldoAwal]`. Jika diberikan saldo awal, member akan otomatis menerima notifikasi penyambutan di WhatsApp.
+- **[📋 10 Member Terbaru]**: Menampilkan daftar 10 member yang baru terdaftar beserta saldo dan tanggal daftarnya.
+
+### 2. 🏪 Pengaturan Toko Digital
+- **[🟢 Buka / 🔴 Tutup Toko]**: Mengubah status operasional toko online/offline seketika dengan 1 klik.
+- **[🏷️ Ubah Nama Toko]**: Mengganti nama toko digital yang tampil di WhatsApp dan struk transaksi.
+
+### 3. 📦 Manajemen Produk Digital & Akun Lokal
+- **[📂 List Produk Digital]**: Melihat daftar produk akun (Netflix, Spotify, Canva, dsb), harga, stok, dan jumlah data akun mentah tersimpan.
+- **[➕ Tambah Produk]**: Format input `[Nama]|[Harga]|[Stok]` (contoh: `Netflix Premium 1 Bulan|35000|10`).
+- **[📥 Isi Stok Data Akun]**: Format `[ID] [Data Akun]` atau untuk banyak stok `[ID] [Jumlah] [Data]`.
+- **[🗑️ Hapus Produk]**: Hapus produk digital lokal berdasarkan ID.
+
+### 4. 🔍 Pencarian Transaksi, Resend SN & Refund
+- **[🔍 Cari Invoice]**: Masukkan ID invoice (contoh: `INV-1726000000`) untuk melihat detail produk, nomor tujuan, waktu, dan SN/Token.
+- **[📲 Kirim Ulang SN ke Pembeli]**: Kirim ulang SN/token transaksi ke nomor WhatsApp pembeli secara instan langsung dari tombol inline di Telegram.
+- **[💸 Batalkan & Refund Order]**: Batalkan pesanan bermasalah dan kembalikan saldo ke dompet pengguna secara otomatis disertai notifikasi WA ke pembeli.
+
+### 5. 📢 Broadcast Pesan WhatsApp Massal
+- **[✍️ Tulis Pesan Broadcast]**: Kirim pengumuman, info maintenance, atau promo massal ke seluruh kontak member yang terdaftar di database.
+- **🛡️ Fitur Anti-Banned**: Pengiriman dilakukan secara berurutan dengan jeda aman 1 detik per nomor untuk melindungi nomor WhatsApp bot dari risiko blokir. Laporan sukses dan gagal dikirimkan ke Telegram setelah selesai.
+
+### 6. 💳 Payment Gateway & Digiflazz
+- **[💳 Gateway: PAYMENTKITA / PAKASIR]**: Pilih payment gateway aktif dengan 1 klik, serta tombol input kredensial Merchant ID, Secret Key, Project Slug, dan API Key.
 - **[⚡ Menu Digiflazz]**: Set Username & API Key, cek saldo Digiflazz, dan sinkronisasi produk.
 - **[💰 Cek Saldo Digi]**: Cek saldo deposit Digiflazz secara realtime.
 - **[🔄 Sync Produk PPOB]**: Tarik ulang seluruh katalog produk prabayar & pascabayar Digiflazz.
+
+### 7. ⚙️ Sistem, Margin, Health & Backup
 - **[📊 Status & Health]**: Monitor uptime server, penggunaan RAM, status database, dan koneksi socket Baileys.
-- **[📈 Statistik Omzet]**: Rekap penjualan harian dan total transaksi tuntas.
-- **[⏳ Antrian Transaksi]**: Cek daftar transaksi yang sedang diproses.
+- **[📈 Statistik Omzet]**: Rekap omzet penjualan harian, transaksi sukses all-time, dan total member.
+- **[⏳ Antrian Transaksi]**: Cek transaksi pending yang sedang dalam pemrosesan.
 - **[📦 Backup Data]**: Buat arsip zip database dan kirimkan langsung ke Telegram untuk restore darurat.
+- **[📱 Hubungkan / Re-Pairing WA]**: Hubungkan nomor bot baru, kode pairing 8-digit langsung dikirimkan ke Telegram.
 
 ---
 
