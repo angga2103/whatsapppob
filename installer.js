@@ -286,21 +286,21 @@ async function startPairingProcess() {
                 printQRInTerminal: false,
                 auth: state,
                 browser: Browsers.ubuntu('Chrome'),
+                markOnlineOnConnect: true,
                 connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 10000
             });
 
             sock.ev.on('creds.update', saveCreds);
 
-            // Tunggu hingga koneksi ke server WhatsApp siap menerima pairing code
-            try {
-                await sock.waitForConnectionUpdate(update => !!update.qr || update.connection === 'open', 15000);
-            } catch (_) {
-                await new Promise(r => setTimeout(r, 4000));
-            }
+            // Jeda minimal 3000ms agar koneksi socket stabil (Aturan Emas #3)
+            await new Promise(r => setTimeout(r, 3000));
 
-            const code = await sock.requestPairingCode(phone);
-            const formatted = code?.match(/.{1,4}/g)?.join(' - ') || code;
+            let code = '';
+            if (!sock.authState.creds.registered) {
+                code = await sock.requestPairingCode(phone);
+            }
+            const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
 
             console.log(`\n${C.yellow}╔═════════════════════════════════════════════════════════════╗${C.reset}`);
             console.log(`${C.yellow}║                   ${C.bold}KODE PAIRING WHATSAPP ANDA${C.reset}${C.yellow}                ║${C.reset}`);

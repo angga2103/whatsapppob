@@ -203,14 +203,15 @@ function formatDigiflazzMessage(text = '') {
 }
 
 
-async function startBot() {
+async function startBot(targetPhone = null, tgChatId = null) {
     const { state, saveCreds } = await useMultiFileAuthState('session_bot');
     const { version } = await fetchLatestBaileysVersion();
     
+    // ATURAN EMAS 1 & 2: Identitas Desktop Chrome & Matikan QR
     const sock = makeWASocket({
         version,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // Kita matikan QR, ganti ke Pairing
+        printQRInTerminal: false,
         auth: state, 
         browser: Browsers.ubuntu('Chrome'), 
         markOnlineOnConnect: true,
@@ -220,13 +221,72 @@ async function startBot() {
 
     global.sock = sock;
 
-    // --- FITUR KODE PAIRING KEMBALI ---
+    // Registrasi creds.update segera saat socket dibuat agar handshake tersimpan
+    sock.ev.on('creds.update', saveCreds);
+
+    // LOGIKA KODE PAIRING (4 ATURAN EMAS BAILEYS)
     if (!sock.authState.creds.registered) {
-        console.clear();
-        console.log('🤖 LOGIN BOT PPOB & DIGITAL STORE');
-        const phoneNumber = await question('Masukan Nomor HP Bot (Format 628xxx): ');
-        const code = await sock.requestPairingCode(phoneNumber.trim());
-        console.log(`\n🔗 KODE PAIRING: \x1b[32m${code?.match(/.{1,4}/g)?.join('-') || code}\x1b[0m`);
+        let phoneToPair = targetPhone;
+
+        // Jika tidak ada nomor dari Telegram, dan kita berada di terminal interaktif TTY
+        if (!phoneToPair && process.stdin.isTTY) {
+            console.log('\n🤖 [WHATSAPP LOGIN] Silakan masukkan nomor WhatsApp Bot...');
+            const input = await question('Masukan Nomor HP Bot (Format 628xxx): ');
+            phoneToPair = (input || '').replace(/[^0-9]/g, '');
+            if (phoneToPair.startsWith('0')) phoneToPair = '62' + phoneToPair.slice(1);
+        }
+
+        if (phoneToPair && phoneToPair.length >= 10 && phoneToPair.startsWith('62')) {
+            console.log(`[PAIRING] ⏳ Menunggu 3 detik agar socket stabil sebelum memanggil requestPairingCode...`);
+            // ATURAN EMAS 3: Jeda minimal 3000ms untuk stabilisasi koneksi
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // ATURAN EMAS 4: Validasi state
+            if (!sock.authState.creds.registered) {
+                try {
+                    const code = await sock.requestPairingCode(phoneToPair);
+                    const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
+                    console.log(`\n🔗 KODE PAIRING WHATSAPP: \x1b[32m${formatted}\x1b[0m\n`);
+
+                    const targetChat = tgChatId || config.telegram?.chatId;
+                    if (global.botTg && targetChat) {
+                        await global.botTg.sendMessage(targetChat, 
+                            `🔑 *KODE PAIRING WHATSAPP ANDA:*\n\n` +
+                            `👉 \`${formatted}\` 👈\n\n` +
+                            `📱 *Cara Tautkan di HP:*\n` +
+                            `1. Buka aplikasi WhatsApp di HP Anda\n` +
+                            `2. Buka menu titik 3 (kanan atas) > *Perangkat tertaut*\n` +
+                            `3. Ketuk *Tautkan Perangkat*\n` +
+                            `4. Pilih menu *"Tautkan dengan nomor telepon saja"*\n` +
+                            `5. Masukkan 8 digit kode: \`${formatted}\`\n\n` +
+                            `⏳ _Menunggu verifikasi WhatsApp di HP Anda (Kode aktif ~120 detik)..._`,
+                            { parse_mode: 'Markdown' }
+                        );
+                    }
+                } catch (pairErr) {
+                    console.error('❌ Gagal request pairing code:', pairErr.message);
+                    const targetChat = tgChatId || config.telegram?.chatId;
+                    if (global.botTg && targetChat) {
+                        global.botTg.sendMessage(targetChat, `❌ *Gagal Mengambil Kode Pairing:*\n${pairErr.message}`, { parse_mode: 'Markdown' });
+                    }
+                }
+            }
+        } else {
+            console.log('⚠️ [WHATSAPP] Belum terhubung. Menunggu nomor pairing dari Telegram.');
+            if (global.botTg && config.telegram?.chatId) {
+                global.botTg.sendMessage(config.telegram.chatId,
+                    `🚨 *WHATSAPP BELUM TERTAUT* 🚨\n\n` +
+                    `Sistem mendeteksi sesi WhatsApp belum terdaftar.\n\n` +
+                    `Silakan klik tombol di bawah untuk memasukkan nomor WhatsApp Bot dan mendapatkan kode pairing:`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '📱 TAUTKAN NOMOR BARU', callback_data: 'cmd_pair_new' }]]
+                        }
+                    }
+                ).catch(() => {});
+            }
+        }
     }
 
     sock.ev.on('connection.update', (update) => {
@@ -349,6 +409,16 @@ try {
                 }
             }
             console.log(`✅  BOT PPOB & KASIR ONLINE!`);
+
+            // Notifikasi sukses ke Telegram jika terhubung
+            if (global.botTg && (tgChatId || config.telegram?.chatId)) {
+                const targetChat = tgChatId || config.telegram?.chatId;
+                global.botTg.sendMessage(targetChat, 
+                    `✅ *WHATSAPP BERHASIL TERHUBUNG!*\n\n` +
+                    `Bot WhatsApp telah aktif, tersambung ke server WhatsApp, dan siap melayani transaksi pelanggan.`, 
+                    { parse_mode: 'Markdown' }
+                ).catch(() => {});
+            }
             
             // --- 🚨 ALARM RESTORE WA ---
             if (require('fs').existsSync('RESTORE_SUCCESS.txt')) {
@@ -1136,7 +1206,7 @@ try {
             if (action === 'cmd_pair_new') {
                 global.botTg.answerCallbackQuery(query.id);
                 global.awaitingPhoneNumber = true;
-                global.botTg.sendMessage(chatId, "📱 *TAUTKAN NOMOR BARU*\n\nSistem WhatsApp terdeteksi Logged Out/Suspend.\n\nSilakan balas pesan ini dengan nomor WhatsApp baru Anda menggunakan awalan *62* (Tanpa spasi atau tanda plus).\n\nContoh: `6281234567890`", {parse_mode: "Markdown"});
+                global.botTg.sendMessage(chatId, "📱 *TAUTKAN NOMOR BARU*\n\nSilakan balas pesan ini dengan nomor WhatsApp yang ingin dijadikan bot menggunakan awalan *62* (Tanpa spasi atau tanda plus).\n\nContoh: `6281234567890`", {parse_mode: "Markdown"});
             }
         });
 
@@ -1145,12 +1215,49 @@ try {
             const authorizedChatId = String(config.telegram.chatId || '');
             if (!authorizedChatId || chatId !== authorizedChatId) return;
 
-            const text = msg.text;
+            const text = (msg.text || '').trim();
+
+            // Perintah manual /pair
+            if (text === '/pair') {
+                global.awaitingPhoneNumber = true;
+                return global.botTg.sendMessage(chatId, "📱 *TAUTKAN NOMOR BARU*\n\nSilakan balas pesan ini dengan nomor WhatsApp baru Anda menggunakan awalan *62*:\n\nContoh: `6281234567890`", {parse_mode: "Markdown"});
+            }
 
             // Jika bot sedang menunggu input nomor HP
-            if (global.awaitingPhoneNumber && text && text.startsWith('62')) {
+            if (global.awaitingPhoneNumber && text) {
+                let cleanPhone = text.replace(/[^0-9]/g, '');
+                if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+
+                if (!cleanPhone.startsWith('62') || cleanPhone.length < 10) {
+                    return global.botTg.sendMessage(chatId, "❌ *Format Nomor Tidak Valid!*\n\nNomor harus diawali angka *62* dan minimal 10 digit (contoh: `6281234567890`).\n\nSilakan kirim ulang nomor WhatsApp Anda:", {parse_mode: 'Markdown'});
+                }
+
                 global.awaitingPhoneNumber = false;
-                global.botTg.sendMessage(chatId, "⏳ Memproses nomor: *" + text + "*...\n\n_Menyiapkan jembatan Pairing ke server Baileys..._", {parse_mode: 'Markdown'});
+                await global.botTg.sendMessage(chatId, `⏳ *Menghubungkan ke server WhatsApp...*\n\nNomor target: \`${cleanPhone}\`\n\n_Menyiapkan socket dan meminta kode pairing (mohon tunggu 3-5 detik)..._`, {parse_mode: 'Markdown'});
+
+                try {
+                    // Tutup sesi socket lama jika ada
+                    if (global.sock) {
+                        try { await global.sock.end(); } catch (_) {}
+                        global.sock = null;
+                    }
+
+                    // Bersihkan folder session_bot agar handshake fresh & creds.registered = false
+                    try {
+                        fs.rmSync('./session_bot', { recursive: true, force: true });
+                    } catch (_) {}
+
+                    // Mulai bot dengan nomor yang diminta dan kirim pairing code ke Telegram
+                    await startBot(cleanPhone, chatId);
+                } catch (err) {
+                    console.error('[TELEGRAM PAIRING ERROR]:', err);
+                    global.botTg.sendMessage(chatId, `❌ *Gagal Memulai Pairing:*\n\`${err.message}\`\n\nSilakan ulangi proses dengan menekan tombol di bawah:`, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '🔄 Coba Tautkan Ulang', callback_data: 'cmd_pair_new' }]]
+                        }
+                    });
+                }
             }
         });
         
