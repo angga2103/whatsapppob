@@ -1,7 +1,6 @@
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
-const pino = require('pino');
 
 // ANSI Color Codes
 const C = {
@@ -56,17 +55,16 @@ function closeRL() {
     }
 }
 
-
 async function runInstaller() {
     console.clear();
     console.log(`${C.cyan}╔══════════════════════════════════════════════════════════════════╗${C.reset}`);
     console.log(`${C.cyan}║   ${C.bold}${C.yellow}⚡ ONE-CLICK INSTALLER BOT PPOB WA & DIGITAL STORE ⚡${C.reset}${C.cyan}        ║${C.reset}`);
-    console.log(`${C.cyan}║   ${C.dim}Automated Setup, Configuration & Interactive WhatsApp Pairing${C.reset}${C.cyan}  ║${C.reset}`);
+    console.log(`${C.cyan}║   ${C.dim}Setup Cepat & Otomatis — Kendali Penuh via Telegram Bot${C.reset}${C.cyan}         ║${C.reset}`);
     console.log(`${C.cyan}╚══════════════════════════════════════════════════════════════════╝${C.reset}\n`);
 
     // 1. Check Node.js
     const nodeVer = parseInt(process.version.slice(1).split('.')[0], 10);
-    console.log(`${C.blue}[1/4] Memeriksa Lingkungan Sistem...${C.reset}`);
+    console.log(`${C.blue}[1/3] Memeriksa Lingkungan Sistem...${C.reset}`);
     if (nodeVer < 18) {
         console.log(`${C.yellow}⚠️  Peringatan: Node.js Anda versi ${process.version}. Disarankan minimal v18 atau v20+.${C.reset}`);
     } else {
@@ -74,348 +72,225 @@ async function runInstaller() {
     }
 
     // 2. Ensure Database Structure
-    console.log(`\n${C.blue}[2/4] Menginisialisasi Database Atomik...${C.reset}`);
+    console.log(`\n${C.blue}[2/3] Menginisialisasi Database Atomik...${C.reset}`);
     try {
         const db = require('./database/db');
-        console.log(`${C.green}✓ Database terverifikasi (${Object.keys(db.users).length} users, ${db.ppob.length} produk PPOB).${C.reset}`);
+        console.log(`${C.green}✓ Database terverifikasi (${Object.keys(db.users || {}).length} users, ${(db.ppob || []).length} produk PPOB).${C.reset}`);
     } catch (e) {
         console.log(`${C.red}✗ Gagal inisialisasi database: ${e.message}${C.reset}`);
     }
 
-    // 3. Setup Configuration (.env)
-    console.log(`\n${C.blue}[3/4] Konfigurasi Kredensial Bot (.env)...${C.reset}`);
+    // 3. Setup Configuration (HANYA TELEGRAM TOKEN & CHAT ID)
+    console.log(`\n${C.blue}[3/3] Konfigurasi Akses Telegram Command Center...${C.reset}`);
     require('dotenv').config();
-    const envExists = fs.existsSync('.env');
 
-    if (envExists) {
-        console.log(`${C.green}✓ File .env sudah ada.${C.reset}`);
-        const setupAgain = await ask(`${C.yellow}Apakah Anda ingin memperbarui kredensial sekarang? (y/N): ${C.reset}`);
-        if (setupAgain.toLowerCase() === 'y') {
-            await promptConfig();
+    const curTgToken = process.env.TELEGRAM_TOKEN || '';
+    const curTgChat = process.env.TELEGRAM_CHAT_ID || '';
+
+    console.log(`${C.cyan}ℹ️  Semua konfigurasi (Pairing WA, Digiflazz, Payment Gateway)`);
+    console.log(`   dapat diatur langsung lewat bot Telegram dengan model tombol interaktif!`);
+    console.log(`   Installer hanya membutuhkan akses bot Telegram Anda.${C.reset}\n`);
+
+    let tgToken = curTgToken;
+    let tgChat = curTgChat;
+
+    while (!tgToken || !tgToken.includes(':')) {
+        console.log(`${C.yellow}📱 Buat bot Telegram baru di @BotFather lalu salin API Token-nya.${C.reset}`);
+        tgToken = (await ask(`• Masukkan Telegram Bot Token ${curTgToken ? `[${curTgToken}]` : ''}: `)) || curTgToken;
+        if (!tgToken || !tgToken.includes(':')) {
+            console.log(`${C.red}❌ Token tidak valid! Format token harus seperti: 123456789:ABCDefghijk...${C.reset}\n`);
         }
-    } else {
-        console.log(`${C.yellow}File .env belum ditemukan. Memulai wizard konfigurasi...${C.reset}`);
-        await promptConfig();
     }
 
-    // 4. WhatsApp Pairing Wizard
-    console.log(`\n${C.blue}[4/4] Proses Pairing WhatsApp Bot...${C.reset}`);
-    const sessionDir = path.join(__dirname, 'session_bot');
-    const credsPath = path.join(sessionDir, 'creds.json');
-    let hasValidSession = false;
-    let registeredUser = '';
-
-    if (fs.existsSync(credsPath)) {
-        try {
-            const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-            if (creds && creds.registered === true && creds.me?.id) {
-                hasValidSession = true;
-                registeredUser = creds.me.id.split(':')[0] || creds.me.id.split('@')[0];
-            }
-        } catch (_) {}
-    }
-
-    let paired = false;
-    if (hasValidSession) {
-        console.log(`${C.green}✓ Sesi WhatsApp aktif terverifikasi (${registeredUser}).${C.reset}`);
-        const rePair = await ask(`${C.yellow}Apakah Anda ingin mengganti nomor dan melakukan pairing baru? (y/N): ${C.reset}`);
-        if (rePair.toLowerCase() === 'y') {
-            console.log(`${C.yellow}Membersihkan sesi lama...${C.reset}`);
-            try {
-                fs.rmSync(sessionDir, { recursive: true, force: true });
-                console.log(`${C.green}✓ Sesi lama berhasil dibersihkan.${C.reset}`);
-            } catch (_) {}
-            paired = await startPairingProcess();
-        } else {
-            console.log(`${C.green}✓ Melanjutkan dengan sesi WhatsApp yang sudah terhubung.${C.reset}`);
-            paired = true;
+    while (!tgChat || !/^[0-9-]+$/.test(tgChat)) {
+        console.log(`${C.yellow}🆔 Dapatkan Chat ID Anda via @userinfobot atau @raw_data_bot di Telegram.${C.reset}`);
+        tgChat = (await ask(`• Masukkan Telegram Chat ID Admin ${curTgChat ? `[${curTgChat}]` : ''}: `)) || curTgChat;
+        if (!tgChat || !/^[0-9-]+$/.test(tgChat)) {
+            console.log(`${C.red}❌ Chat ID tidak valid! Chat ID berupa angka unik (contoh: 7236113204).${C.reset}\n`);
         }
-    } else {
-        if (fs.existsSync(sessionDir)) {
-            console.log(`${C.yellow}ℹ️ Terdeteksi sesi pairing yang belum selesai / sempat terputus sebelumnya.${C.reset}`);
-            console.log(`${C.cyan}Membersihkan sisa sesi dan menyiapkan kode pairing baru...${C.reset}`);
-            try {
-                fs.rmSync(sessionDir, { recursive: true, force: true });
-            } catch (_) {}
+    }
+
+    // Tulis file .env lengkap dengan template aman
+    const port = process.env.PORT || '3000';
+    const owner = process.env.OWNER_NUMBER || '';
+    const digiUser = process.env.DIGIFLAZZ_USERNAME || '';
+    const digiKey = process.env.DIGIFLAZZ_KEY || '';
+    const pMId = process.env.PAYMENTKITA_MERCHANT_ID || '';
+    const pSecret = process.env.PAYMENTKITA_SECRET || '';
+    const pksProj = process.env.PAKASIR_PROJECT || '';
+    const pksKey = process.env.PAKASIR_KEY || '';
+    const pGw = process.env.PAYMENT_GATEWAY || 'paymentkita';
+
+    const envContent = `# ==============================================================================
+# 🤖 KREDENSIAL BOT PPOB & TOKO DIGITAL
+# Seluruh pengaturan dapat diubah langsung melalui Bot Telegram (Tombol Inline)
+# ==============================================================================
+PORT=${port}
+PAYMENT_GATEWAY=${pGw}
+
+# Telegram Command Center (Wajib)
+TELEGRAM_TOKEN=${tgToken}
+TELEGRAM_CHAT_ID=${tgChat}
+
+# WhatsApp Owner (Dapat ditambahkan via bot)
+OWNER_NUMBER=${owner}
+
+# Digiflazz Gateway (Dapat diset via bot Telegram / WA)
+DIGIFLAZZ_USERNAME=${digiUser}
+DIGIFLAZZ_KEY=${digiKey}
+
+# Payment Gateway Kredensial (Dapat diset via bot Telegram / WA)
+PAYMENTKITA_MERCHANT_ID=${pMId}
+PAYMENTKITA_SECRET=${pSecret}
+PAKASIR_PROJECT=${pksProj}
+PAKASIR_KEY=${pksKey}
+`;
+
+    fs.writeFileSync('.env', envContent, 'utf8');
+    console.log(`${C.green}✓ Konfigurasi .env berhasil disimpan!${C.reset}`);
+
+    // Update settings.json agar sync
+    try {
+        const settingsPath = path.join(__dirname, 'database', 'settings.json');
+        let currentSettings = {};
+        if (fs.existsSync(settingsPath)) {
+            currentSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
         }
-        paired = await startPairingProcess();
-    }
+        currentSettings.telegram = { token: tgToken, chatId: tgChat };
+        if (!currentSettings.paymentGateway) currentSettings.paymentGateway = pGw;
+        fs.writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2), 'utf8');
+    } catch (_) {}
 
-    if (!paired) {
-        console.log(`\n${C.yellow}ℹ️ Pairing WhatsApp belum selesai. Anda dapat menjalankan pairing kapan saja dengan:${C.reset}`);
-        console.log(`   ${C.bold}node installer.js${C.reset}  atau  ${C.bold}npm start${C.reset}\n`);
-        closeRL();
-        process.exit(0);
-    }
-
+    // 4. Manajemen Proses Background (PM2)
     const isLinux = process.platform === 'linux';
     let ranViaPm2 = false;
+
     if (isLinux) {
         console.log(`\n${C.cyan}──────────────────────────────────────────────────${C.reset}`);
         console.log(`${C.bold}MANAJEMEN PROSES BACKGROUND (PM2)${C.reset}`);
-        console.log(`Agar bot tetap berjalan 24 jam nonstop meskipun terminal/SSH ditutup.`);
+        console.log(`Menjalankan bot 24 jam nonstop di background.`);
         console.log(`${C.cyan}──────────────────────────────────────────────────${C.reset}\n`);
 
-        const pm2Choice = await ask(`${C.yellow}Jalankan bot sekarang di background via PM2? (Y/n): ${C.reset}`);
-        if (pm2Choice.toLowerCase() !== 'n') {
-            console.log(`\n${C.blue}Menyiapkan PM2...${C.reset}`);
+        console.log(`${C.blue}Menyiapkan proses bot via PM2...${C.reset}`);
+        try {
+            const { execSync } = require('child_process');
             try {
-                const { execSync } = require('child_process');
-                try {
-                    execSync('pm2 -v', { stdio: 'ignore' });
-                } catch (_) {
-                    console.log(`Memasang PM2 secara global...`);
-                    execSync('npm install -g pm2', { stdio: 'inherit' });
-                }
-                console.log(`Menjalankan bot via PM2...`);
-                execSync('pm2 delete bot-ppob 2>/dev/null || true', { stdio: 'ignore' });
-                execSync('pm2 start index.js --name "bot-ppob"', { stdio: 'inherit' });
-                execSync('pm2 save', { stdio: 'ignore' });
-                ranViaPm2 = true;
-                console.log(`${C.green}✓ Bot berhasil aktif 24 jam di background via PM2!${C.reset}`);
-            } catch (pm2Err) {
-                console.log(`${C.yellow}Peringatan: PM2 gagal dikonfigurasi otomatis (${pm2Err.message}). Anda tetap bisa menjalankannya via npm start.${C.reset}`);
+                execSync('pm2 -v', { stdio: 'ignore' });
+            } catch (_) {
+                console.log(`Memasang PM2 secara global...`);
+                execSync('npm install -g pm2', { stdio: 'inherit' });
             }
+            execSync('pm2 delete bot-ppob 2>/dev/null || true', { stdio: 'ignore' });
+            execSync('pm2 start index.js --name "bot-ppob"', { stdio: 'inherit' });
+            execSync('pm2 save', { stdio: 'ignore' });
+            ranViaPm2 = true;
+            console.log(`${C.green}✓ Bot berhasil dijalankan 24 jam di background via PM2!${C.reset}`);
+        } catch (pm2Err) {
+            console.log(`${C.yellow}Peringatan PM2: ${pm2Err.message}. Anda dapat menjalankannya manual via npm start.${C.reset}`);
         }
     }
 
     console.log(`\n${C.green}╔══════════════════════════════════════════════════════════════════╗${C.reset}`);
-    console.log(`${C.green}║   ${C.bold}🎉 INSTALASI & SETUP BOT SELESAI DENGAN SUKSES!${C.reset}${C.green}               ║${C.reset}`);
+    console.log(`${C.green}║   ${C.bold}🎉 INSTALASI SUKSES! BOT TELEGRAM SEKARANG TELAH AKTIF!${C.reset}${C.green}        ║${C.reset}`);
     console.log(`${C.green}║                                                                  ║${C.reset}`);
+    console.log(`${C.green}║   👉 ${C.bold}Silakan buka Bot Telegram Anda sekarang juga!${C.reset}${C.green}              ║${C.reset}`);
+    console.log(`${C.green}║   👉 ${C.bold}Kirim perintah /start atau /menu${C.reset}${C.green}                             ║${C.reset}`);
+    console.log(`${C.green}║                                                                  ║${C.reset}`);
+    console.log(`${C.green}║   ${C.yellow}${C.bold}FITUR-FITUR INTERAKTIF MODEL TOMBOL INLINE TELEGRAM:${C.reset}${C.green}           ║${C.reset}`);
+    console.log(`${C.green}║   • [📱 Hubungkan WA] : Minta kode pairing WhatsApp 8 digit      ║${C.reset}`);
+    console.log(`${C.green}║   • [💳 Ganti Gateway] : Pilih PaymentKita / Pakasir & set key   ║${C.reset}`);
+    console.log(`${C.green}║   • [⚡ Digiflazz]     : Set username/key & cek saldo live       ║${C.reset}`);
+    console.log(`${C.green}║   • [🏪 Buka/Tutup]   : Buka atau tutup toko langsung 1-klik     ║${C.reset}`);
+    console.log(`${C.green}║   • [🔄 Sync PPOB]     : Sinkronisasi katalog produk otomatis    ║${C.reset}`);
+    console.log(`${C.green}║   • [📦 Backup Data]   : Backup data otomatis ke Telegram        ║${C.reset}`);
     if (ranViaPm2) {
-        console.log(`${C.green}║   Status: ${C.bold}Bot aktif berjalan 24 jam di background (PM2)${C.reset}${C.green}         ║${C.reset}`);
-        console.log(`${C.green}║   • Cek status bot:  ${C.bold}pm2 status${C.reset}${C.green}                                  ║${C.reset}`);
-        console.log(`${C.green}║   • Cek log live:    ${C.bold}pm2 logs bot-ppob${C.reset}${C.green}                           ║${C.reset}`);
-        console.log(`${C.green}║   • Restart bot:     ${C.bold}pm2 restart bot-ppob${C.reset}${C.green}                        ║${C.reset}`);
-    } else {
-        console.log(`${C.green}║   Untuk menjalankan bot:                                         ║${C.reset}`);
-        console.log(`${C.green}║   👉 ${C.bold}npm start${C.reset}${C.green}  atau  ${C.bold}node index.js${C.reset}${C.green}                              ║${C.reset}`);
+        console.log(`${C.green}║                                                                  ║${C.reset}`);
+        console.log(`${C.green}║   Perintah Cepat Sistem di VPS:                                  ║${C.reset}`);
+        console.log(`${C.green}║   • ${C.bold}bot-ppob status${C.reset}${C.green}   : Cek status bot di background (PM2)       ║${C.reset}`);
+        console.log(`${C.green}║   • ${C.bold}bot-ppob logs${C.reset}${C.green}     : Cek log pesan & transaksi live           ║${C.reset}`);
+        console.log(`${C.green}║   • ${C.bold}bot-ppob restart${C.reset}${C.green}  : Restart bot                              ║${C.reset}`);
     }
-    console.log(`${C.green}║                                                                  ║${C.reset}`);
-    console.log(`${C.green}║   Semua pengaturan (profit, API key, dll.) dapat diubah          ║${C.reset}`);
-    console.log(`${C.green}║   langsung melalui chat WhatsApp dengan ketik: ${C.bold}.admin${C.reset}${C.green}            ║${C.reset}`);
     console.log(`${C.green}╚══════════════════════════════════════════════════════════════════╝${C.reset}\n`);
+
     closeRL();
     process.exit(0);
 }
 
-async function promptConfig() {
-    const curPort = process.env.PORT || '3000';
-    const curOwner = process.env.OWNER_NUMBER || '';
-    const curDigiUser = process.env.DIGIFLAZZ_USERNAME || '';
-    const curDigiKey = process.env.DIGIFLAZZ_KEY || '';
-    const curMId = process.env.PAYMENTKITA_MERCHANT_ID || '';
-    const curMSecret = process.env.PAYMENTKITA_SECRET || '';
-    const curTgToken = process.env.TELEGRAM_TOKEN || '';
-    const curTgChat = process.env.TELEGRAM_CHAT_ID || '';
-
-    console.log(`\n${C.cyan}Tekan [ENTER] langsung untuk menggunakan nilai saat ini / default.${C.reset}\n`);
-
-    const port = (await ask(`• Port Server [${curPort}]: `)) || curPort;
-    const owner = (await ask(`• Nomor WA Owner / Admin (Contoh: 6281234567890) [${curOwner}]: `)) || curOwner;
-    const digiUser = (await ask(`• Digiflazz Username [${curDigiUser}]: `)) || curDigiUser;
-    const digiKey = (await ask(`• Digiflazz API Key [${curDigiKey}]: `)) || curDigiKey;
-    const pMId = (await ask(`• PaymentKita Merchant ID [${curMId}]: `)) || curMId;
-    const pSecret = (await ask(`• PaymentKita Secret [${curMSecret}]: `)) || curMSecret;
-    const tgToken = (await ask(`• Telegram Bot Token (Opsional) [${curTgToken || '-'}]: `)) || curTgToken;
-    const tgChat = (await ask(`• Telegram Chat ID (Opsional) [${curTgChat || '-'}]: `)) || curTgChat;
-
-    const envContent = `# Kredensial Bot PPOB & Toko Digital
-PORT=${port}
-
-# WhatsApp Owner
-OWNER_NUMBER=${owner}
-
-# Digiflazz Gateway
-DIGIFLAZZ_USERNAME=${digiUser}
-DIGIFLAZZ_KEY=${digiKey}
-
-# PaymentKita Gateway
-PAYMENTKITA_MERCHANT_ID=${pMId}
-PAYMENTKITA_SECRET=${pSecret}
-
-# Telegram Command Center (Opsional)
-TELEGRAM_TOKEN=${tgToken}
-TELEGRAM_CHAT_ID=${tgChat}
-`;
-
-    fs.writeFileSync('.env', envContent, 'utf8');
-    console.log(`${C.green}✓ File .env berhasil disimpan!${C.reset}`);
-}
-
+// Fallback Pairing di Terminal jika dipanggil khusus
 async function startPairingProcess() {
     const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
     
     console.log(`\n${C.cyan}──────────────────────────────────────────────────${C.reset}`);
-    console.log(`${C.bold}LANGKAH PAIRING KODE WHATSAPP${C.reset}`);
-    console.log(`Pastikan nomor WhatsApp Anda aktif dan siap menerima kode pairing.`);
+    console.log(`${C.bold}LANGKAH PAIRING KODE WHATSAPP (FALLBACK CLI)${C.reset}`);
+    console.log(`Buka WhatsApp di HP > Perangkat Tertaut > Tautkan dengan nomor telepon saja.`);
     console.log(`${C.cyan}──────────────────────────────────────────────────${C.reset}\n`);
 
     let phone = '';
-    const sessionDir = path.join(__dirname, 'session_bot');
-
-    while (true) {
-        while (!phone || phone.length < 10) {
-            phone = await ask(`${C.yellow}👉 Masukkan Nomor WhatsApp Bot (Contoh: 6281234567890): ${C.reset}`);
-            phone = phone.replace(/[^0-9]/g, '');
-            if (phone.startsWith('0')) phone = '62' + phone.slice(1);
-
-            if (!phone || phone.length < 10) {
-                console.log(`${C.red}Nomor tidak valid. Minimal 10 digit dengan format internasional (awalan 62). Coba lagi.${C.reset}`);
-                phone = '';
-            }
-        }
-
-        // Bersihkan session lama untuk memastikan handshake fresh dan bersih
-        try {
-            fs.rmSync(sessionDir, { recursive: true, force: true });
-        } catch (_) {}
-
-        console.log(`\n${C.blue}⏳ Menghubungkan ke server WhatsApp dan meminta kode pairing untuk [${phone}]...${C.reset}`);
-
-        let sock = null;
-        let pairResult = null;
-
-        try {
-            const { state, saveCreds } = await useMultiFileAuthState('session_bot');
-            const { version } = await fetchLatestBaileysVersion();
-
-            sock = makeWASocket({
-                version,
-                logger: pino({ level: 'silent' }),
-                printQRInTerminal: false,
-                auth: state,
-                browser: Browsers.ubuntu('Chrome'),
-                markOnlineOnConnect: true,
-                connectTimeoutMs: 60000,
-                keepAliveIntervalMs: 10000
-            });
-
-            sock.ev.on('creds.update', saveCreds);
-
-            // Jeda minimal 3000ms agar koneksi socket stabil (Aturan Emas #3)
-            await new Promise(r => setTimeout(r, 3000));
-
-            let code = '';
-            if (!sock.authState.creds.registered) {
-                code = await sock.requestPairingCode(phone);
-            }
-            const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
-
-            console.log(`\n${C.yellow}╔═════════════════════════════════════════════════════════════╗${C.reset}`);
-            console.log(`${C.yellow}║                   ${C.bold}KODE PAIRING WHATSAPP ANDA${C.reset}${C.yellow}                ║${C.reset}`);
-            console.log(`${C.yellow}║                                                             ║${C.reset}`);
-            console.log(`${C.yellow}║                 ${C.bold}${C.bgGreen}  [ ${formatted} ]  ${C.reset}${C.yellow}                  ║${C.reset}`);
-            console.log(`${C.yellow}║                                                             ║${C.reset}`);
-            console.log(`${C.yellow}║  ${C.cyan}CARA TAUTKAN DI HP:${C.reset}${C.yellow}                                        ║${C.reset}`);
-            console.log(`${C.yellow}║  1. Buka aplikasi WhatsApp di HP Anda                       ║${C.reset}`);
-            console.log(`${C.yellow}║  2. Buka menu titik 3 (kanan atas) > ${C.bold}Perangkat tertaut${C.reset}${C.yellow}      ║${C.reset}`);
-            console.log(`${C.yellow}║  3. Ketuk ${C.bold}Tautkan Perangkat${C.reset}${C.yellow}                                 ║${C.reset}`);
-            console.log(`${C.yellow}║  4. Pilih ${C.bold}"Tautkan dengan nomor telepon saja"${C.reset}${C.yellow}              ║${C.reset}`);
-            console.log(`${C.yellow}║  5. Masukkan 8 digit kode di atas                           ║${C.reset}`);
-            console.log(`${C.yellow}╚═════════════════════════════════════════════════════════════╝${C.reset}\n`);
-            console.log(`${C.dim}⏳ Menunggu verifikasi dari HP Anda (Masa aktif kode: ~120 detik)...${C.reset}`);
-            console.log(`${C.cyan}💡 TIPS JIKA LOADING LAMA / TIDAK BERHASIL:${C.reset}`);
-            console.log(`   • Tekan ${C.bold}[ENTER]${C.reset} atau ketik ${C.bold}'R'${C.reset} untuk ${C.bold}BUAT KODE PAIRING BARU${C.reset}`);
-            console.log(`   • Ketik ${C.bold}'G'${C.reset} untuk ${C.bold}GANTI NOMOR WHATSAPP${C.reset}`);
-            console.log(`   • Ketik ${C.bold}'Q'${C.reset} untuk ${C.bold}BATAL / KELUAR${C.reset}\n`);
-
-            pairResult = await new Promise((resolve) => {
-                let timer = null;
-                let resolved = false;
-
-                const cleanup = () => {
-                    if (timer) clearTimeout(timer);
-                    resolved = true;
-                };
-
-                // Listener 1: Update koneksi
-                sock.ev.on('connection.update', async (update) => {
-                    const { connection, lastDisconnect } = update;
-                    if (connection === 'open') {
-                        cleanup();
-                        resolve({ status: 'SUCCESS' });
-                    } else if (connection === 'close') {
-                        const statusCode = lastDisconnect?.error?.output?.statusCode;
-                        if (statusCode === 401 || statusCode === 408 || statusCode === 440) {
-                            cleanup();
-                            resolve({ status: 'DISCONNECTED', code: statusCode });
-                        }
-                    }
-                });
-
-                // Listener 2: Timeout 120 detik
-                timer = setTimeout(() => {
-                    if (!resolved) {
-                        cleanup();
-                        resolve({ status: 'TIMEOUT' });
-                    }
-                }, 120000);
-
-                // Listener 3: Input langsung dari keyboard
-                ask(`${C.yellow}👉 Aksi [Enter/R=Kode Baru, G=Ganti Nomor, Q=Keluar]: ${C.reset}`).then((userInput) => {
-                    if (!resolved) {
-                        cleanup();
-                        resolve({ status: 'USER_ACTION', input: (userInput || 'R').trim().toUpperCase() });
-                    }
-                });
-            });
-
-        } catch (err) {
-            console.log(`${C.red}✗ Gagal meminta kode pairing: ${err.message}${C.reset}`);
-            pairResult = { status: 'ERROR', error: err.message };
-        } finally {
-            if (sock) {
-                try { await sock.end(); } catch (_) {}
-            }
-        }
-
-        if (pairResult?.status === 'SUCCESS') {
-            console.log(`\n${C.green}✅ BERHASIL TERHUBUNG DENGAN WHATSAPP!${C.reset}`);
-            console.log(`${C.green}Akun bot aktif: ${phone}${C.reset}`);
-            return true;
-        }
-
-        if (pairResult?.status === 'USER_ACTION') {
-            const cmd = pairResult.input;
-            if (cmd === 'Q') {
-                console.log(`${C.dim}Pairing dibatalkan.${C.reset}`);
-                return false;
-            } else if (cmd === 'G') {
-                phone = '';
-                console.log(`\n${C.cyan}🔄 Silakan masukkan nomor baru:${C.reset}`);
-                continue;
-            } else {
-                console.log(`\n${C.cyan}🔄 Mereset sesi dan membuat kode pairing baru...${C.reset}`);
-                continue;
-            }
-        }
-
-        if (pairResult?.status === 'TIMEOUT') {
-            console.log(`\n${C.yellow}⏰ Waktu pairing habis (kode kadaluarsa atau loading lama di HP).${C.reset}`);
-            const act = await ask(`${C.yellow}Apakah ingin membuat kode pairing baru lagi? (Y/n) atau ketik 'g' untuk ganti nomor: ${C.reset}`);
-            if (act.toLowerCase() === 'n') {
-                return false;
-            } else if (act.toLowerCase() === 'g') {
-                phone = '';
-            }
-            continue;
-        }
-
-        if (pairResult?.status === 'DISCONNECTED' || pairResult?.status === 'ERROR') {
-            console.log(`\n${C.yellow}⚠️ Koneksi pairing terputus / gagal terhubung.${C.reset}`);
-            const act = await ask(`${C.yellow}Buat kode pairing baru lagi? (Y/n) atau ketik 'g' untuk ganti nomor: ${C.reset}`);
-            if (act.toLowerCase() === 'n') {
-                return false;
-            } else if (act.toLowerCase() === 'g') {
-                phone = '';
-            }
-            continue;
+    while (!phone || phone.length < 10 || !phone.startsWith('62')) {
+        const input = await ask(`• Masukkan nomor WhatsApp Bot (awali 62, contoh: 6281234567890): `);
+        phone = input.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+        if (phone.length < 10 || !phone.startsWith('62')) {
+            console.log(`${C.red}❌ Format nomor tidak valid! Harus diawali 62 dan minimal 10 digit.${C.reset}`);
         }
     }
+
+    const sessionDir = path.join(__dirname, 'session_bot');
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    const { version } = await fetchLatestBaileysVersion();
+
+    const pino = require('pino');
+    const sock = makeWASocket({
+        version,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        auth: state,
+        browser: Browsers.ubuntu('Chrome'),
+        markOnlineOnConnect: true,
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 10000
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    console.log(`\n${C.yellow}⏳ Menghubungkan ke WhatsApp... Mohon tunggu 3 detik...${C.reset}`);
+    await new Promise(r => setTimeout(r, 3000));
+
+    if (!sock.authState.creds.registered) {
+        try {
+            const code = await sock.requestPairingCode(phone);
+            const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
+            console.log(`\n${C.bgGreen}${C.bold} KODE PAIRING WHATSAPP ANDA: ${formatted} ${C.reset}\n`);
+            console.log(`${C.dim}Masukkan kode 8 digit di atas pada menu 'Perangkat Tertaut' di WhatsApp HP Anda.${C.reset}`);
+        } catch (err) {
+            console.log(`${C.red}✗ Gagal meminta kode pairing: ${err.message}${C.reset}`);
+            return false;
+        }
+    }
+
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+            console.log(`\n${C.yellow}⚠️ Waktu tunggu pairing selesai (timeout 120s). Sesi tetap tersimpan.${C.reset}`);
+            resolve(true);
+        }, 120000);
+
+        sock.ev.on('connection.update', (update) => {
+            const { connection } = update;
+            if (connection === 'open') {
+                clearTimeout(timeout);
+                console.log(`\n${C.green}✓ WHATSAPP BERHASIL TERHUBUNG DENGAN SUKSES!${C.reset}`);
+                resolve(true);
+            }
+        });
+    });
 }
 
-runInstaller().catch(err => {
-    console.error("\n[INSTALLER ERROR]", err.message);
-    process.exit(1);
-});
+if (require.main === module) {
+    runInstaller().catch(err => {
+        console.error(`${C.red}Error Installer: ${err.message}${C.reset}`);
+        closeRL();
+        process.exit(1);
+    });
+}
+
+module.exports = { runInstaller, startPairingProcess };

@@ -265,15 +265,19 @@ async function startBot(targetPhone = null, tgChatId = null) {
             }
         } else {
             console.log('⚠️ [WHATSAPP] Belum terhubung. Menunggu nomor pairing dari Telegram.');
-            if (global.botTg && config.telegram?.chatId) {
+            if (global.botTg && config.telegram?.chatId && !global.hasSentUnpairedNotice) {
+                global.hasSentUnpairedNotice = true;
                 global.botTg.sendMessage(config.telegram.chatId,
                     `🚨 *WHATSAPP BELUM TERTAUT* 🚨\n\n` +
                     `Sistem mendeteksi sesi WhatsApp belum terdaftar.\n\n` +
-                    `Silakan klik tombol di bawah untuk memasukkan nomor WhatsApp Bot dan mendapatkan kode pairing:`,
+                    `Silakan gunakan tombol di bawah untuk memasukkan nomor WhatsApp Bot dan mendapatkan kode pairing:`,
                     {
                         parse_mode: 'Markdown',
                         reply_markup: {
-                            inline_keyboard: [[{ text: '📱 TAUTKAN NOMOR BARU', callback_data: 'cmd_pair_new' }]]
+                            inline_keyboard: [
+                                [{ text: '📱 HUBUNGKAN WHATSAPP (PAIRING)', callback_data: 'tg_pair' }],
+                                [{ text: '🤖 COMMAND CENTER DASHBOARD', callback_data: 'tg_menu' }]
+                            ]
                         }
                     }
                 ).catch(() => {});
@@ -284,6 +288,12 @@ async function startBot(targetPhone = null, tgChatId = null) {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
+            const isRegistered = Boolean(sock.authState?.creds?.registered);
+            if (!isRegistered) {
+                console.log('ℹ️ [WHATSAPP] Socket tertutup. Menunggu pairing nomor baru dari Telegram Command Center.');
+                return;
+            }
+
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             
             // JIKA BENAR-BENAR LOGGED OUT / TERHAPUS
@@ -293,14 +303,10 @@ async function startBot(targetPhone = null, tgChatId = null) {
                     const axios = require('axios');
                     axios.post('https://api.telegram.org/bot' + config.telegram.token + '/sendMessage', {
                         chat_id: config.telegram.chatId,
-                        text: `🚨 *WHATSAPP LOGGED OUT / TERHAPUS* 🚨
-
-Sistem mendeteksi sesi WhatsApp bot telah hilang/ter-suspend.
-
-Silakan klik tombol di bawah untuk menautkan ulang:`,
+                        text: `🚨 *WHATSAPP LOGGED OUT / TERHAPUS* 🚨\n\nSistem mendeteksi sesi WhatsApp bot telah hilang/ter-suspend.\n\nSilakan klik tombol di bawah untuk menautkan ulang:`,
                         parse_mode: 'Markdown',
                         reply_markup: {
-                            inline_keyboard: [[{ text: '📱 TAUTKAN NOMOR BARU', callback_data: 'cmd_pair_new' }]]
+                            inline_keyboard: [[{ text: '📱 TAUTKAN NOMOR BARU', callback_data: 'tg_pair' }]]
                         }
                     }).catch(e => console.log("Gagal kirim alarm telegram:", e.message));
                 } catch(e) {}
@@ -726,7 +732,7 @@ Terima kasih telah berbelanja.`
                 'admin', 'pullppob', 'cekdigi', 'addsaldo', 'tariksaldo', 'addmenu', 'adddata', 'delmenu', 
                 'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
-                'settings', 'pengaturan', 'setdigi', 'setpayment', 'settg', 'setprofit', 
+                'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
                 'settier', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal'
             ];
 
@@ -1148,7 +1154,7 @@ setInterval(() => {
 
 
 // ==========================================
-// 🎧 TELEGRAM COMMAND CENTER LISTENER
+// 🎧 TELEGRAM COMMAND CENTER LISTENER (INLINE KEYBOARD)
 // ==========================================
 try {
     const TelegramBot = require('node-telegram-bot-api');
@@ -1156,19 +1162,253 @@ try {
     // Mencegah bentrok / double polling jika file dimuat ulang
     if (!global.botTg && config.telegram.token && config.telegram.token.includes(':')) {
         global.botTg = new TelegramBot(config.telegram.token, { polling: true });
-        global.awaitingPhoneNumber = false;
+        global.tgInputState = null;
 
         // Tangkap polling error agar tidak crash dan mudah dilacak
         global.botTg.on('polling_error', (error) => {
             console.warn('⚠️ [TELEGRAM POLLING]:', error.code || error.message);
         });
 
+        const maskSecret = (str = '') => (str && str.length > 8 ? str.slice(0, 4) + '••••' + str.slice(-4) : (str ? '••••••••' : '-'));
+
+        const getWaStatus = () => {
+            let connected = false;
+            let phone = '';
+            try {
+                if (global.sock?.user?.id) {
+                    connected = true;
+                    phone = global.sock.user.id.split(':')[0] || global.sock.user.id.split('@')[0];
+                } else if (fs.existsSync('./session_bot/creds.json')) {
+                    const creds = JSON.parse(fs.readFileSync('./session_bot/creds.json', 'utf8'));
+                    if (creds && creds.registered && creds.me?.id) {
+                        connected = true;
+                        phone = creds.me.id.split(':')[0] || creds.me.id.split('@')[0];
+                    }
+                }
+            } catch (_) {}
+            return { connected, phone };
+        };
+
+        const renderTelegramDashboard = () => {
+            const wa = getWaStatus();
+            const activeGw = (config.paymentGateway || 'paymentkita').toLowerCase();
+            const storeStatus = db.store.buka ? "🟢 BUKA" : "🔴 TUTUP (Offline)";
+            const totalUsers = Object.keys(db.users || {}).length;
+            const totalProducts = (db.ppob || []).length;
+            const pendingOrders = (db.orders || []).filter(o => o.status === 'pending' || o.status === 'processing').length;
+
+            let text = `🤖 *COMMAND CENTER BOT PPOB & TOKO DIGITAL*\n`;
+            text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            text += `🏪 *Toko:* *${db.store.namaToko || "DIGITAL STORE"}* (${storeStatus})\n`;
+            text += `📱 *WhatsApp:* ${wa.connected ? `🟢 Terhubung (\`+${wa.phone}\`)` : '🔴 Belum Terhubung'}\n`;
+            text += `💳 *Gateway:* *${activeGw.toUpperCase()}*\n`;
+            text += `⚡ *Digiflazz:* ${config.digiflazz.username ? `🟢 \`${config.digiflazz.username}\`` : '🔴 Belum Diatur'}\n`;
+            text += `📦 *Katalog:* ${totalProducts} Produk | ⏳ *Antrian:* ${pendingOrders} Trx\n`;
+            text += `👥 *Pengguna:* ${totalUsers} Akun Terdaftar\n`;
+            text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            text += `_Silakan pilih menu kendali melalui tombol di bawah:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: wa.connected ? '📱 Re-Pairing WA' : '📱 Hubungkan WA', callback_data: 'tg_pair' },
+                        { text: db.store.buka ? '🔴 Tutup Toko' : '🟢 Buka Toko', callback_data: 'tg_toggletoko' }
+                    ],
+                    [
+                        { text: `💳 Gateway: ${activeGw.toUpperCase()}`, callback_data: 'tg_gw_menu' },
+                        { text: '⚡ Menu Digiflazz', callback_data: 'tg_digi_menu' }
+                    ],
+                    [
+                        { text: '💰 Cek Saldo Digi', callback_data: 'tg_cekdigi' },
+                        { text: '🔄 Sync Produk PPOB', callback_data: 'tg_sync' }
+                    ],
+                    [
+                        { text: '📊 Status & Health', callback_data: 'tg_health' },
+                        { text: '📈 Statistik Omzet', callback_data: 'tg_stats' }
+                    ],
+                    [
+                        { text: `⏳ Antrian Order (${pendingOrders})`, callback_data: 'tg_lunas' },
+                        { text: '📦 Backup Data', callback_data: 'tg_backup' }
+                    ],
+                    [
+                        { text: '⚙️ Pengaturan & Margin', callback_data: 'tg_settings_menu' },
+                        { text: '🔄 Refresh', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+
+            return { text, reply_markup };
+        };
+
+        const renderGatewayMenu = () => {
+            const activeGw = (config.paymentGateway || 'paymentkita').toLowerCase();
+            let text = `💳 *PENGATURAN PAYMENT GATEWAY*\n\n`;
+            text += `Gateway Aktif Saat Ini: *${activeGw.toUpperCase()}*\n\n`;
+            text += `🔹 *PaymentKita:*\n`;
+            text += `• Merchant ID: \`${config.paymentkita.merchantId || '(Belum diset)'}\`\n`;
+            text += `• Secret Key: \`${maskSecret(config.paymentkita.secret)}\`\n\n`;
+            text += `🔹 *Pakasir:*\n`;
+            text += `• Project Slug: \`${config.pakasir.project || '(Belum diset)'}\`\n`;
+            text += `• API Key: \`${maskSecret(config.pakasir.key)}\`\n\n`;
+            text += `_Pilih aksi melalui tombol di bawah:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: activeGw === 'paymentkita' ? '✅ PaymentKita (Aktif)' : '⚡ Aktifkan PaymentKita', callback_data: 'tg_setgw_pk' },
+                        { text: activeGw === 'pakasir' ? '✅ Pakasir (Aktif)' : '⚡ Aktifkan Pakasir', callback_data: 'tg_setgw_pakasir' }
+                    ],
+                    [
+                        { text: '🔑 Set Kredensial PaymentKita', callback_data: 'tg_input_pk' },
+                        { text: '🔑 Set Kredensial Pakasir', callback_data: 'tg_input_pakasir' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+
+            return { text, reply_markup };
+        };
+
+        const renderDigiMenu = () => {
+            let text = `⚡ *PENGATURAN DIGIFLAZZ*\n\n`;
+            text += `• Username: \`${config.digiflazz.username || '(Belum diatur)'}\`\n`;
+            text += `• API Key: \`${maskSecret(config.digiflazz.key)}\`\n\n`;
+            text += `_Pilih aksi melalui tombol di bawah:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '🔑 Set Username & Key', callback_data: 'tg_input_digi' }
+                    ],
+                    [
+                        { text: '💰 Cek Saldo Digi', callback_data: 'tg_cekdigi' },
+                        { text: '🔄 Sinkronisasi Produk', callback_data: 'tg_sync' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+
+            return { text, reply_markup };
+        };
+
+        const renderSettingsMenu = () => {
+            const configData = require('./config');
+            let text = `⚙️ *PENGATURAN HARGA & TOKO*\n\n`;
+            text += `🏪 Nama Toko: *${db.store.namaToko || "DIGITAL STORE"}*\n\n`;
+            text += `💰 *Markup Kategori:*\n`;
+            text += `• Pulsa: ${formatRupiah(configData.profit.pulsa)}\n`;
+            text += `• Data: ${formatRupiah(configData.profit.data)}\n`;
+            text += `• E-Money: ${formatRupiah(configData.profit.emoney)}\n`;
+            text += `• PLN: ${formatRupiah(configData.profit.pln)}\n\n`;
+            text += `📊 *Margin Tier:*\n`;
+            text += `• Kecil: ${formatRupiah(configData.profitTier.kecil)}\n`;
+            text += `• Sedang: ${formatRupiah(configData.profitTier.sedang)}\n`;
+            text += `• Besar: ${formatRupiah(configData.profitTier.besar)}\n`;
+            text += `• Premium: ${formatRupiah(configData.profitTier.premium)}\n\n`;
+            text += `👑 *Owner Terdaftar:* ${configData.owner.join(', ') || 'Belum ada'}\n`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '🏷️ Ganti Nama Toko', callback_data: 'tg_input_namatoko' },
+                        { text: '💵 Set Margin Profit', callback_data: 'tg_input_profit' }
+                    ],
+                    [
+                        { text: '👑 Tambah Admin/Owner', callback_data: 'tg_input_addowner' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+
+            return { text, reply_markup };
+        };
+
+        const updateOrSend = async (chatId, messageId, content) => {
+            try {
+                if (messageId) {
+                    await global.botTg.editMessageText(content.text, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: 'Markdown',
+                        reply_markup: content.reply_markup
+                    });
+                    return;
+                }
+            } catch (_) {}
+            await global.botTg.sendMessage(chatId, content.text, {
+                parse_mode: 'Markdown',
+                reply_markup: content.reply_markup
+            });
+        };
+
+        // Trigger Pairing WhatsApp
+        const triggerPairing = async (chatId, rawPhone) => {
+            let cleanPhone = (rawPhone || '').replace(/[^0-9]/g, '');
+            if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+
+            if (!cleanPhone.startsWith('62') || cleanPhone.length < 10) {
+                return global.botTg.sendMessage(chatId, 
+                    `❌ *Format Nomor Tidak Valid!*\n\n` +
+                    `Nomor harus diawali angka *62* dan minimal 10 digit (contoh: \`6281234567890\`).\n\n` +
+                    `Silakan ketik ulang nomor WhatsApp Anda:`, 
+                    { 
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_menu' }]]
+                        }
+                    }
+                );
+            }
+
+            global.tgInputState = null;
+            await global.botTg.sendMessage(chatId, 
+                `⏳ *Menghubungkan ke server WhatsApp...*\n\n` +
+                `Nomor target: \`${cleanPhone}\`\n\n` +
+                `_Menyiapkan socket Baileys dan meminta kode pairing (mohon tunggu 3-5 detik)..._`, 
+                { parse_mode: 'Markdown' }
+            );
+
+            try {
+                if (global.sock) {
+                    try { await global.sock.end(); } catch (_) {}
+                    global.sock = null;
+                }
+
+                try {
+                    fs.rmSync('./session_bot', { recursive: true, force: true });
+                } catch (_) {}
+
+                await startBot(cleanPhone, chatId);
+            } catch (err) {
+                console.error('[TELEGRAM PAIRING ERROR]:', err);
+                global.botTg.sendMessage(chatId, 
+                    `❌ *Gagal Memulai Pairing:*\n\`${err.message}\``, 
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '🔄 Coba Tautkan Ulang', callback_data: 'tg_pair' }],
+                                [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                            ]
+                        }
+                    }
+                );
+            }
+        };
+
+        // 🔘 CALLBACK QUERY LISTENER
         global.botTg.on('callback_query', async (query) => {
             const chatId = String(query.message?.chat?.id || query.from?.id || '');
+            const messageId = query.message?.message_id;
             const authorizedChatId = String(config.telegram.chatId || '').trim();
 
             if (authorizedChatId && chatId !== authorizedChatId) {
-                console.warn(`[SECURITY] Unauthorized Telegram callback attempt from Chat ID: ${chatId}`);
                 return global.botTg.answerCallbackQuery(query.id, { 
                     text: `❌ Akses ditolak! Chat ID Anda (${chatId}) tidak terdaftar sebagai Admin.`, 
                     show_alert: true 
@@ -1176,6 +1416,300 @@ try {
             }
 
             const action = query.data;
+
+            if (action === 'tg_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTelegramDashboard());
+            }
+
+            if (action === 'tg_toggletoko') {
+                db.store.buka = !db.store.buka;
+                if (db.saveStore) db.saveStore();
+                else if (db.save) db.save();
+                global.botTg.answerCallbackQuery(query.id, { 
+                    text: db.store.buka ? '🟢 Toko berhasil DIBUKA!' : '🔴 Toko berhasil DITUTUP!' 
+                });
+                return updateOrSend(chatId, messageId, renderTelegramDashboard());
+            }
+
+            if (action === 'tg_pair' || action === 'cmd_pair_new') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_phone', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `📱 *HUBUNGKAN / PAIRING WHATSAPP*\n\n` +
+                    `Silakan balas pesan ini dengan nomor WhatsApp yang ingin dijadikan bot menggunakan awalan *62* (Tanpa spasi atau simbol plus).\n\n` +
+                    `Contoh: \`6281234567890\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_menu' }]]
+                        }
+                    }
+                );
+            }
+
+            if (action === 'tg_gw_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderGatewayMenu());
+            }
+
+            if (action === 'tg_setgw_pk') {
+                if (!db.settings) db.settings = {};
+                db.settings.paymentGateway = 'paymentkita';
+                if (db.saveSettings) db.saveSettings();
+                global.botTg.answerCallbackQuery(query.id, { text: '✅ Gateway aktif: PAYMENTKITA' });
+                return updateOrSend(chatId, messageId, renderGatewayMenu());
+            }
+
+            if (action === 'tg_setgw_pakasir') {
+                if (!db.settings) db.settings = {};
+                db.settings.paymentGateway = 'pakasir';
+                if (db.saveSettings) db.saveSettings();
+                global.botTg.answerCallbackQuery(query.id, { text: '✅ Gateway aktif: PAKASIR' });
+                return updateOrSend(chatId, messageId, renderGatewayMenu());
+            }
+
+            if (action === 'tg_input_pk') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'set_paymentkita', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🔑 *SET KREDENSIAL PAYMENTKITA*\n\n` +
+                    `Kirimkan Merchant ID dan Secret Key dipisahkan spasi:\n` +
+                    `Format: \`<MERCHANT_ID> <SECRET_KEY>\`\n` +
+                    `Contoh: \`PKM12345 PKSK_abcdef123456\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_gw_menu' }]]
+                        }
+                    }
+                );
+            }
+
+            if (action === 'tg_input_pakasir') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'set_pakasir', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🔑 *SET KREDENSIAL PAKASIR*\n\n` +
+                    `Kirimkan Project Slug dan API Key dipisahkan spasi:\n` +
+                    `Format: \`<PROJECT_SLUG> <API_KEY>\`\n` +
+                    `Contoh: \`myproject 98a7bc1234...\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_gw_menu' }]]
+                        }
+                    }
+                );
+            }
+
+            if (action === 'tg_digi_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderDigiMenu());
+            }
+
+            if (action === 'tg_input_digi') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'set_digi', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🔑 *SET KREDENSIAL DIGIFLAZZ*\n\n` +
+                    `Kirimkan Username dan API Key Digiflazz dipisahkan spasi:\n` +
+                    `Format: \`<USERNAME> <API_KEY>\`\n` +
+                    `Contoh: \`digiuser dev-98a7bc...\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digi_menu' }]]
+                        }
+                    }
+                );
+            }
+
+            if (action === 'tg_cekdigi') {
+                global.botTg.answerCallbackQuery(query.id, { text: '⏳ Mengambil saldo Digiflazz...' });
+                const saldo = await api.cekSaldoDigi();
+                const text = `💰 *SALDO API DIGIFLAZZ*\n\n` +
+                    `• Username: \`${config.digiflazz.username || '-'}\`\n` +
+                    `• Saldo: *${typeof saldo === 'number' ? formatRupiah(saldo) : saldo}*\n` +
+                    `• Waktu Cek: ${new Date().toLocaleString('id-ID')}`;
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Cek Saldo Lagi', callback_data: 'tg_cekdigi' }],
+                            [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                        ]
+                    }
+                });
+            }
+
+            if (action === 'tg_sync') {
+                global.botTg.answerCallbackQuery(query.id, { text: '⏳ Memulai sinkronisasi produk...' });
+                await global.botTg.sendMessage(chatId, "⏳ *Sedang menyinkronkan seluruh produk Digiflazz...*\nMohon tunggu sejenak...", { parse_mode: 'Markdown' });
+                const cats = ['pulsa', 'data', 'emoney', 'pln'];
+                let report = "📊 *HASIL SINKRONISASI DIGIFLAZZ*\n\n";
+                for (const c of cats) {
+                    const res = await api.pullDigiProducts(c);
+                    report += `• ${c.toUpperCase()}: ${res !== false ? res + ' produk' : '❌ Gagal'}\n`;
+                }
+                const pascaRes = await api.pullDigiPostpaid();
+                report += `• PASCABAYAR: ${pascaRes !== false ? pascaRes + ' produk' : '❌ Gagal'}\n\n`;
+                report += `✅ *Total Produk Aktif:* ${db.ppob.length + (db.postpaid || []).length} SKU`;
+                return global.botTg.sendMessage(chatId, report, {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [[{ text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }]]
+                    }
+                });
+            }
+
+            if (action === 'tg_health') {
+                global.botTg.answerCallbackQuery(query.id);
+                let health = {};
+                try {
+                    const checkHealth = require('./system/health-check');
+                    health = checkHealth();
+                } catch (_) {}
+                const wa = getWaStatus();
+                const mem = process.memoryUsage();
+                const uptimeSec = Math.floor(process.uptime());
+                const uptimeStr = `${Math.floor(uptimeSec / 3600)}j ${Math.floor((uptimeSec % 3600) / 60)}m ${uptimeSec % 60}d`;
+
+                let text = `📊 *STATUS & KESEHATAN SISTEM*\n\n`;
+                text += `• Server Uptime: *${uptimeStr}*\n`;
+                text += `• RAM Used: *${(mem.rss / 1024 / 1024).toFixed(1)} MB*\n`;
+                text += `• WhatsApp: ${wa.connected ? `🟢 Connected (+${wa.phone})` : '🔴 Disconnected'}\n`;
+                text += `• Database: ${health.database ? '🟢 Normal' : '🔴 Error'}\n`;
+                text += `• Status Toko: *${health.store === 'ON' ? '🟢 Buka' : '🔴 Tutup'}*\n`;
+                text += `• Heartbeat: ${health.heartbeat ? '🟢 Aktif' : '🟡 Offline'}\n`;
+                text += `• Antrian Trx: *${health.processing || 0} order*\n`;
+                text += `• Waktu: ${new Date().toLocaleString('id-ID')}`;
+
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Refresh Health', callback_data: 'tg_health' }],
+                            [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                        ]
+                    }
+                });
+            }
+
+            if (action === 'tg_stats') {
+                global.botTg.answerCallbackQuery(query.id);
+                const orders = db.orders || [];
+                const successOrders = orders.filter(o => o.status === 'success');
+                const failedOrders = orders.filter(o => o.status === 'failed' || o.status === 'cancelled');
+                const totalOmzet = successOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+                
+                const startOfDay = new Date();
+                startOfDay.setHours(0, 0, 0, 0);
+                const todayOrders = successOrders.filter(o => (o.timestamp || o.doneAt || 0) >= startOfDay.getTime());
+                const todayOmzet = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+
+                let text = `📈 *STATISTIK PENJUALAN & OMZET*\n\n`;
+                text += `📅 *Hari Ini:*\n`;
+                text += `• Transaksi Berhasil: *${todayOrders.length} trx*\n`;
+                text += `• Omzet Hari Ini: *${formatRupiah(todayOmzet)}*\n\n`;
+                text += `🏆 *Keseluruhan (All Time):*\n`;
+                text += `• Total Sukses: *${successOrders.length} trx*\n`;
+                text += `• Total Gagal/Refund: *${failedOrders.length} trx*\n`;
+                text += `• Total Omzet: *${formatRupiah(totalOmzet)}*\n`;
+                text += `• Total Member: *${Object.keys(db.users || {}).length} pengguna*`;
+
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                        ]
+                    }
+                });
+            }
+
+            if (action === 'tg_lunas') {
+                global.botTg.answerCallbackQuery(query.id);
+                const pending = (db.orders || []).filter(o => o.status === 'pending' || o.status === 'processing');
+                let text = `⏳ *ANTRIAN TRANSAKSI AKTIF*\n\n`;
+                if (pending.length === 0) {
+                    text += `_Tidak ada transaksi dalam antrian saat ini. Seluruh order telah tuntas._`;
+                } else {
+                    pending.slice(0, 10).forEach((o, i) => {
+                        text += `${i + 1}. \`${o.id}\` | ${o.item || o.sku} | ${formatRupiah(o.total || 0)} (${o.status})\n`;
+                    });
+                    if (pending.length > 10) text += `\n_...dan ${pending.length - 10} order lainnya._`;
+                }
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Refresh Antrian', callback_data: 'tg_lunas' }],
+                            [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                        ]
+                    }
+                });
+            }
+
+            if (action === 'tg_backup') {
+                global.botTg.answerCallbackQuery(query.id, { text: '⏳ Menjalankan backup...' });
+                await global.botTg.sendMessage(chatId, "⏳ *Membuat file backup dan mengirimkan ke chat ini...*", { parse_mode: 'Markdown' });
+                exec('node lib/backup/backup-telegram.js', (err) => {
+                    if (err) {
+                        return global.botTg.sendMessage(chatId, `❌ Backup gagal: ${err.message}`, {
+                            reply_markup: {
+                                inline_keyboard: [[{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]]
+                            }
+                        });
+                    }
+                    return global.botTg.sendMessage(chatId, `✅ *Backup Berhasil Dikirim!*\nFile arsip data telah terkirim ke Telegram.`, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '📦 Restore Backup', callback_data: 'cmd_restore' }],
+                                [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                            ]
+                        }
+                    });
+                });
+                return;
+            }
+
+            if (action === 'tg_settings_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderSettingsMenu());
+            }
+
+            if (action === 'tg_input_namatoko') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'set_namatoko', chatId };
+                return global.botTg.sendMessage(chatId, `🏷️ *GANTI NAMA TOKO*\n\nKetik nama toko digital Anda yang baru:\nContoh: \`Garuda Multi Payment\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_input_profit') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'set_profit', chatId };
+                return global.botTg.sendMessage(chatId, `💵 *SET MARGIN KEUNTUNGAN KATEGORI*\n\nKetik kategori dan nominal margin dipisahkan spasi:\nFormat: \`<KATEGORI> <NOMINAL>\`\nKategori: \`pulsa\`, \`data\`, \`emoney\`, \`pln\`, \`pasca\`\nContoh: \`pulsa 750\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_input_addowner') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'add_owner', chatId };
+                return global.botTg.sendMessage(chatId, `👑 *TAMBAH ADMIN / OWNER WHATSAPP*\n\nKetik nomor WhatsApp yang ingin dijadikan Admin (Format 62):\nContoh: \`6281234567890\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
 
             if (action === 'cmd_restore') {
                 global.botTg.answerCallbackQuery(query.id);
@@ -1202,14 +1736,9 @@ try {
                     global.botTg.sendMessage(chatId, "❌ *Gagal Restore:* " + err.message);
                 }
             }
-
-            if (action === 'cmd_pair_new') {
-                global.botTg.answerCallbackQuery(query.id);
-                global.awaitingPhoneNumber = true;
-                global.botTg.sendMessage(chatId, "📱 *TAUTKAN NOMOR BARU*\n\nSilakan balas pesan ini dengan nomor WhatsApp yang ingin dijadikan bot menggunakan awalan *62* (Tanpa spasi atau tanda plus).\n\nContoh: `6281234567890`", {parse_mode: "Markdown"});
-            }
         });
 
+        // 📩 MESSAGE LISTENER (INTERACTIVE TEXT & COMMANDS)
         global.botTg.on('message', async (msg) => {
             const chatId = String(msg.chat?.id || '');
             const authorizedChatId = String(config.telegram.chatId || '').trim();
@@ -1217,7 +1746,7 @@ try {
 
             if (!text) return;
 
-            // 1. Cek Chat ID (selalu diizinkan agar admin bisa mengetahui Chat ID-nya)
+            // 1. Cek Chat ID (selalu diizinkan)
             if (/^\/id(@\w+)?$/i.test(text)) {
                 return global.botTg.sendMessage(chatId, `🆔 *Chat ID Telegram Anda:* \`${chatId}\``, { parse_mode: 'Markdown' });
             }
@@ -1240,108 +1769,167 @@ try {
                 return global.botTg.sendMessage(chatId,
                     `❌ *Akses Ditolak!*\n\n` +
                     `Chat ID Anda: \`${chatId}\`\n` +
-                    `Chat ID Admin di .env: \`${authorizedChatId}\`\n\n` +
-                    `Jika ini akun Anda, ubah \`TELEGRAM_CHAT_ID=${chatId}\` di file \`.env\` VPS lalu restart bot.`,
+                    `Chat ID Admin di .env: \`${authorizedChatId}\``,
                     { parse_mode: 'Markdown' }
                 );
             }
 
-            // 3. Menu Utama (/start, /menu, /help)
-            if (/^\/start(@\w+)?$/i.test(text) || /^\/menu(@\w+)?$/i.test(text) || /^\/help(@\w+)?$/i.test(text)) {
-                return global.botTg.sendMessage(chatId,
-                    `🤖 *COMMAND CENTER BOT PPOB*\n\n` +
-                    `Halo Admin! Sistem bot aktif dan siap menerima perintah.\n\n` +
-                    `📋 *Daftar Perintah:*\n` +
-                    `• \`/pair\` - Tautkan nomor WhatsApp baru\n` +
-                    `• \`/pair 628xxx\` - Langsung kirim nomor untuk pairing\n` +
-                    `• \`/id\` - Cek Chat ID Telegram Anda\n\n` +
-                    `Silakan klik tombol di bawah untuk tindakan cepat:`,
-                    {
+            // 3. Menangani Input State Interaktif
+            if (global.tgInputState && global.tgInputState.chatId === chatId) {
+                const stateType = global.tgInputState.type;
+
+                if (stateType === 'awaiting_phone') {
+                    return triggerPairing(chatId, text);
+                }
+
+                if (stateType === 'set_paymentkita') {
+                    const [mId, secret] = text.split(/\s+/);
+                    if (!mId || !secret || mId.length < 3 || secret.length < 6) {
+                        return global.botTg.sendMessage(chatId, `❌ *Format salah!*\nKetik: \`<MERCHANT_ID> <SECRET_KEY>\`\nContoh: \`PKM12345 PKSK_abcdef123456\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_gw_menu' }]] }
+                        });
+                    }
+                    if (!db.settings) db.settings = {};
+                    db.settings.paymentkita = { merchantId: mId, secret: secret };
+                    if (db.saveSettings) db.saveSettings();
+                    global.tgInputState = null;
+                    return global.botTg.sendMessage(chatId, `✅ *Kredensial PaymentKita Berhasil Disimpan!*\nMerchant ID: \`${mId}\`\nSecret: \`${maskSecret(secret)}\``, {
                         parse_mode: 'Markdown',
                         reply_markup: {
                             inline_keyboard: [
-                                [{ text: '📱 TAUTKAN NOMOR BARU', callback_data: 'cmd_pair_new' }],
-                                [{ text: '📦 AUTO RESTORE BACKUP', callback_data: 'cmd_restore' }]
+                                [{ text: '💳 Menu Gateway', callback_data: 'tg_gw_menu' }],
+                                [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
                             ]
                         }
+                    });
+                }
+
+                if (stateType === 'set_pakasir') {
+                    const [proj, key] = text.split(/\s+/);
+                    if (!proj || !key || proj.length < 2 || key.length < 6) {
+                        return global.botTg.sendMessage(chatId, `❌ *Format salah!*\nKetik: \`<PROJECT_SLUG> <API_KEY>\`\nContoh: \`myproject 98a7bc...\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_gw_menu' }]] }
+                        });
                     }
-                );
+                    if (!db.settings) db.settings = {};
+                    db.settings.pakasir = { project: proj, key: key };
+                    if (db.saveSettings) db.saveSettings();
+                    global.tgInputState = null;
+                    return global.botTg.sendMessage(chatId, `✅ *Kredensial Pakasir Berhasil Disimpan!*\nProject: \`${proj}\`\nKey: \`${maskSecret(key)}\``, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '💳 Menu Gateway', callback_data: 'tg_gw_menu' }],
+                                [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                            ]
+                        }
+                    });
+                }
+
+                if (stateType === 'set_digi') {
+                    const [u, k] = text.split(/\s+/);
+                    if (!u || !k || u.length < 3 || k.length < 6) {
+                        return global.botTg.sendMessage(chatId, `❌ *Format salah!*\nKetik: \`<USERNAME> <API_KEY>\`\nContoh: \`digiuser dev-98a7bc...\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digi_menu' }]] }
+                        });
+                    }
+                    if (!db.settings) db.settings = {};
+                    db.settings.digiflazz = { username: u, key: k };
+                    if (db.saveSettings) db.saveSettings();
+                    global.tgInputState = null;
+                    return global.botTg.sendMessage(chatId, `✅ *Kredensial Digiflazz Berhasil Disimpan!*\nUsername: \`${u}\`\nKey: \`${maskSecret(k)}\``, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '💰 Cek Saldo', callback_data: 'tg_cekdigi' }],
+                                [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                            ]
+                        }
+                    });
+                }
+
+                if (stateType === 'set_namatoko') {
+                    db.store.namaToko = text;
+                    if (db.saveStore) db.saveStore();
+                    else if (db.save) db.save();
+                    global.tgInputState = null;
+                    return global.botTg.sendMessage(chatId, `✅ *Nama Toko Diperbarui:* ${text}`, {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]] }
+                    });
+                }
+
+                if (stateType === 'set_profit') {
+                    const [katRaw, nomStr] = text.split(/\s+/);
+                    const kat = (katRaw || '').toLowerCase();
+                    const nom = parseInt(nomStr, 10);
+                    if (!['pulsa', 'data', 'emoney', 'pln', 'pasca'].includes(kat) || isNaN(nom) || nom < 0) {
+                        return global.botTg.sendMessage(chatId, `❌ *Format salah!*\nKetik: \`<kategori> <nominal>\`\nContoh: \`pulsa 750\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                        });
+                    }
+                    if (!db.settings) db.settings = {};
+                    if (!db.settings.profit) db.settings.profit = { ...config.profit };
+                    db.settings.profit[kat] = nom;
+                    if (db.saveSettings) db.saveSettings();
+                    global.tgInputState = null;
+                    return global.botTg.sendMessage(chatId, `✅ *Margin Profit ${kat.toUpperCase()} Disetel:* ${formatRupiah(nom)}`, {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]] }
+                    });
+                }
+
+                if (stateType === 'add_owner') {
+                    let cleanNo = text.replace(/[^0-9]/g, '');
+                    if (cleanNo.startsWith('0')) cleanNo = '62' + cleanNo.slice(1);
+                    if (!cleanNo || cleanNo.length < 10) {
+                        return global.botTg.sendMessage(chatId, `❌ *Format nomor tidak valid!* Minimal 10 digit diawali 62.`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                        });
+                    }
+                    const newJid = cleanNo + '@s.whatsapp.net';
+                    if (!db.settings) db.settings = {};
+                    let owners = Array.isArray(db.settings.owner) ? [...db.settings.owner] : [...config.owner];
+                    if (!owners.includes(newJid)) owners.push(newJid);
+                    db.settings.owner = owners;
+                    if (db.saveSettings) db.saveSettings();
+                    global.tgInputState = null;
+                    return global.botTg.sendMessage(chatId, `✅ *Nomor ${cleanNo} berhasil ditambahkan sebagai Admin/Owner!*`, {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]] }
+                    });
+                }
             }
 
-            // Fungsi Pembantu: Eksekusi Pairing WhatsApp
-            const triggerPairing = async (rawPhone) => {
-                let cleanPhone = (rawPhone || '').replace(/[^0-9]/g, '');
-                if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
-
-                if (!cleanPhone.startsWith('62') || cleanPhone.length < 10) {
-                    return global.botTg.sendMessage(chatId, 
-                        `❌ *Format Nomor Tidak Valid!*\n\n` +
-                        `Nomor harus diawali angka *62* dan minimal 10 digit (contoh: \`6281234567890\`).\n\n` +
-                        `Silakan ketik ulang nomor WhatsApp Anda:`, 
-                        { parse_mode: 'Markdown' }
-                    );
-                }
-
-                global.awaitingPhoneNumber = false;
-                await global.botTg.sendMessage(chatId, 
-                    `⏳ *Menghubungkan ke server WhatsApp...*\n\n` +
-                    `Nomor target: \`${cleanPhone}\`\n\n` +
-                    `_Menyiapkan socket Baileys dan meminta kode pairing (mohon tunggu 3-5 detik)..._`, 
-                    { parse_mode: 'Markdown' }
-                );
-
-                try {
-                    // Tutup sesi socket lama jika ada
-                    if (global.sock) {
-                        try { await global.sock.end(); } catch (_) {}
-                        global.sock = null;
-                    }
-
-                    // Bersihkan folder session_bot agar handshake fresh & creds.registered = false
-                    try {
-                        fs.rmSync('./session_bot', { recursive: true, force: true });
-                    } catch (_) {}
-
-                    // Mulai bot dengan nomor yang diminta dan kirim pairing code ke Telegram
-                    await startBot(cleanPhone, chatId);
-                } catch (err) {
-                    console.error('[TELEGRAM PAIRING ERROR]:', err);
-                    global.botTg.sendMessage(chatId, 
-                        `❌ *Gagal Memulai Pairing:*\n\`${err.message}\`\n\n` +
-                        `Silakan ulangi proses dengan menekan tombol di bawah:`, 
-                        {
-                            parse_mode: 'Markdown',
-                            reply_markup: {
-                                inline_keyboard: [[{ text: '🔄 Coba Tautkan Ulang', callback_data: 'cmd_pair_new' }]]
-                            }
-                        }
-                    );
-                }
-            };
-
-            // 4. Perintah /pair atau /pair 628xxx (dengan regex fleksibel)
+            // 4. Perintah /pair langsung (misal: /pair 628123456789)
             const pairMatch = text.match(/^\/pair(@\w+)?(?:\s+(.+))?$/i);
             if (pairMatch) {
                 const argPhone = pairMatch[2] ? pairMatch[2].trim() : '';
                 if (argPhone) {
-                    return triggerPairing(argPhone);
+                    return triggerPairing(chatId, argPhone);
                 } else {
-                    global.awaitingPhoneNumber = true;
+                    global.tgInputState = { type: 'awaiting_phone', chatId };
                     return global.botTg.sendMessage(chatId, 
                         `📱 *TAUTKAN NOMOR BARU*\n\n` +
                         `Silakan balas pesan ini dengan nomor WhatsApp yang ingin dijadikan bot (Format *62*, contoh: \`6281234567890\`):`, 
-                        { parse_mode: "Markdown" }
+                        { 
+                            parse_mode: "Markdown",
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_menu' }]] }
+                        }
                     );
                 }
             }
 
-            // 5. Menangkap balasan nomor saat bot sedang menunggu input
-            if (global.awaitingPhoneNumber) {
-                return triggerPairing(text);
-            }
+            // 5. Default: Render Dashboard Interaktif Inline Keyboard
+            return updateOrSend(chatId, null, renderTelegramDashboard());
         });
         
-        console.log(`[SYSTEM] 🎧 Telinga Telegram Command Center Berhasil Aktif! (Admin ID: ${config.telegram.chatId || 'Belum Diatur'})`);
+        console.log(`[SYSTEM] 🎧 Telegram Command Center (Inline Keyboard) Aktif! (Admin ID: ${config.telegram.chatId || 'Belum Diatur'})`);
     } else if (!config.telegram.token || !config.telegram.token.includes(':')) {
         console.warn('⚠️ [TELEGRAM] TELEGRAM_TOKEN belum diatur di file .env. Command Center Telegram dinonaktifkan.');
     }

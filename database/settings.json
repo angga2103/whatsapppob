@@ -1,4 +1,5 @@
 {
+  "paymentGateway": "paymentkita",
   "namaTokoAdmin": "GarudaTel Bot WhatsApp",
   "marginTier": {
     "kecil": 250,

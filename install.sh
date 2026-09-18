@@ -184,9 +184,9 @@ EOF
     echo "✓ Pintasan perintah sistem 'bot-ppob' berhasil dipasang."
 fi
 
-# 6. Jalankan wizard instalasi & pairing WhatsApp
+# 6. Jalankan wizard instalasi Telegram Command Center
 echo ""
-echo "Menjalankan wizard instalasi dan pairing WhatsApp..."
+echo "Menjalankan wizard instalasi bot & Telegram Command Center..."
 if [ -e /dev/tty ]; then
     node installer.js < /dev/tty
 else

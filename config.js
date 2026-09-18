@@ -20,9 +20,16 @@ const config = {
         return envOwner ? [envOwner] : [];
     },
     port: parseInt(process.env.PORT || '3000', 10),
-    pakasir: {
-        project: process.env.PAKASIR_PROJECT || '',
-        key: process.env.PAKASIR_KEY || ''
+    get paymentGateway() {
+        const s = getSettings();
+        return (s.paymentGateway || process.env.PAYMENT_GATEWAY || 'paymentkita').toLowerCase();
+    },
+    get pakasir() {
+        const s = getSettings();
+        return {
+            project: s.pakasir?.project || process.env.PAKASIR_PROJECT || '',
+            key: s.pakasir?.key || process.env.PAKASIR_KEY || ''
+        };
     },
     get digiflazz() {
         const s = getSettings();

@@ -1,8 +1,8 @@
 # 🤖 Bot PPOB & Toko Digital WhatsApp + Telegram
 
-Bot WhatsApp otomatis untuk melayani transaksi **PPOB (Pulsa, Paket Data, E-Money, Token PLN, Tagihan Pascabayar)** dan **Produk Digital (Akun / Lisensi / Voucher)** dengan sistem pembayaran otomatis menggunakan **Saldo Akun** dan **QRIS Realtime (PaymentKita)**, terintegrasi dengan provider **Digiflazz**.
+Bot WhatsApp otomatis untuk melayani transaksi **PPOB (Pulsa, Paket Data, E-Money, Token PLN, Tagihan Pascabayar)** dan **Produk Digital (Akun / Lisensi / Voucher)** dengan sistem pembayaran otomatis menggunakan **Saldo Akun** dan **QRIS Realtime (Pilihan Gateway: PaymentKita / Pakasir)**, terintegrasi dengan provider **Digiflazz**.
 
-Dilengkapi dengan **Interactive One-Click Installer**, **Pengaturan Penuh via Chat WhatsApp (In-Chat Admin Settings)**, **Shortcut Transaksi Instan**, dan **Database JSON Atomik Anti-Korupsi**.
+Dilengkapi dengan **One-Click Streamlined Installer (Hanya butuh Telegram Token & Chat ID)**, **Telegram Command Center Interaktif Berbasis Model Tombol Inline (Inline Keyboard)**, **Pengaturan Penuh via Chat WhatsApp (In-Chat Admin Settings)**, **Shortcut Transaksi Instan**, dan **Database JSON Atomik Anti-Korupsi**.
 
 ---
 
@@ -63,17 +63,19 @@ Dilengkapi dengan **Interactive One-Click Installer**, **Pengaturan Penuh via Ch
 
 ### ⚡ Jalankan di Linux / VPS (100% Otomatis, Anti-Gagal & Ramah Pemula)
 Cukup salin dan tempel **satu baris perintah** ini di terminal VPS Anda. 
-Perintah ini **otomatis** memasang dependensi sistem (`git`, `curl`, `Node.js 20 LTS`), otomatis memulihkan direktori jika koneksi sempat terputus (anti-bentrok), memasang dependensi project, memandu proses pairing WhatsApp, serta menyediakan opsi jalan 24 jam nonstop di background via PM2:
+Perintah ini **otomatis** memasang dependensi sistem (`git`, `curl`, `Node.js 20 LTS`), mengunduh repo secara idempoten, memasang modul NPM, dan **hanya menanyakan Telegram Bot Token & Chat ID Admin**. Seluruh konfigurasi lainnya (Pairing WhatsApp, akun Digiflazz, pemilihan Payment Gateway PaymentKita/Pakasir) diatur langsung lewat **Tombol Inline Bot Telegram**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/angga2103/whatsapppob/main/install.sh | bash
+git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob && chmod +x install.sh && ./install.sh
 ```
 
 > [!TIP]
-> **Alternatif jika ingin meng-*clone* git secara manual:**
-> ```bash
-> apt update && apt install -y git curl && ( [ -d /var/www/bot-ppob/.git ] && cd /var/www/bot-ppob && git pull origin main || git clone https://github.com/angga2103/whatsapppob.git /var/www/bot-ppob && cd /var/www/bot-ppob ) && chmod +x install.sh && ./install.sh
-> ```
+> **Alur Setup Super Ringkas:**
+> 1. Installer hanya meminta **Telegram Bot Token** (dari @BotFather) dan **Chat ID Admin** (dari @userinfobot).
+> 2. Bot langsung otomatis berjalan 24 jam nonstop di background via PM2.
+> 3. Buka bot Telegram Anda, kirim `/start`, dan klik tombol **[📱 Hubungkan WhatsApp]**.
+> 4. Masukkan nomor WhatsApp bot, dan kode pairing 8 digit langsung dikirim ke Telegram Anda untuk ditautkan di WhatsApp HP!
+> 5. Pilih gateway pembayaran (**PaymentKita** atau **Pakasir**) dan atur Digiflazz langsung lewat **Tombol Inline Telegram**!
 
 ---
 
@@ -83,22 +85,25 @@ curl -fsSL https://raw.githubusercontent.com/angga2103/whatsapppob/main/install.
    git clone https://github.com/angga2103/whatsapppob.git
    cd whatsapppob
    ```
-2. Cukup klik dua kali file **`install.bat`** atau jalankan perintah:
+2. Cukup jalankan perintah:
    ```powershell
    npm run setup
    ```
+3. Masukkan Telegram Bot Token & Chat ID, lalu jalankan `npm start`. Seluruh kendali langsung aktif di Telegram Command Center!
 
-### 3. Ikuti Panduan Interaktif di Terminal:
-1. Installer akan memeriksa Node.js dan memasang dependensi secara otomatis.
-2. Anda akan dipandu memasukkan kredensial (`.env`) seperti username Digiflazz, PaymentKita, dan nomor WhatsApp Admin.
-3. Masukkan nomor WhatsApp Bot (format: `628xxxxxxxx`).
-4. Terminal akan menampilkan **Kotak Kode Pairing 8 Digit** (Contoh: `ABCD - 1234`).
-5. Buka WhatsApp di HP Anda:
-   - Ketuk menu **Titik Tiga (Kanan Atas)** > **Perangkat tertaut (Linked devices)**
-   - Ketuk **Tautkan perangkat (Link a device)**
-   - Pilih **Tautkan dengan nomor telepon saja (Link with phone number instead)**
-   - Masukkan 8 digit kode pairing yang tampil di terminal.
-6. Selesai! Bot WhatsApp Anda resmi terhubung.
+---
+
+### 🤖 Model Tombol Inline (Interactive Telegram Command Center):
+- **[📱 Hubungkan / Re-Pairing WA]** : Generate 8-digit kode pairing WhatsApp langsung ke Telegram.
+- **[🏪 Buka / Tutup Toko]** : Buka/tutup toko dalam 1-klik tanpa restart bot.
+- **[💳 Gateway: PAYMENTKITA / PAKASIR]** : Ganti payment gateway secara instan & input kredensial API.
+- **[⚡ Menu Digiflazz]** : Set Username & Key, cek saldo realtime, dan sinkronisasi produk.
+- **[💰 Cek Saldo Digi]** : Menampilkan sisa saldo Digiflazz.
+- **[🔄 Sync Produk PPOB]** : Sinkronisasi produk prabayar & pascabayar otomatis.
+- **[📊 Status & Health]** : Cek CPU, RAM, koneksi Baileys WA, dan database.
+- **[📈 Statistik Omzet]** : Pantau omzet harian & total transaksi.
+- **[⏳ Antrian Order]** : Monitor transaksi pending/processing.
+- **[📦 Backup Data]** : Buat arsip backup database dan kirimkan langsung ke Telegram.
 
 ---
 

@@ -13,8 +13,10 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         let t = `👑 *COMMAND CENTER*\n🏪 Toko: *${db.store.namaToko || "STORE"}*\nStatus: ${statusToko}\n--------------------------\n`;
         t += `⚙️ *PENGATURAN BOT (IN-CHAT)*\n`;
         t += `• *.settings* (Lihat Semua Pengaturan Aktif)\n`;
-        t += `• *.setdigi* User Key (Update API Digiflazz)\n`;
+        t += `• *.setgateway* [paymentkita/pakasir] (Ganti Payment Gateway)\n`;
         t += `• *.setpayment* Merchant Secret (Update PaymentKita)\n`;
+        t += `• *.setpakasir* Project Key (Update Pakasir)\n`;
+        t += `• *.setdigi* User Key (Update API Digiflazz)\n`;
         t += `• *.settg* Token ChatID (Update Telegram Alert)\n`;
         t += `• *.setprofit* [pulsa/data/emoney/pln] Nominal\n`;
         t += `• *.settier* [kecil/sedang/besar/premium] Nominal\n`;
@@ -708,11 +710,14 @@ ${rate}%`
     // ==========================================
     if (cmd === 'settings' || cmd === 'pengaturan') {
         const configData = require('../config');
+        const activeGw = (configData.paymentGateway || 'paymentkita').toLowerCase();
         let t = `⚙️ *PENGATURAN BOT AKTIF*\n\n`;
         t += `🏪 *TOKO:*\n• Nama: *${db.store.namaToko || "DIGITAL STORE"}*\n• Status: *${db.store.buka ? "🟢 BUKA" : "🔴 TUTUP"}*\n\n`;
-        t += `🔑 *DIGIFLAZZ API:*\n• User: \`${configData.digiflazz.username}\`\n• Key: \`${maskSecret(configData.digiflazz.key)}\`\n\n`;
-        t += `💳 *PAYMENTKITA GATEWAY:*\n• Merchant ID: \`${configData.paymentkita.merchantId}\`\n• Secret: \`${maskSecret(configData.paymentkita.secret)}\`\n\n`;
-        t += `🤖 *TELEGRAM COMMAND CENTER:*\n• Token: \`${maskSecret(configData.telegram.token)}\`\n• Chat ID: \`${configData.telegram.chatId}\`\n\n`;
+        t += `💳 *PAYMENT GATEWAY (AKTIF: ${activeGw.toUpperCase()}):*\n`;
+        t += `• PaymentKita: Merchant ID \`${configData.paymentkita.merchantId || '-'}\` | Secret \`${maskSecret(configData.paymentkita.secret)}\`\n`;
+        t += `• Pakasir: Project \`${configData.pakasir.project || '-'}\` | Key \`${maskSecret(configData.pakasir.key)}\`\n\n`;
+        t += `🔑 *DIGIFLAZZ API:*\n• User: \`${configData.digiflazz.username || '-'}\`\n• Key: \`${maskSecret(configData.digiflazz.key)}\`\n\n`;
+        t += `🤖 *TELEGRAM COMMAND CENTER:*\n• Token: \`${maskSecret(configData.telegram.token)}\`\n• Chat ID: \`${configData.telegram.chatId || '-'}\`\n\n`;
         t += `💰 *KEUNTUNGAN KATEGORI (MARKUP):*\n`;
         t += `• Pulsa: ${formatRupiah(configData.profit.pulsa)}\n`;
         t += `• Data: ${formatRupiah(configData.profit.data)}\n`;
@@ -728,6 +733,21 @@ ${rate}%`
         configData.owner.forEach((o, i) => t += `${i+1}. ${o}\n`);
         t += `\n_💡 Ketik .admin untuk melihat daftar perintah pengubahan._`;
         return sock.sendMessage(sender, { text: t });
+    }
+
+    if (cmd === 'setgateway' || cmd === 'gateway') {
+        const targetGw = args.trim().toLowerCase();
+        if (!['paymentkita', 'pakasir'].includes(targetGw)) {
+            return sock.sendMessage(sender, { 
+                text: `❌ Pilihan gateway tidak valid.\nFormat: .setgateway [paymentkita|pakasir]\nContoh: .setgateway pakasir` 
+            });
+        }
+        if (!db.settings) db.settings = {};
+        db.settings.paymentGateway = targetGw;
+        if (db.saveSettings) db.saveSettings();
+        return sock.sendMessage(sender, { 
+            text: `✅ Payment Gateway aktif berhasil disetel ke: *${targetGw.toUpperCase()}*` 
+        });
     }
 
     if (cmd === 'setdigi') {
@@ -750,6 +770,21 @@ ${rate}%`
         db.settings.paymentkita = { merchantId: mId, secret: secret };
         if (db.saveSettings) db.saveSettings();
         return sock.sendMessage(sender, { text: `✅ Berhasil memperbarui kredensial PaymentKita!\nMerchant ID: ${mId}\nSecret: ${maskSecret(secret)}` });
+    }
+
+    if (cmd === 'setpakasir') {
+        const [project, key] = args.trim().split(/\s+/);
+        if (!project || !key || project.length < 2 || key.length < 6) {
+            return sock.sendMessage(sender, { 
+                text: "❌ Format salah atau kredensial terlalu pendek.\nFormat: .setpakasir [project_slug] [api_key]\nContoh: .setpakasir myproject 98a7bc..." 
+            });
+        }
+        if (!db.settings) db.settings = {};
+        db.settings.pakasir = { project, key };
+        if (db.saveSettings) db.saveSettings();
+        return sock.sendMessage(sender, { 
+            text: `✅ Berhasil memperbarui kredensial Pakasir!\nProject: ${project}\nKey: ${maskSecret(key)}` 
+        });
     }
 
     if (cmd === 'settg') {

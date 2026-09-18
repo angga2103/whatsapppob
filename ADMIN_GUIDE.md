@@ -12,12 +12,31 @@ Seluruh konfigurasi, margin profit, API key, multi-owner, dan manajemen produk b
 | Perintah | Deskripsi | Contoh Penggunaan |
 | :--- | :--- | :--- |
 | `.settings` / `.pengaturan` | Menampilkan seluruh status setting aktif saat ini | `.settings` |
-| `.setdigi [username] [apiKey]` | Mengubah kredensial API Digiflazz | `.setdigi user123 32d4-xxxx-xxxx` |
+| `.setgateway [paymentkita\|pakasir]` | Mengubah payment gateway aktif | `.setgateway pakasir` |
 | `.setpayment [merchantId] [secret]` | Mengubah kredensial PaymentKita (QRIS) | `.setpayment PKM123 PKSK_xxxx` |
+| `.setpakasir [project] [apiKey]` | Mengubah kredensial Pakasir (QRIS) | `.setpakasir myproject 98a7bc...` |
+| `.setdigi [username] [apiKey]` | Mengubah kredensial API Digiflazz | `.setdigi user123 32d4-xxxx-xxxx` |
 | `.settg [token] [chatId]` | Mengubah bot token & chat ID Telegram | `.settg 847009:AAExxx 723611` |
 | `.namatoko [nama]` | Mengubah nama toko bot | `.namatoko GarudaTel PPOB` |
-| `.toko [buka\|tutup]` | Mengatur status buka / tutup toko | `.toko buka` atau `.toko tutup` |
+| `.toko [on\|off]` | Mengatur status buka / tutup toko | `.toko on` atau `.toko off` |
 | `.cekdigi` | Cek sisa saldo akun Digiflazz | `.cekdigi` |
+
+---
+
+## 🤖 1B. Telegram Command Center (Model Tombol Inline)
+
+Selain melalui chat WhatsApp, **seluruh pengaturan dan operasional bot dapat dikendalikan langsung lewat Telegram** dengan **Model Tombol Inline (Inline Keyboard)** tanpa perlu mengetik perintah:
+
+- **[📱 Hubungkan / Re-Pairing WA]**: Menghubungkan nomor WhatsApp baru, kode pairing 8-digit langsung dikirimkan ke Telegram!
+- **[🏪 Buka / Tutup Toko]**: Mengubah status toko online/offline seketika dengan 1 klik.
+- **[💳 Gateway: PAYMENTKITA / PAKASIR]**: Buka menu pilihan gateway dan input kredensial Merchant ID / Secret Key / Project Slug.
+- **[⚡ Menu Digiflazz]**: Set Username & API Key, cek saldo Digiflazz, dan sinkronisasi produk.
+- **[💰 Cek Saldo Digi]**: Cek saldo deposit Digiflazz secara realtime.
+- **[🔄 Sync Produk PPOB]**: Tarik ulang seluruh katalog produk prabayar & pascabayar Digiflazz.
+- **[📊 Status & Health]**: Monitor uptime server, penggunaan RAM, status database, dan koneksi socket Baileys.
+- **[📈 Statistik Omzet]**: Rekap penjualan harian dan total transaksi tuntas.
+- **[⏳ Antrian Transaksi]**: Cek daftar transaksi yang sedang diproses.
+- **[📦 Backup Data]**: Buat arsip zip database dan kirimkan langsung ke Telegram untuk restore darurat.
 
 ---
 
