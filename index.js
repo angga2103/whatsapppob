@@ -2159,13 +2159,19 @@ try {
             if (action === 'tg_sync') {
                 global.botTg.answerCallbackQuery(query.id, { text: '⏳ Memulai sinkronisasi produk...' });
                 await global.botTg.sendMessage(chatId, "⏳ *Sedang menyinkronkan seluruh produk Digiflazz...*\nMohon tunggu sejenak...", { parse_mode: 'Markdown' });
-                const cats = ['pulsa', 'data', 'emoney', 'pln'];
-                let report = "📊 *HASIL SINKRONISASI DIGIFLAZZ*\n\n";
-                for (const c of cats) {
-                    const res = await api.pullDigiProducts(c);
-                    report += `• ${c.toUpperCase()}: ${res !== false ? res + ' produk' : '❌ Gagal'}\n`;
-                }
+                
+                const prep = await api.pullAllDigiPrepaid();
                 const pascaRes = await api.pullDigiPostpaid();
+
+                let report = "📊 *HASIL SINKRONISASI DIGIFLAZZ*\n\n";
+                if (prep) {
+                    report += `• PULSA: ${prep.pulsa} produk\n`;
+                    report += `• DATA: ${prep.data} produk\n`;
+                    report += `• EMONEY: ${prep.emoney} produk\n`;
+                    report += `• PLN: ${prep.pln} produk\n`;
+                } else {
+                    report += `• PRABAYAR (PULSA/DATA/EMONEY/PLN): ❌ Gagal\n`;
+                }
                 report += `• PASCABAYAR: ${pascaRes !== false ? pascaRes + ' produk' : '❌ Gagal'}\n\n`;
                 report += `✅ *Total Produk Aktif:* ${db.ppob.length + (db.postpaid || []).length} SKU`;
                 return global.botTg.sendMessage(chatId, report, {

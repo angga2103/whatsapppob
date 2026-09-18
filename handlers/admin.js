@@ -867,13 +867,19 @@ ${rate}%`
 
     if (cmd === 'sync') {
         await sock.sendMessage(sender, { text: "⏳ *SINKRONISASI KATALOG DIGIFLAZZ...*\nMenarik data pulsa, data, emoney, pln, dan pascabayar secara otomatis..." });
-        const cats = ['pulsa', 'data', 'emoney', 'pln'];
-        let report = "📊 *HASIL SINKRONISASI PPOB:*\n\n";
-        for (const c of cats) {
-            const res = await api.pullDigiProducts(c);
-            report += `• ${c.toUpperCase()}: ${res !== false ? res + ' produk' : '❌ Gagal'}\n`;
-        }
+        
+        const prep = await api.pullAllDigiPrepaid();
         const pascaRes = await api.pullDigiPostpaid();
+
+        let report = "📊 *HASIL SINKRONISASI PPOB:*\n\n";
+        if (prep) {
+            report += `• PULSA: ${prep.pulsa} produk\n`;
+            report += `• DATA: ${prep.data} produk\n`;
+            report += `• EMONEY: ${prep.emoney} produk\n`;
+            report += `• PLN: ${prep.pln} produk\n`;
+        } else {
+            report += `• PRABAYAR (PULSA/DATA/EMONEY/PLN): ❌ Gagal\n`;
+        }
         report += `• PASCABAYAR: ${pascaRes !== false ? pascaRes + ' produk' : '❌ Gagal'}\n`;
         report += `\n✅ Sinkronisasi katalog selesai dan telah tersimpan ke database.`;
         return sock.sendMessage(sender, { text: report });
