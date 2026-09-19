@@ -95,13 +95,43 @@
 
 ---
 
-## PASAL 8: HUKUM YANG BERLAKU & PENYELESAIAN SENGKETA
+## PASAL 8: KETENTUAN KHUSUS PRODUK DIGITAL (AKUN STREAMING, APLIKASI & LISENSI)
 
-8.1. Perjanjian Syarat dan Ketentuan ini tunduk dan ditafsirkan berdasarkan hukum yang berlaku di **Negara Kesatuan Republik Indonesia**, khususnya Undang-Undang Nomor 11 Tahun 2008 tentang Informasi dan Transaksi Elektronik (UU ITE) sebagaimana telah diubah dengan Undang-Undang Nomor 1 Tahun 2024, serta Kitab Undang-Undang Hukum Perdata (KUHPerdata).
+8.1. **Asal Usul Produk Pihak Ketiga (*Third-Party Seller Goods*)**:
+   - Seluruh produk digital berupa akun premium (Netflix, Spotify, YouTube Premium, Disney+, Canva Pro, ChatGPT, VPN, lisensi software, akun game, dan sejenisnya) didapatkan dan dibeli dari **pihak ketiga / seller / supplier luar**, dan **BUKAN** diterbitkan, diproduksi, atau dikelola langsung oleh Pengelola.
 
-8.2. Segala perselisihan yang timbul antara Pengguna dan Pengelola wajib diselesaikan terlebih dahulu melalui musyawarah untuk mufakat melalui saluran Layanan Pelanggan (Admin Resmi).
+8.2. **Skema Promo & Kerentanan Sistem (*Promo Nature & Upstream Policy*)**:
+   - Pengguna memahami sepenuhnya bahwa harga murah yang diberikan disebabkan oleh pemanfaatan program promo, trial, paket keluarga (*family plan*), atau regional pricing dari vendor/provider resmi.
+   - Provider resmi (seperti Netflix Inc, Google LLC, Spotify AB, OpenAI LLC, Canva Pty Ltd) berhak sewaktu-waktu dan secara sepihak mengubah ketentuan langganan, mengakhiri promo lebih awal, menerapkan kebijakan pembatasan rumah tangga (*household/anti-sharing*), atau membatalkan langganan.
+   - Tindakan sepihak dari provider resmi tersebut sepenuhnya di luar kendali dan kuasa hukum Pengelola.
 
-8.3. Dengan menyetujui ketentuan ini, Pengguna melepaskan hak istimewanya untuk mengajukan gugatan perdata atau tuntutan pidana yang tidak berdasar kepada Pengelola atas hal-hal yang telah secara tegas diatur dalam Batasan Tanggung Jawab ini.
+8.3. **Batasan Penggunaan Perangkat (*Strict Single-Device Rule*)**:
+   - Akun digital yang dibeli **HANYA BERLAKU UNTUK 1 (SATU) PERANGKAT** milik Pengguna.
+   - Pengguna dilarang keras:
+     a. Melakukan multi-login di lebih dari 1 perangkat secara bersamaan.
+     b. Membagikan (*sharing*), menjual kembali (*reselling*), atau meminjamkan kredensial kepada pihak lain.
+     c. Mengubah email, kata sandi (*password*), informasi profil pengguna lain, maupun metode penagihan (*billing/payment method*).
+   - Setiap pelanggaran terhadap klausul ini mengakibatkan akun diblokir secara permanen dan **MENGHANGUSKAN SEGALA BENTUK KLAIM BANTUAN SECARA INSTAN TANPA GANTI RUGI**.
+
+8.4. **Ketiadaan Garansi Permanen & Kebijakan Garansi Terbatas (*Limited First-Login Warranty Only*)**:
+   - **TIDAK ADA GARANSI PERMANEN / SEUMUR HIDUP (*NO LIFETIME WARRANTY*)** untuk seluruh produk digital.
+   - Garansi yang diberikan oleh Pengelola semata-mata adalah **Garansi Login Awal (*First-Login Guarantee*)** dengan batas waktu pelaporan maksimal **1x24 jam** terhitung sejak data akun dikirimkan oleh bot.
+   - Apabila saat pertama kali diterima akun tidak dapat diakses (kredensial salah), Pengguna berhak mendapatkan penggantian data (*replace*) setelah diverifikasi oleh Admin.
+   - **Setelah akun berhasil login pertama kali, transaksi dinyatakan SELESAI, LUNAS, DAN SAH SECARA HUKUM.**
+   - Apabila di kemudian hari akun mengalami penertiban (*suspend, on-hold, wipeout, atau expired*) sebelum masa aktif habis akibat kebijakan baru provider resmi, **PENGELOLA TIDAK MEMBERIKAN PENGEMBALIAN UANG (*NO CASH REFUND*)**. Pengelola hanya akan membantu klaim penggantian (*replace*) sebatas kemampuan dan ketersediaan dari supplier pihak ketiga.
+
+8.5. **Pelepasan Tuntutan Kerugian (*Indemnity & Hold Harmless*)**:
+   - Pengguna secara sukarela menerima segala risiko teknis dan operasional atas pembelian akun digital murah ini, dan **MELEPASKAN PENGELOLA DARI SEGALA TUNTUTAN HUKUM PIDANA MAUPUN PERDATA, GUGATAN GANTI RUGI FINANSIAL, MAUPUN PELAPORAN KONSUMEN** atas segala bentuk pemblokiran akun oleh provider resmi.
+
+---
+
+## PASAL 9: HUKUM YANG BERLAKU & PENYELESAIAN SENGKETA
+
+9.1. Perjanjian Syarat dan Ketentuan ini tunduk dan ditafsirkan berdasarkan hukum yang berlaku di **Negara Kesatuan Republik Indonesia**, khususnya Undang-Undang Nomor 11 Tahun 2008 tentang Informasi dan Transaksi Elektronik (UU ITE) sebagaimana telah diubah dengan Undang-Undang Nomor 1 Tahun 2024, serta Kitab Undang-Undang Hukum Perdata (KUHPerdata).
+
+9.2. Segala perselisihan yang timbul antara Pengguna dan Pengelola wajib diselesaikan terlebih dahulu melalui musyawarah untuk mufakat melalui saluran Layanan Pelanggan (Admin Resmi).
+
+9.3. Dengan menyetujui ketentuan ini, Pengguna melepaskan hak istimewanya untuk mengajukan gugatan perdata atau tuntutan pidana yang tidak berdasar kepada Pengelola atas hal-hal yang telah secara tegas diatur dalam Batasan Tanggung Jawab ini.
 
 ---
 

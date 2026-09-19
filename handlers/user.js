@@ -235,6 +235,10 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     const cmdFirst = parts[0].toUpperCase();
 
     // 0. QUICK USER COMMANDS
+    if (['.SNKDIGITAL', '!SNKDIGITAL', 'SNKDIGITAL', '.DIGITAL', '!DIGITAL', 'DIGITAL', '.ATURANAKUN', '!ATURANAKUN', 'ATURANAKUN'].includes(txt)) {
+        return sock.sendMessage(sender, { text: legal.getTermsDigitalWA() });
+    }
+
     if (['.SNK', '!SNK', 'SNK', '.TOS', '!TOS', 'TOS', '.ATURAN', '!ATURAN', 'ATURAN', '.SYARAT', '!SYARAT', 'SYARAT'].includes(txt)) {
         return sock.sendMessage(sender, { text: legal.getTermsAndConditionsWA() });
     }
@@ -249,7 +253,8 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         t += `• *.riwayat* : Cek 5 transaksi terakhir\n`;
         t += `• *.status [Invoice]* : Cek status transaksi / token\n`;
         t += `• *.transfer [NoHP] [Nominal]* : Kirim saldo ke member\n`;
-        t += `• *.snk* : Syarat & Ketentuan Layanan (TOS & Batasan Tanggung Jawab)\n`;
+        t += `• *.snk* : Syarat & Ketentuan Umum Layanan (PPOB & Toko)\n`;
+        t += `• *.snkdigital* : S&K Khusus Akun Digital (1 Device & Garansi)\n`;
         t += `• *B* : Batalkan transaksi yang sedang berjalan\n\n`;
         t += `🏪 *${db.store.namaToko || 'DIGITAL STORE'}* - Aman, Cepat, dan Otomatis.`;
         return sock.sendMessage(sender, { text: t });
@@ -724,6 +729,7 @@ if (txt === 'PROFIL') {
             if (!db.menu || db.menu.length === 0) return sock.sendMessage(sender, { text: `❌ Belum ada produk digital tersedia saat ini.` });
             session.tempDigitalList = [...db.menu];
             db.menu.forEach((m, idx) => t += `*${idx + 1}.* ${m.nama}\n   💰 ${formatRupiah(m.harga)} | 📦 Stok: ${m.stok}\n\n`);
+            t += `⚠️ *Catatan S&K:* Akun promo seller (max 1 device, garansi First Login saja). Ketik *.snkdigital* untuk info lengkap.\n\n`;
             t += `Balas *Angka (1 - ${db.menu.length})* produk pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: t });
         } else if (txt === '7') {
@@ -1295,7 +1301,11 @@ async function showInvoice(sock, sender, session) {
         t += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
     }
     t += `👉 Balas *1* untuk BAYAR SEKARANG\n👉 Balas *2* untuk BATAL\n\n`;
-    t += `⚖️ _Membayar berarti menyetujui S&K Layanan (salah no tujuan tanggung jawab pembeli). Info: ketik .snk_`;
+    if (!isPpob) {
+        t += legal.getTermsDigitalShort();
+    } else {
+        t += `⚖️ _Membayar berarti menyetujui S&K Layanan (salah no tujuan tanggung jawab pembeli). Info: ketik .snk_`;
+    }
     
     await sock.sendMessage(sender, { text: t });
 }

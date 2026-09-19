@@ -778,7 +778,7 @@ Terima kasih telah berbelanja.`
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
                 'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
                 'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
-                'snk', 'tos', 'syarat', 'aturan'
+                'snk', 'tos', 'syarat', 'aturan', 'snkdigital', 'digital', 'aturanakun'
             ];
 
             if (isOwner && adminCommands.includes(cmd)) {
@@ -1192,7 +1192,20 @@ Mohon tunggu beberapa menit ya kak.`
             db.saveMenu();
 
             order.status = 'success'; db.saveOrders();
-            await sock.sendMessage(targetJid, { text: `✅ *PESANAN SUKSES*\n\nDetail:\n${dataExtracted.join('\n---\n')}` });
+            let deliverMsg = `✅ *PESANAN PRODUK DIGITAL SUKSES*\n\n` +
+                `📦 Produk : *${order.item}*\n` +
+                `📊 Jumlah : *${order.qty}*\n` +
+                `🧾 No. Inv: \`${order.id}\`\n\n` +
+                `🔑 *DETAIL AKUN / KREDENSIAL:*\n` +
+                `${dataExtracted.join('\n---\n')}\n\n` +
+                `📌 *ATURAN PENGGUNAAN WAJIB & BATASAN HUKUM:*\n` +
+                `1. Wajib login HANYA di *1 Device* (Dilarang multi-device/sharing).\n` +
+                `2. Dilarang mengubah email, password, profile, atau billing/pembayaran.\n` +
+                `3. Akun bersumber dari promo seller luar, *TIDAK ADA garansi seumur hidup/permanen*.\n` +
+                `4. Garansi HANYA saat *First Login (maks 1x24 jam)* jika salah password saat pertama diterima.\n` +
+                `5. Jika akun tersuspend pihak provider resmi di kemudian hari, *TIDAK ADA REFUND / UANG KEMBALI*.\n\n` +
+                `_Ketik *.snkdigital* untuk membaca syarat & ketentuan lengkap._`;
+            await sock.sendMessage(targetJid, { text: deliverMsg });
 
 addLog(
 `TRANSACTION SUCCESS
@@ -1710,11 +1723,15 @@ try {
             return { text, reply_markup };
         };
 
-        const renderLegalMenu = () => {
+        const renderLegalMenu = (mode = 'general') => {
             const legal = require('./lib/legal');
-            const text = legal.getTermsTelegram();
+            const text = mode === 'digital' ? legal.getTermsDigitalTg() : legal.getTermsTelegram();
             const reply_markup = {
                 inline_keyboard: [
+                    [
+                        { text: mode === 'general' ? '• 📱 S&K Umum PPOB •' : '📱 S&K Umum PPOB', callback_data: 'tg_legal_snk' },
+                        { text: mode === 'digital' ? '• 🔑 S&K Akun Digital •' : '🔑 S&K Akun Digital', callback_data: 'tg_legal_digital' }
+                    ],
                     [
                         { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
                     ]
@@ -3022,7 +3039,13 @@ try {
 
             if (action === 'tg_legal_snk') {
                 global.botTg.answerCallbackQuery(query.id);
-                const content = renderLegalMenu();
+                const content = renderLegalMenu('general');
+                return updateOrSend(chatId, messageId, content);
+            }
+
+            if (action === 'tg_legal_digital') {
+                global.botTg.answerCallbackQuery(query.id);
+                const content = renderLegalMenu('digital');
                 return updateOrSend(chatId, messageId, content);
             }
 
