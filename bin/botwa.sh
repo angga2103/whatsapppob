@@ -131,9 +131,17 @@ show_header() {
 # 1. Status Bot & Sistem
 cmd_status() {
     echo -e "\n${BOLD}📊 MEMERIKSA STATUS SISTEM & BOT...${NC}\n"
-    local PNAME=$(get_pm2_process_name)
     if command -v pm2 &> /dev/null; then
-        pm2 status "$PNAME" 2>/dev/null || pm2 list
+        echo -e "${BOLD}📋 Daftar Seluruh Proses PM2:${NC}"
+        pm2 list
+    fi
+    echo ""
+    echo -e "${BOLD}🔍 Pengecekan Proses Node.js di Sistem:${NC}"
+    local node_procs=$(ps aux 2>/dev/null | grep -E "node.*(index|pairing)" | grep -v grep)
+    if [ -n "$node_procs" ]; then
+        echo "$node_procs"
+    else
+        echo "✓ Tidak ada proses node liar di luar sistem."
     fi
     echo ""
     echo -e "${BOLD}💾 Pemakaian RAM Server:${NC}"
@@ -159,11 +167,55 @@ cmd_status() {
 
 # 2. Restart Bot
 cmd_restart() {
-    local PNAME=$(get_pm2_process_name)
-    echo -e "\n${YELLOW}🔄 Merestart proses bot ($PNAME)...${NC}"
-    pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+    echo -e "\n${YELLOW}🔄 Merestart proses bot secara bersih...${NC}"
+    # 1. Bersihkan proses PM2 yang duplikat jika ada (selain bot-ppob)
+    node -e "
+        try {
+            const { execSync } = require('child_process');
+            const raw = execSync('pm2 jlist', { stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).toString();
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+                list.forEach(p => {
+                    if (p.name !== 'bot-ppob' && (p.name === 'bot-kasir' || p.name === 'index' || (p.pm2_env && p.pm2_env.pm_exec_path && p.pm2_env.pm_exec_path.includes('index.js')))) {
+                        console.log('Menghapus proses PM2 ganda: ' + p.name);
+                        try { execSync('pm2 delete ' + p.name, { stdio: 'ignore' }); } catch(_) {}
+                    }
+                });
+            }
+        } catch (_) {}
+    " 2>/dev/null
+
+    # 2. Matikan proses node di luar PM2 yang mungkin nyangkut (zombie)
+    local cur_pm2_pid=$(node -e "
+        try {
+            const { execSync } = require('child_process');
+            const raw = execSync('pm2 jlist', { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+            const list = JSON.parse(raw);
+            const p = list.find(x => x.name === 'bot-ppob');
+            if (p && p.pid) console.log(p.pid);
+        } catch (_) {}
+    " 2>/dev/null)
+
+    for pid in $(pgrep -f "node.*(index|pairing_bridge)\.js" 2>/dev/null); do
+        if [ "$pid" != "$cur_pm2_pid" ] && [ -n "$pid" ]; then
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+    done
+
+    # 3. Reset webhook & drop pending updates Telegram agar koneksi fresh
+    node -e "
+        const https = require('https');
+        const cfg = require('./config');
+        if (cfg.telegram?.token) {
+            https.get('https://api.telegram.org/bot' + cfg.telegram.token + '/deleteWebhook?drop_pending_updates=true', res => {
+                res.on('data', () => {});
+            }).on('error', () => {});
+        }
+    " 2>/dev/null
+
+    pm2 restart bot-ppob 2>/dev/null || pm2 start index.js --name bot-ppob
     pm2 save 2>/dev/null || true
-    echo -e "${GREEN}✅ Bot berhasil direstart!${NC}"
+    echo -e "${GREEN}✅ Bot berhasil direstart secara bersih!${NC}"
     sleep 2
 }
 
@@ -430,9 +482,8 @@ cmd_update() {
     chmod +x "$APP_DIR/bin/botwa.sh" 2>/dev/null || true
     ln -sf "$APP_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
     ln -sf "$APP_DIR/bin/botwa.sh" /usr/bin/botwa 2>/dev/null || true
-    local PNAME=$(get_pm2_process_name)
-    pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
-    echo -e "\n${GREEN}✅ Pembaruan berhasil diterapkan dan bot ($PNAME) telah direstart!${NC}"
+    cmd_restart
+    echo -e "\n${GREEN}✅ Pembaruan berhasil diterapkan dan bot telah direstart bersih!${NC}"
     pause_menu
 }
 
@@ -459,6 +510,45 @@ cmd_clean() {
     fi
 
     echo -e "${GREEN}✅ Pembersihan storage selesai!${NC}"
+    pause_menu
+}
+
+# 13. Perbaiki Konflik Bot Telegram (Kill Zombie & Fix 409 Conflict)
+cmd_fix_conflict() {
+    echo -e "\n${CYAN}====================================================================${NC}"
+    echo -e "${BOLD}   🛠️ PERBAIKI KONFLIK BOT TELEGRAM (KILL ZOMBIE & FIX 409)${NC}"
+    echo -e "${CYAN}====================================================================${NC}\n"
+    echo -e "${YELLOW}Masalah 409 Conflict terjadi karena token bot Telegram dipakai di 2 proses sekaligus.${NC}"
+    echo -e "Mematikan seluruh proses ganda & zombie di VPS, lalu merestart 1 instance bersih...\n"
+
+    echo -e "${CYAN}1. Menghapus semua proses lama di PM2...${NC}"
+    pm2 delete all 2>/dev/null || true
+
+    echo -e "${CYAN}2. Mematikan seluruh proses Node.js background/zombie...${NC}"
+    pkill -9 -f "node" 2>/dev/null || true
+    sleep 2
+
+    echo -e "${CYAN}3. Mereset koneksi Telegram API (drop pending updates)...${NC}"
+    node -e "
+        const https = require('https');
+        const cfg = require('./config');
+        if (cfg.telegram?.token) {
+            https.get('https://api.telegram.org/bot' + cfg.telegram.token + '/deleteWebhook?drop_pending_updates=true', (res) => {
+                let d = '';
+                res.on('data', c => d += c);
+                res.on('end', () => console.log('   Response Telegram:', d));
+            }).on('error', (e) => console.log('   Gagal reset webhook:', e.message));
+        }
+    " 2>/dev/null
+    sleep 1
+
+    echo -e "${CYAN}4. Menjalankan 1 proses resmi bot-ppob...${NC}"
+    cd "$APP_DIR" || exit 1
+    pm2 start index.js --name bot-ppob
+    pm2 save 2>/dev/null || true
+
+    echo -e "\n${GREEN}✅ SELESAI! Seluruh proses ganda & zombie telah dibersihkan.${NC}"
+    echo -e "${CYAN}Silakan cek log dengan perintah 'botwa logs' atau pilih menu [5].${NC}"
     pause_menu
 }
 
@@ -490,6 +580,8 @@ if [ -n "$1" ]; then
             cmd_update; exit 0 ;;
         clean)
             cmd_clean; exit 0 ;;
+        fix|fix-conflict)
+            cmd_fix_conflict; exit 0 ;;
         help|--help|-h)
             echo -e "${BOLD}Panduan Penggunaan Perintah 'botwa':${NC}"
             echo "  botwa               - Buka menu kontrol interaktif"
@@ -505,6 +597,7 @@ if [ -n "$1" ]; then
             echo "  botwa reset-wa      - Reset sesi dan pairing ulang WA"
             echo "  botwa update        - Update bot ke commit Git terbaru"
             echo "  botwa clean         - Bersihkan log & backup lama"
+            echo "  botwa fix           - Bersihkan proses ganda & fix 409 conflict"
             exit 0 ;;
         *)
             echo -e "${RED}Perintah '$1' tidak dikenal.${NC} Ketik ${BOLD}botwa help${NC} untuk melihat daftar perintah."
@@ -529,10 +622,11 @@ while true; do
     echo -e " ${BOLD}[10]${NC} 📱 Reset Sesi & Pairing Ulang WhatsApp"
     echo -e " ${BOLD}[11]${NC} 🚀 Update Bot ke Versi Terbaru (Git Pull + Restart)"
     echo -e " ${BOLD}[12]${NC} 🧹 Bersihkan Cache, Log & File Backup Lama"
+    echo -e " ${BOLD}[13]${NC} 🛠️ Perbaiki Konflik Bot Telegram (Kill Zombie & Fix 409)"
     echo -e "${CYAN}--------------------------------------------------------------------${NC}"
     echo -e " ${BOLD}[0]${NC}  ❌ Keluar"
     echo -e "${CYAN}====================================================================${NC}"
-    read -p " Masukkan pilihan angka Anda [0-12]: " choice
+    read -p " Masukkan pilihan angka Anda [0-13]: " choice
 
     case "$choice" in
         1) cmd_status ;;
@@ -547,7 +641,8 @@ while true; do
         10) cmd_reset_whatsapp ;;
         11) cmd_update ;;
         12) cmd_clean ;;
+        13) cmd_fix_conflict ;;
         0) echo -e "\nSampai jumpa! 👋\n"; exit 0 ;;
-        *) echo -e "\n${RED}❌ Pilihan tidak valid! Masukkan angka 0-12.${NC}"; sleep 1.5 ;;
+        *) echo -e "\n${RED}❌ Pilihan tidak valid! Masukkan angka 0-13.${NC}"; sleep 1.5 ;;
     esac
 done
