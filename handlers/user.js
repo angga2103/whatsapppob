@@ -210,25 +210,18 @@ async function showProductList(sock, sender, session) {
         t += `*${globalIdx}.* ${p.cleanName}\n   💰 ${formatRupiah(p.hargaJual)}\n`;
     });
     
-    t += `\n👇 Balas angka pilihan Anda.`;
+    t += `\n👉 Balas *Angka (1 - ${pageItems.length})* produk pilihan Anda.`;
 
     if (session.tempSmartMode || session.tempSearchKeyword) {
-        t += `\n\n➡️ Ketik *LANJUT* atau *Z* untuk melihat seluruh katalog ${session.tempOp || session.tempBrand || ''}.`;
+        t += `\n➡️ Ketik *LANJUT* untuk melihat seluruh paket ${session.tempOp || session.tempBrand || ''}.`;
     } else if (maxPage > 0) {
-        t += `\n➡️ Ketik *LANJUT* atau *Z* untuk halaman berikutnya (${session.tempPage + 1}/${maxPage + 1}).`;
+        t += `\n➡️ Ketik *LANJUT* atau *HAL ${session.tempPage + 2}* untuk halaman berikutnya (${session.tempPage + 1}/${maxPage + 1}).`;
     }
 
-    // PANDUAN PENCARIAN & PEMBELIAN CEPAT (SESUAI PERMINTAAN USER)
     if (session.tempTipe === 'Data') {
-        t += `\n\n⚡ *Pencarian Cepat Paket Data:*\n`;
-        t += `Balas langsung kriteria paket yang Anda inginkan:\n`;
-        t += `• Kuota : ketik *2gb*, *10gb*, *500mb*, dll\n`;
-        t += `• Masa Aktif : ketik *30hari*, *7hari*, *1hari*, dll\n`;
-        t += `• Rentang Harga : ketik *25k*, *50k*, *100k*, dll\n`;
-        t += `• Nama Paket : ketik kata kunci (contoh: *combo*, *akrab*)`;
+        t += `\n💡 *Tips Cari Cepat:* Ketik kuota/harga (cth: *2gb*, *30hari*, *50k*, *combo*).`;
     } else if (session.tempTipe === 'Pulsa' || session.tempTipe === 'E-Money') {
-        t += `\n\n⚡ *Pencarian Cepat Nominal:*\n`;
-        t += `Ketik nominal yang dicari, contoh: *10k*, *50k*, *100k*`;
+        t += `\n💡 *Tips Cari Cepat:* Ketik nominal (cth: *10k*, *50k*, *100k*).`;
     }
     
     await sock.sendMessage(sender, { text: t });
@@ -509,6 +502,11 @@ if (session.step === S.INPUT_DEPOSIT) {
     const finalAmount = amount + unique;
     const depositId = 'DEP-' + Date.now();
 
+    // Notifikasi instan sebelum generate barcode QRIS (agar user tidak merasa jeda)
+    await sock.sendMessage(sender, {
+        text: "⏳ *MENYIAPKAN QRIS...*\nSedang membuat barcode deposit saldo, mohon tunggu sebentar ya..."
+    }).catch(() => {});
+
     const qris = await api.createQris(depositId, finalAmount);
 
     if (!qris || qris.status !== 'Success') {
@@ -543,20 +541,21 @@ if (session.step === S.INPUT_DEPOSIT) {
 
     await sock.sendMessage(sender, {
         image: qrPayload,
-        caption:
-        `💰 *DEPOSIT SALDO*
+        caption: `💰 *TAGIHAN DEPOSIT SALDO (QRIS)*
 
-Nominal:
-Rp ${(qris.data && qris.data.total_bayar ? Number(qris.data.total_bayar) : finalAmount).toLocaleString('id-ID')}
-_*(Fee/Unik: Rp ${((qris.data && qris.data.total_bayar ? Number(qris.data.total_bayar) : finalAmount) - amount).toLocaleString('id-ID')})*_
+• Nominal Masuk : *${formatRupiah(amount)}*
+• Total Bayar   : *Rp ${finalAmountNum.toLocaleString('id-ID')}* _(Tepat)_
+• Biaya / Unik  : Rp ${(finalAmountNum - amount).toLocaleString('id-ID')}
+• ID Tagihan    : \`${depositId}\`
 
-🧾 ID:
-${depositId}
+⏳ Batas Waktu  : *5 Menit* (Otomatis Masuk)
 
-⏳  Expired:
-5 menit
+💡 *Cara Bayar Mudah:*
+1. Simpan / Screenshot gambar QR di atas.
+2. Buka m-Banking (BCA, Mandiri, BRI, BNI) atau E-Wallet (DANA, GoPay, OVO, ShopeePay).
+3. Pilih menu *Scan QRIS* lalu unggah foto dari galeri HP Anda.
 
-Silakan scan QRIS di atas.`
+_Saldo akun akan bertambah otomatis dalam beberapa detik setelah pembayaran lunas!_`
     });
 
     const checker = setInterval(async () => {
@@ -658,14 +657,30 @@ if (txt === 'PROFIL') {
         if (txt === '1' || txt === '2') {
             session.tempTipe = txt === '1' ? 'Pulsa' : 'Data';
             session.step = S.INPUT_TARGET_PULSA;
-            if (session.tempTipe === 'Data') {
-                return sock.sendMessage(sender, {
-                    text: `📶 *PAKET DATA INTERNET*\n\nSilakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\n⚡ *Tips Beli Cepat Langsung Filter:*\nBisa sertakan kata kunci setelah nomor, contoh:\n• _08123456789 2gb_ (Paket ~2GB)\n• _08123456789 30hari_ (Paket 30 Hari)\n• _08123456789 50k_ (Paket ~Rp50.000)\n\nKetik *0* atau *B* untuk batal.`
-                });
+
+            // Deteksi nomor pengirim untuk kemudahan Fast Order
+            const u = db.getUser ? db.getUser(sender) : null;
+            let senderPhone = u?.phone || '';
+            if (!senderPhone && !sender.includes('@lid')) {
+                senderPhone = sender.split('@')[0].split(':')[0];
             }
-            return sock.sendMessage(sender, {
-                text: `📱 *PULSA REGULER*\n\nSilakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\nKetik *0* atau *B* untuk batal.`
-            });
+            if (senderPhone.startsWith('62')) senderPhone = '0' + senderPhone.slice(2);
+            const isValidSender = senderPhone && senderPhone.startsWith('08') && senderPhone.length >= 10;
+            session.tempSenderPhone = isValidSender ? senderPhone : null;
+
+            let msg = session.tempTipe === 'Data' ? `📶 *PAKET DATA INTERNET*\n\n` : `📱 *PULSA REGULER*\n\n`;
+            if (isValidSender) {
+                msg += `Silakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\n` +
+                       `👉 Atau balas *1* untuk mengisi ke nomor sendiri (*${senderPhone}*).\n\n`;
+            } else {
+                msg += `Silakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\n`;
+            }
+
+            if (session.tempTipe === 'Data') {
+                msg += `💡 *Tips:* Bisa langsung sertakan kuota/harga (contoh: *08123456789 2gb* atau *1 50k*)\n\n`;
+            }
+            msg += `Ketik *0* atau *B* untuk batal.`;
+            return sock.sendMessage(sender, { text: msg });
         } else if (txt === '3') {
             session.tempTipe = 'E-Money';
             session.step = S.PILIH_BRAND_EMONEY;
@@ -984,23 +999,47 @@ if (txt === 'PROFIL') {
 
     // 3. ALUR PULSA/DATA (Auto Detect -> Sort -> Group -> Paginate)
     if (session.step === S.INPUT_TARGET_PULSA) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali belanja." });
+        }
+
         let searchKeyword = '';
         let rawInput = text.trim();
 
+        // Opsi Cepat: Balas "1" untuk menggunakan nomor sendiri
+        if (session.tempSenderPhone && (rawInput === '1' || rawInput.startsWith('1 ') || rawInput.startsWith('1.'))) {
+            let extra = '';
+            if (rawInput.startsWith('1 ')) extra = rawInput.slice(2).trim();
+            else if (rawInput.startsWith('1.')) extra = rawInput.slice(2).trim();
+            rawInput = session.tempSenderPhone;
+            if (extra) searchKeyword = extra;
+        }
+
         if (session.tempTipe === 'Data') {
-            if (rawInput.includes('.')) {
-                const parts = rawInput.split('.');
-                rawInput = parts[0];
-                searchKeyword = parts.slice(1).join('.').trim();
-            } else if (rawInput.includes(' ')) {
-                const parts = rawInput.split(/\s+/);
-                rawInput = parts[0];
-                searchKeyword = parts.slice(1).join(' ').trim();
+            if (!searchKeyword) {
+                if (rawInput.includes('.')) {
+                    const parts = rawInput.split('.');
+                    rawInput = parts[0];
+                    searchKeyword = parts.slice(1).join('.').trim();
+                } else if (rawInput.includes(' ')) {
+                    const parts = rawInput.split(/\s+/);
+                    rawInput = parts[0];
+                    searchKeyword = parts.slice(1).join(' ').trim();
+                }
             }
         }
 
         const phone = rawInput.replace(/[^0-9]/g, '');
-        if (phone.length < 10) return sock.sendMessage(sender, { text: `❌ Nomor tidak valid.` });
+        if (session.tempTipe === 'PLN') {
+            if (phone.length < 11 || phone.length > 12) {
+                return sock.sendMessage(sender, { text: `❌ Nomor Meter / ID Pelanggan PLN harus 11 atau 12 digit.` });
+            }
+        } else {
+            if (phone.length < 10 || phone.length > 14) {
+                return sock.sendMessage(sender, { text: `❌ Nomor HP tidak valid (harus 10 - 14 digit).` });
+            }
+        }
         let operator = '';
 
         if (session.tempTipe === 'PLN') {
@@ -1100,9 +1139,19 @@ if (txt === 'PROFIL') {
     if (session.step === S.PILIH_PRODUK_PULSA || session.step === S.PILIH_PRODUK_EMONEY) {
         const upperTxt = txt.trim().toUpperCase();
         const isResetCmd = ['ALL', 'SEMUA', 'RESET'].includes(upperTxt);
-        const isNextCmd = ['Z', 'N', 'NEXT', 'L', 'LANJUT', '00', '>'].includes(upperTxt) || isResetCmd;
+        const isNextCmd = ['Z', 'N', 'NEXT', 'L', 'LANJUT', '00', '>', 'SELANJUTNYA', 'BERIKUTNYA'].includes(upperTxt) || isResetCmd;
+        const pageMatch = upperTxt.match(/^(?:HAL(?:AMAN)?\.?\s*)(\d+)$/i);
 
         // 1. Paginasi & Navigasi Halaman
+        if (pageMatch) {
+            const targetP = parseInt(pageMatch[1], 10) - 1;
+            const maxPage = Math.floor(((session.tempList || []).length - 1) / 10);
+            if (targetP >= 0 && targetP <= maxPage) {
+                session.tempPage = targetP;
+                return showProductList(sock, sender, session);
+            }
+        }
+
         if (isNextCmd) {
             if ((session.tempSmartMode || session.tempSearchKeyword || isResetCmd) && session.tempAllProducts) {
                 session.tempList = session.tempAllProducts;
@@ -1129,16 +1178,8 @@ if (txt === 'PROFIL') {
 
             if (!hasil || hasil.length === 0) {
                 return sock.sendMessage(sender, {
-                    text:
-`⚠️ Paket "${rawSearch}" tidak ditemukan pada katalog ${session.tempOp || session.tempBrand || ''} saat ini.
-
-⚡ *Tips Pencarian Cepat:*
-• Kuota : ketik *2gb*, *10gb*, *500mb*
-• Masa Aktif : ketik *30hari*, *7hari*, *1hari*
-• Rentang Harga : ketik *25k*, *50k*, *100k*
-• Nama Paket : ketik kata kunci (contoh: *combo*, *akrab*)
-
-Ketik *LANJUT* atau *SEMUA* untuk melihat katalog lengkap.`
+                    text: `⚠️ Paket "*${rawSearch}*" tidak ditemukan pada katalog ${session.tempOp || session.tempBrand || ''}.\n\n` +
+                          `💡 *Tips:* Coba kata kunci kuota/harga lain (contoh: *2gb*, *30hari*, *50k*) atau ketik *SEMUA* untuk melihat seluruh katalog.`
                 });
             }
 
@@ -1154,7 +1195,7 @@ Ketik *LANJUT* atau *SEMUA* untuk melihat katalog lengkap.`
         const idx = parseInt(txt.trim(), 10) - 1;
         if (isNaN(idx) || !session.tempList[idx]) {
             return sock.sendMessage(sender, {
-                text: `❌ Pilihan tidak valid. Balas nomor produk (1-${session.tempList.length}), ketik pencarian paket (cth: *2gb*, *30hari*, *50k*), atau ketik *LANJUT* / *Z* untuk ganti halaman.`
+                text: `❌ Pilihan tidak valid. Balas nomor produk (*1 - ${session.tempList.length}*), ketik kata kunci paket (cth: *2gb*, *50k*), atau ketik *LANJUT* untuk halaman berikutnya.`
             });
         }
         
@@ -1204,13 +1245,20 @@ async function showInvoice(sock, sender, session) {
     const user = db.getUser(sender);
     const saldo = Number(user.saldo) || 0;
     
-    let t = `🧾 *KONFIRMASI PESANAN*\n\n📦 ${session.tempItem.cleanName || session.tempItem.nama}\n`;
-    if (isPpob) t += `🎯 Tujuan: *${session.tempTarget}*\n`;
-    else t += `📊 Jumlah: ${qty}\n`;
+    let t = `🧾 *KONFIRMASI PESANAN*\n\n`;
+    t += `📦 Produk : *${session.tempItem.cleanName || session.tempItem.nama}*\n`;
+    if (isPpob) t += `🎯 Tujuan : *${session.tempTarget}*\n`;
+    else t += `📊 Jumlah : *${qty}*\n`;
     
-    t += `💵 Total: *${formatRupiah(total)}*\n💰 Saldo Anda: ${formatRupiah(saldo)}\n\n`;
-    t += saldo >= total ? `_Saldo mencukupi (Potong Otomatis)._\n\n` : `_Pembayaran via QRIS Otomatis._\n\n`;
-    t += `Balas *1* untuk BAYAR SEKARANG\nBalas *2* untuk BATAL`;
+    t += `💰 Total  : *${formatRupiah(total)}*\n`;
+    t += `💵 Saldo  : ${formatRupiah(saldo)}\n\n`;
+    
+    if (saldo >= total) {
+        t += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+    } else {
+        t += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+    }
+    t += `👉 Balas *1* untuk BAYAR SEKARANG\n👉 Balas *2* untuk BATAL`;
     
     await sock.sendMessage(sender, { text: t });
 }

@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const config = require('./config');
 const db = require('./database/db');
 const api = require('./lib/api');
-const { formatRupiah, getTanggal, getTanggalLengkap } = require('./lib/utils');
+const { formatRupiah, getTanggal, getTanggalLengkap, formatPlnToken } = require('./lib/utils');
 const { handleAdmin } = require('./handlers/admin');
 const { handleUser, S } = require('./handlers/user');
 
@@ -905,6 +905,11 @@ async function processCheckout(sock, sender, session) {
         }
     }
 
+    // Notifikasi instan sebelum generate barcode QRIS (agar user tidak merasa jeda)
+    await sock.sendMessage(sender, {
+        text: "⏳ *MENYIAPKAN QRIS...*\nSedang membuat barcode pembayaran resmi, mohon tunggu beberapa detik ya kak..."
+    }).catch(() => {});
+
     // Jika saldo tidak cukup -> Generate QRIS
     const qris = await api.createQris(oid, baseAmount);
     if (!qris || qris.status !== 'Success') {
@@ -926,13 +931,21 @@ async function processCheckout(sock, sender, session) {
 
     await sock.sendMessage(sender, {
         image: qrPayload,
-        caption: `🧾 *TAGIHAN QRIS*
+        caption: `🧾 *TAGIHAN PEMBAYARAN QRIS*
 
-Invoice : ${oid}
-Produk  : ${order.item}
-Nominal : ${formatRupiah(order.total)}
+• Invoice : \`${oid}\`
+• Produk  : *${order.item}*
+• Tujuan  : *${order.target}*
+• Total   : *${formatRupiah(order.total)}* _(Tepat)_
 
-Expired : 5 Menit (Otomatis Batal)`
+⏳ Batas Waktu: *5 Menit* (Otomatis Batal)
+
+💡 *Cara Bayar Mudah:*
+1. Simpan / Screenshot gambar QR di atas.
+2. Buka m-Banking (BCA, Mandiri, BRI, BNI) atau E-Wallet (DANA, GoPay, OVO, ShopeePay).
+3. Pilih menu *Scan QRIS* lalu unggah foto dari galeri HP Anda.
+
+_Transaksi otomatis diproses seketika setelah pembayaran berhasil diterima!_`
     });
     startPolling(sock, order);
 }
@@ -1079,7 +1092,35 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                               `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
                     });
                 } else {
-                    await sock.sendMessage(targetJid, { text: `✅ *PPOB SUKSES*\n\nProduk: ${order.item}\nTujuan: ${order.target}\nSN/Ket: ${formatDigiflazzMessage(hit.data.sn || hit.data.message)}` });
+                    const rawSn = hit.data.sn || hit.data.message || '';
+                    const plnData = formatPlnToken(rawSn);
+                    const storeName = db.store.namaToko || 'DIGITAL STORE';
+                    const timeStr = getTanggalLengkap(order.timestamp || Date.now());
+
+                    if (plnData) {
+                        let plnMsg = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
+                                     `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
+                                     `\`${plnData.token}\`\n` +
+                                     `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
+                        if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
+                        if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
+                        if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n`;
+                        plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
+                                  `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
+                                  `🕒 Waktu           : ${timeStr}\n\n` +
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_`;
+                        await sock.sendMessage(targetJid, { text: plnMsg });
+                    } else {
+                        await sock.sendMessage(targetJid, {
+                            text: `✅ *TRANSAKSI BERHASIL*\n\n` +
+                                  `📦 Produk   : *${order.item}*\n` +
+                                  `🎯 Tujuan   : *${order.target}*\n` +
+                                  `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
+                                  `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
+                                  `🕒 Waktu    : ${timeStr}\n\n` +
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_`
+                        });
+                    }
                 }
             } else if (hit.data.status === 'Pending') {
                 order.status = 'processing';
@@ -3981,8 +4022,35 @@ setInterval(async () => {
                               `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
                     });
                 } else {
-                    let snText = sn ? `\nSN/Ket: ${sn}` : '';
-                    await botSock.sendMessage(realBuyerJid || buyerJid, { text: `✅  *PPOB SUKSES*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}${snText}\n\nTerima kasih telah berbelanja di *${db.store.namaToko || 'Toko Kami'}*!` });
+                    const rawSn = sn || order.sn || '';
+                    const plnData = formatPlnToken(rawSn);
+                    const storeName = db.store.namaToko || 'DIGITAL STORE';
+                    const timeStr = getTanggalLengkap(order.timestamp || Date.now());
+
+                    if (plnData) {
+                        let plnMsg = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
+                                     `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
+                                     `\`${plnData.token}\`\n` +
+                                     `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
+                        if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
+                        if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
+                        if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n`;
+                        plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
+                                  `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
+                                  `🕒 Waktu           : ${timeStr}\n\n` +
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_`;
+                        await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg });
+                    } else {
+                        await botSock.sendMessage(realBuyerJid || buyerJid, {
+                            text: `✅ *TRANSAKSI BERHASIL*\n\n` +
+                                  `📦 Produk   : *${order.item || order.sku}*\n` +
+                                  `🎯 Tujuan   : *${order.target}*\n` +
+                                  `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
+                                  `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
+                                  `🕒 Waktu    : ${timeStr}\n\n` +
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_`
+                        });
+                    }
                 }
                 console.log("[RADAR V4] ✅ Sukses! Pesan terkirim.");
             } 
