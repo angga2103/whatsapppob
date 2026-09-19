@@ -2,6 +2,7 @@ const db = require('../database/db');
 const { formatRupiah } = require('../lib/utils');
 const api = require('../lib/api');
 const marginHelper = require('../lib/margin');
+const analytics = require('../lib/analytics');
 const healthCheck = require('../system/health-check');
 
 const maskSecret = (str = '') => (str.length > 8 ? str.slice(0, 4) + '••••' + str.slice(-4) : '••••');
@@ -38,7 +39,13 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.member* | *.info* 628xxxx\n`;
         t += `• *.topsaldo* | *.toptrx*\n`;
         t += `• *.lunas* (Cek Antrian) | *.resend* INV-xxx\n`;
-        t += `• *.health* | *.stats* | *.backup*`;
+        t += `• *.health* | *.backup*\n\n`;
+        t += `📊 *LAPORAN & LABA BERSIH*\n`;
+        t += `• *.stats* / *.omzet* (Ringkasan Laba 1 Hari, 7 Hari, 30 Hari, All-Time)\n`;
+        t += `• *.laba* [tanggal] (Cek Laba Hari Tertentu, cth: .laba 19-09-2026 / .laba kemarin)\n`;
+        t += `• *.topproduk* (Ranking 10 Produk Paling Laris Dibeli)\n`;
+        t += `• *.produkgagal* (Laporan Produk Sering Gagal Digiflazz)\n`;
+        t += `• *.toptrx* (Peringkat Member Transaksi Terbanyak)`;
         return sock.sendMessage(sender, { text: t });
     }
     
@@ -567,32 +574,24 @@ if (cmd === 'topsaldo') {
     }
 
     if (cmd === 'toptrx') {
+        const days = parseInt(args, 10) || 0;
+        const data = analytics.getTopMembers(10, days);
+        let text = `👥 *PERINGKAT MEMBER TRANSAKSI TERBANYAK*\n`;
+        text += `Periode: *${data.periodLabel}*\n\n`;
 
-        const map = {};
-
-        (db.orders || []).forEach(o=>{
-
-            if(o.status !== 'success') return;
-
-            map[o.buyer] = (map[o.buyer]||0)+1;
-        });
-
-        const rows = Object.entries(map)
-        .sort((a,b)=>b[1]-a[1])
-        .slice(0,10);
-
-        let text = '🔥 *MEMBER TERAKTIF*\n\n';
-
-        rows.forEach(([jid,total],i)=>{
-
-            const u = db.users[jid] || {};
-            const phone = u.phone || jid;
-
-            text += (i+1)+'. '+phone+'\n';
-            text += '🛒 '+total+' transaksi\n\n';
-        });
-
-        return sock.sendMessage(sender,{text});
+        if (data.ranking.length === 0) {
+            text += `_Belum ada transaksi sukses tercatat._`;
+        } else {
+            data.ranking.forEach((m, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                const nameStr = m.name ? ` (${m.name})` : '';
+                text += `${medal} *${m.phone}*${nameStr}\n`;
+                text += `   • Frekuensi : *${m.trxCount} transaksi*\n`;
+                text += `   • Belanja   : *${formatRupiah(m.totalBelanja)}*\n`;
+                text += `   • 💰 Laba   : *${formatRupiah(m.totalProfit)}*\n\n`;
+            });
+        }
+        return sock.sendMessage(sender, { text });
     }
     
     if (cmd === 'lunas') {
@@ -677,69 +676,128 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
 }
     
 
-if (cmd === 'stats') {
-
+    if (cmd === 'stats' || cmd === 'omzet') {
+        const sToday = analytics.getStatsSummary('today');
+        const s7d = analytics.getStatsSummary('7d');
+        const s30d = analytics.getStatsSummary('30d');
+        const sAll = analytics.getStatsSummary('all');
         const users = Object.keys(db.users || {}).length;
-        const orders = db.orders || [];
-
-        const success = orders.filter(o => o.status === 'success').length;
-        const cancel = orders.length - success;
-
-        let omzet = 0;
-        orders.forEach(o => {
-            if (o.status === 'success') {
-                omzet += Number(o.baseAmount || 0);
-            }
-        });
 
         let totalSaldo = 0;
         Object.values(db.users || {}).forEach(u => {
             totalSaldo += Number(u.saldo || 0);
         });
 
-        const map = {};
+        let text = `📊 *LAPORAN PENJUALAN & LABA BERSIH*\n\n`;
 
-        orders.forEach(o => {
-            if (o.status !== 'success') return;
-            map[o.buyer] = (map[o.buyer] || 0) + 1;
-        });
+        text += `📅 *HARI INI (${sToday.rangeLabel}):*\n`;
+        text += `• Transaksi Sukses : *${sToday.successCount} trx* (Gagal: ${sToday.failedCount})\n`;
+        text += `• Omzet Penjualan  : *${formatRupiah(sToday.omzet)}*\n`;
+        text += `• 💰 *Laba Bersih*  : *${formatRupiah(sToday.labaBersih)}* _(${sToday.marginPercent}% margin)_\n\n`;
 
-        const top = Object.entries(map)
-            .sort((a,b)=>b[1]-a[1])[0];
+        text += `🗓️ *7 HARI TERAKHIR:*\n`;
+        text += `• Transaksi Sukses : *${s7d.successCount} trx*\n`;
+        text += `• Omzet Penjualan  : *${formatRupiah(s7d.omzet)}*\n`;
+        text += `• 💰 *Laba Bersih*  : *${formatRupiah(s7d.labaBersih)}*\n\n`;
 
-        let topMember = '-';
+        text += `📆 *30 HARI TERAKHIR (BULAN INI):*\n`;
+        text += `• Transaksi Sukses : *${s30d.successCount} trx*\n`;
+        text += `• Omzet Penjualan  : *${formatRupiah(s30d.omzet)}*\n`;
+        text += `• 💰 *Laba Bersih*  : *${formatRupiah(s30d.labaBersih)}*\n\n`;
 
-        if(top){
-            const u = db.users[top[0]] || {};
-            topMember = u.phone || top[0];
+        text += `🏆 *KESELURUHAN (ALL-TIME):*\n`;
+        text += `• Total Transaksi  : *${sAll.totalOrders} trx*\n`;
+        text += `• Sukses / Gagal   : *${sAll.successCount}* / *${sAll.failedCount}* (${sAll.successRate}% rate)\n`;
+        text += `• Total Omzet      : *${formatRupiah(sAll.omzet)}*\n`;
+        text += `• 💰 *Total Laba*   : *${formatRupiah(sAll.labaBersih)}*\n`;
+        text += `• Total Pengguna   : *${users} member* (Saldo: ${formatRupiah(totalSaldo)})\n\n`;
+
+        text += `💡 *Perintah Laporan Lanjutan:*\n`;
+        text += `• *.laba 19-09-2026* (Cek laba & produk hari tertentu)\n`;
+        text += `• *.topproduk* (10 Produk paling banyak dibeli)\n`;
+        text += `• *.produkgagal* (Laporan produk sering gagal Digiflazz)\n`;
+        text += `• *.toptrx* (Peringkat member transaksi terbanyak)`;
+
+        return sock.sendMessage(sender, { text });
+    }
+
+    if (cmd === 'laba') {
+        const queryDate = args.trim() || 'today';
+        const dayData = analytics.getDayStats(queryDate);
+
+        if (!dayData.success) {
+            return sock.sendMessage(sender, {
+                text: `❌ *Format Tanggal Salah!*\n\n${dayData.message}\nContoh yang didukung:\n• *.laba 19-09-2026*\n• *.laba 2026-09-19*\n• *.laba kemarin*`
+            });
         }
 
-        const rate = orders.length
-            ? ((success/orders.length)*100).toFixed(2)
-            : '0.00';
+        let text = `📅 *LAPORAN KEUANGAN TANGGAL: ${dayData.dateFormatted.toUpperCase()}*\n\n`;
+        text += `• Total Transaksi   : *${dayData.totalOrders} trx*\n`;
+        text += `• Transaksi Sukses  : *${dayData.successCount} trx*\n`;
+        text += `• Transaksi Gagal   : *${dayData.failedCount} trx*\n`;
+        text += `• Transaksi Pending : *${dayData.pendingCount} trx*\n\n`;
+        text += `💵 *Omzet Penjualan* : *${formatRupiah(dayData.omzet)}*\n`;
+        text += `💰 *Laba Bersih Toko*: *${formatRupiah(dayData.labaBersih)}* _(${dayData.marginPercent}% margin)_\n\n`;
 
-        return sock.sendMessage(sender,{
-            text:
-`📊 *STATISTIK TOKO*
+        text += `📦 *Rincian Produk Terjual:*\n`;
+        if (dayData.itemsSold.length === 0) {
+            text += `_Tidak ada produk yang berhasil terjual pada tanggal ini._\n`;
+        } else {
+            dayData.itemsSold.forEach((item, i) => {
+                text += `${i + 1}. *${item.name}*\n`;
+                text += `   ➥ Terjual: *${item.qty}x* | Omzet: *${formatRupiah(item.omzet)}* | 💰 Laba: *${formatRupiah(item.profit)}*\n`;
+            });
+        }
 
-👥 Member: ${users}
+        if (queryDate === 'today') {
+            text += `\n_💡 Cek tanggal lain: .laba DD-MM-YYYY (contoh: .laba 18-09-2026 atau .laba kemarin)_`;
+        }
 
-📦 Total Order: ${orders.length}
-✅ Success: ${success}
-❌ Cancel: ${cancel}
+        return sock.sendMessage(sender, { text });
+    }
 
-💵 Omzet:
-${formatRupiah(omzet)}
+    if (cmd === 'topproduk' || cmd === 'terlaris') {
+        const days = parseInt(args.trim(), 10) || 0;
+        const data = analytics.getTopProducts(10, days);
 
-💰 Total Saldo Member:
-${formatRupiah(totalSaldo)}
+        let text = `🏆 *TOP 10 PRODUK PALING BANYAK DIBELI*\n`;
+        text += `Periode: *${data.periodLabel}*\n\n`;
 
-🏆 Top Member:
-${topMember}
+        if (data.ranking.length === 0) {
+            text += `_Belum ada transaksi sukses yang tercatat dalam periode ini._`;
+        } else {
+            data.ranking.forEach((item, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                text += `${medal} *${item.name}*\n`;
+                text += `   • Kategori : ${item.category}\n`;
+                text += `   • Terjual  : *${item.qty}x*\n`;
+                text += `   • Omzet    : *${formatRupiah(item.omzet)}*\n`;
+                text += `   • 💰 Laba   : *${formatRupiah(item.profit)}*\n\n`;
+            });
+        }
 
-📈 Success Rate:
-${rate}%`
-        });
+        return sock.sendMessage(sender, { text });
+    }
+
+    if (cmd === 'produkgagal' || cmd === 'gagal') {
+        const days = parseInt(args.trim(), 10) || 0;
+        const data = analytics.getFailedProducts(10, days);
+
+        let text = `⚠️ *LAPORAN ANALISA PRODUK GAGAL*\n`;
+        text += `Periode: *${data.periodLabel}* | Total Gagal: *${data.totalFailedTrx} trx*\n\n`;
+
+        if (data.ranking.length === 0) {
+            text += `_🎉 Luar biasa! Tidak ada transaksi gagal yang tercatat._`;
+        } else {
+            text += `_Daftar produk dengan frekuensi kegagalan tertinggi (evaluasi Digiflazz):_\n\n`;
+            data.ranking.forEach((item, i) => {
+                text += `${i + 1}. ❌ *${item.name}*\n`;
+                text += `   • Total Gagal : *${item.failCount} kali*\n`;
+                text += `   • Penyebab    : _${item.topReasons}_\n\n`;
+            });
+        }
+
+        return sock.sendMessage(sender, { text });
     }
 
     // ==========================================

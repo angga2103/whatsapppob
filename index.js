@@ -14,6 +14,7 @@ const config = require('./config');
 const db = require('./database/db');
 const api = require('./lib/api');
 const marginHelper = require('./lib/margin');
+const analytics = require('./lib/analytics');
 const { formatRupiah, getTanggal, getTanggalLengkap, formatPlnToken } = require('./lib/utils');
 const { handleAdmin } = require('./handlers/admin');
 const { handleUser, S } = require('./handlers/user');
@@ -776,7 +777,7 @@ Terima kasih telah berbelanja.`
                 'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
                 'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
-                'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal'
+                'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal'
             ];
 
             if (isOwner && adminCommands.includes(cmd)) {
@@ -1067,6 +1068,7 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                 order.status = 'success'; 
                 order.sn = hit.data.sn || order.sn;
                 if (hit.data.ref_id) order.digiflazz_oid = hit.data.ref_id;
+                order.profit = analytics.calculateOrderProfit(order, db.ppob);
                 db.saveOrders();
 
                 activeTransactions.delete(
@@ -1671,7 +1673,7 @@ try {
                     ],
                     [
                         { text: '📊 Status & Health', callback_data: 'tg_health' },
-                        { text: '📈 Statistik Omzet', callback_data: 'tg_stats' }
+                        { text: '📊 Laba & Statistik', callback_data: 'tg_stats' }
                     ],
                     [
                         { text: '⚙️ Margin & Owner', callback_data: 'tg_settings_menu' },
@@ -2011,6 +2013,222 @@ try {
                     ],
                     [
                         { text: '⬅️ Kembali ke Menu Backup', callback_data: 'tg_backup_menu' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const safeTg = (t = '') => String(t || '').replace(/[_*`\[\]]/g, ' ');
+
+        const renderStatsOverview = () => {
+            const sToday = analytics.getStatsSummary('today');
+            const s7d = analytics.getStatsSummary('7d');
+            const s30d = analytics.getStatsSummary('30d');
+            const sAll = analytics.getStatsSummary('all');
+            const userCount = Object.keys(db.users || {}).length;
+
+            let text = `📊 *LAPORAN PENJUALAN & LABA BERSIH*\n\n`;
+            text += `📅 *HARI INI (${sToday.rangeLabel}):*\n`;
+            text += `• Transaksi Sukses : *${sToday.successCount} trx* (Gagal: ${sToday.failedCount})\n`;
+            text += `• Omzet Penjualan  : *${formatRupiah(sToday.omzet)}*\n`;
+            text += `• 💰 *Laba Bersih*  : *${formatRupiah(sToday.labaBersih)}* _(${sToday.marginPercent}% margin)_\n\n`;
+
+            text += `🗓️ *7 HARI TERAKHIR:*\n`;
+            text += `• Transaksi Sukses : *${s7d.successCount} trx*\n`;
+            text += `• Omzet Penjualan  : *${formatRupiah(s7d.omzet)}*\n`;
+            text += `• 💰 *Laba Bersih*  : *${formatRupiah(s7d.labaBersih)}*\n\n`;
+
+            text += `📆 *30 HARI TERAKHIR (BULAN INI):*\n`;
+            text += `• Transaksi Sukses : *${s30d.successCount} trx*\n`;
+            text += `• Omzet Penjualan  : *${formatRupiah(s30d.omzet)}*\n`;
+            text += `• 💰 *Laba Bersih*  : *${formatRupiah(s30d.labaBersih)}*\n\n`;
+
+            text += `🏆 *KESELURUHAN (ALL-TIME):*\n`;
+            text += `• Total Sukses     : *${sAll.successCount} trx* | Gagal: *${sAll.failedCount}*\n`;
+            text += `• Total Omzet      : *${formatRupiah(sAll.omzet)}*\n`;
+            text += `• 💰 *Total Laba*   : *${formatRupiah(sAll.labaBersih)}*\n`;
+            text += `• Total Pengguna   : *${userCount} member*\n\n`;
+            text += `_💡 Pilih menu di bawah untuk rincian analisis atau cek tanggal tertentu:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '🔍 Cek Tanggal Tertentu', callback_data: 'tg_stats_datepicker' }
+                    ],
+                    [
+                        { text: '🏆 Produk Terlaris', callback_data: 'tg_stats_topproduk' },
+                        { text: '⚠️ Laporan Produk Gagal', callback_data: 'tg_stats_produkgagal' }
+                    ],
+                    [
+                        { text: '👥 Top Member Trx', callback_data: 'tg_stats_topmember' },
+                        { text: '🔄 Refresh Data', callback_data: 'tg_stats' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Dashboard', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderDatePickerMenu = () => {
+            let text = `🔍 *CEK LABA BERSIH TANGGAL TERTENTU*\n\n`;
+            text += `Anda dapat memeriksa omzet, laba bersih, dan rincian produk yang terjual pada tanggal spesifik.\n\n`;
+            text += `_Pilih opsi cepat di bawah atau ketik tanggal manual:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '📅 Hari Ini', callback_data: 'tg_stats_date_today' },
+                        { text: '⏮️ Kemarin', callback_data: 'tg_stats_date_yesterday' }
+                    ],
+                    [
+                        { text: '⏮️ 2 Hari Lalu', callback_data: 'tg_stats_date_2days' },
+                        { text: '⌨️ Ketik Tanggal Manual', callback_data: 'tg_input_stats_date' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Laporan', callback_data: 'tg_stats' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderDateDetail = (dateInput) => {
+            const dayData = analytics.getDayStats(dateInput);
+            if (!dayData.success) {
+                return {
+                    text: `❌ *TANGGAL TIDAK VALID*\n\n${dayData.message}`,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Coba Lagi', callback_data: 'tg_input_stats_date' }],
+                            [{ text: '⬅️ Kembali ke Laporan', callback_data: 'tg_stats' }]
+                        ]
+                    }
+                };
+            }
+
+            let text = `📅 *LAPORAN TANGGAL: ${dayData.dateFormatted.toUpperCase()}*\n\n`;
+            text += `• Total Transaksi   : *${dayData.totalOrders} trx*\n`;
+            text += `• Transaksi Sukses  : *${dayData.successCount} trx*\n`;
+            text += `• Transaksi Gagal   : *${dayData.failedCount} trx*\n`;
+            text += `• Transaksi Pending : *${dayData.pendingCount} trx*\n\n`;
+            text += `💵 *Omzet Penjualan* : *${formatRupiah(dayData.omzet)}*\n`;
+            text += `💰 *Laba Bersih Toko*: *${formatRupiah(dayData.labaBersih)}* _(${dayData.marginPercent}% margin)_\n\n`;
+
+            text += `📦 *Rincian Produk Terjual:*\n`;
+            if (dayData.itemsSold.length === 0) {
+                text += `_Tidak ada produk yang berhasil terjual pada tanggal ini._\n`;
+            } else {
+                dayData.itemsSold.forEach((item, i) => {
+                    text += `${i + 1}. *${safeTg(item.name)}*\n`;
+                    text += `   ➥ Terjual: *${item.qty}x* | Omzet: *${formatRupiah(item.omzet)}* | Laba: *${formatRupiah(item.profit)}*\n`;
+                });
+            }
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '🔍 Cek Tanggal Lain', callback_data: 'tg_stats_datepicker' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Laporan', callback_data: 'tg_stats' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderTopProductsMenu = (days = 0) => {
+            const data = analytics.getTopProducts(10, days);
+            let text = `🏆 *TOP 10 PRODUK PALING BANYAK DIBELI*\n`;
+            text += `Periode: *${data.periodLabel}* | Total Produk Aktif: *${data.totalUniqueProducts}*\n\n`;
+
+            if (data.ranking.length === 0) {
+                text += `_Belum ada transaksi sukses yang tercatat dalam periode ini._\n`;
+            } else {
+                data.ranking.forEach((item, i) => {
+                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                    text += `${medal} *${safeTg(item.name)}*\n`;
+                    text += `   ➥ Kategori: *${item.category}* | Terjual: *${item.qty}x*\n`;
+                    text += `   ➥ Omzet: *${formatRupiah(item.omzet)}* | 💰 Laba: *${formatRupiah(item.profit)}*\n\n`;
+                });
+            }
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: days === 0 ? '✅ All-Time' : 'All-Time', callback_data: 'tg_topprod_all' },
+                        { text: days === 30 ? '✅ 30 Hari' : '30 Hari', callback_data: 'tg_topprod_30' },
+                        { text: days === 7 ? '✅ 7 Hari' : '7 Hari', callback_data: 'tg_topprod_7' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Laporan', callback_data: 'tg_stats' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderFailedProductsMenu = (days = 0) => {
+            const data = analytics.getFailedProducts(10, days);
+            let text = `⚠️ *LAPORAN ANALISA PRODUK GAGAL*\n`;
+            text += `Periode: *${data.periodLabel}* | Total Gagal: *${data.totalFailedTrx} trx*\n\n`;
+
+            if (data.ranking.length === 0) {
+                text += `_🎉 Tidak ada transaksi gagal tercatat dalam periode ini._\n`;
+            } else {
+                text += `_Daftar produk dengan frekuensi kegagalan tertinggi (evaluasi Digiflazz):_\n\n`;
+                data.ranking.forEach((item, i) => {
+                    text += `${i + 1}. ❌ *${safeTg(item.name)}*\n`;
+                    text += `   • Total Gagal : *${item.failCount} kali*\n`;
+                    text += `   • Alasan      : _${safeTg(item.topReasons)}_\n\n`;
+                });
+            }
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: days === 0 ? '✅ All-Time' : 'All-Time', callback_data: 'tg_failprod_all' },
+                        { text: days === 30 ? '✅ 30 Hari' : '30 Hari', callback_data: 'tg_failprod_30' },
+                        { text: days === 7 ? '✅ 7 Hari' : '7 Hari', callback_data: 'tg_failprod_7' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Laporan', callback_data: 'tg_stats' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderTopMembersTrxMenu = (days = 0) => {
+            const data = analytics.getTopMembers(10, days);
+            let text = `👥 *PERINGKAT MEMBER TRANSAKSI TERBANYAK*\n`;
+            text += `Periode: *${data.periodLabel}* | Pembeli Aktif: *${data.totalActiveBuyers} orang*\n\n`;
+
+            if (data.ranking.length === 0) {
+                text += `_Belum ada member bertransaksi sukses pada periode ini._\n`;
+            } else {
+                data.ranking.forEach((m, i) => {
+                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                    const dispP = formatDisplayPhone(m.phone);
+                    const nameStr = m.name ? ` (${safeTg(m.name)})` : '';
+                    text += `${medal} \`${dispP}\`${nameStr}\n`;
+                    text += `   ➥ Frekuensi : *${m.trxCount} transaksi*\n`;
+                    text += `   ➥ Belanja   : *${formatRupiah(m.totalBelanja)}* | 💰 Profit Toko: *${formatRupiah(m.totalProfit)}*\n\n`;
+                });
+            }
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: days === 0 ? '✅ All-Time' : 'All-Time', callback_data: 'tg_topmem_all' },
+                        { text: days === 30 ? '✅ 30 Hari' : '30 Hari', callback_data: 'tg_topmem_30' },
+                        { text: days === 7 ? '✅ 7 Hari' : '7 Hari', callback_data: 'tg_topmem_7' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Laporan', callback_data: 'tg_stats' }
                     ]
                 ]
             };
@@ -2806,34 +3024,92 @@ try {
 
             if (action === 'tg_stats') {
                 global.botTg.answerCallbackQuery(query.id);
-                const orders = db.orders || [];
-                const successOrders = orders.filter(o => o.status === 'success');
-                const failedOrders = orders.filter(o => o.status === 'failed' || o.status === 'cancelled');
-                const totalOmzet = successOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
-                
-                const startOfDay = new Date();
-                startOfDay.setHours(0, 0, 0, 0);
-                const todayOrders = successOrders.filter(o => (o.timestamp || o.doneAt || 0) >= startOfDay.getTime());
-                const todayOmzet = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+                return updateOrSend(chatId, messageId, renderStatsOverview());
+            }
 
-                let text = `📈 *STATISTIK PENJUALAN & OMZET*\n\n`;
-                text += `📅 *Hari Ini:*\n`;
-                text += `• Transaksi Berhasil: *${todayOrders.length} trx*\n`;
-                text += `• Omzet Hari Ini: *${formatRupiah(todayOmzet)}*\n\n`;
-                text += `🏆 *Keseluruhan (All Time):*\n`;
-                text += `• Total Sukses: *${successOrders.length} trx*\n`;
-                text += `• Total Gagal/Refund: *${failedOrders.length} trx*\n`;
-                text += `• Total Omzet: *${formatRupiah(totalOmzet)}*\n`;
-                text += `• Total Member: *${Object.keys(db.users || {}).length} pengguna*`;
+            if (action === 'tg_stats_datepicker') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderDatePickerMenu());
+            }
 
-                return updateOrSend(chatId, messageId, {
-                    text,
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
-                        ]
+            if (action === 'tg_stats_date_today') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderDateDetail('today'));
+            }
+
+            if (action === 'tg_stats_date_yesterday') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderDateDetail('kemarin'));
+            }
+
+            if (action === 'tg_stats_date_2days') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderDateDetail('2hari'));
+            }
+
+            if (action === 'tg_input_stats_date') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'input_stats_date', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🔍 *CEK LABA BERSIH TANGGAL TERTENTU*\n\n` +
+                    `Silakan balas pesan ini dengan tanggal yang ingin diperiksa:\n\n` +
+                    `• Format: \`DD-MM-YYYY\` (contoh: \`19-09-2026\`)\n` +
+                    `• Atau: \`YYYY-MM-DD\` (contoh: \`2026-09-19\`)\n` +
+                    `• Kata kunci cepat: \`kemarin\` atau \`today\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '❌ Batal', callback_data: 'tg_stats' }]
+                            ]
+                        }
                     }
-                });
+                );
+            }
+
+            if (action === 'tg_stats_topproduk' || action === 'tg_topprod_all') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTopProductsMenu(0));
+            }
+
+            if (action === 'tg_topprod_30') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTopProductsMenu(30));
+            }
+
+            if (action === 'tg_topprod_7') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTopProductsMenu(7));
+            }
+
+            if (action === 'tg_stats_produkgagal' || action === 'tg_failprod_all') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderFailedProductsMenu(0));
+            }
+
+            if (action === 'tg_failprod_30') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderFailedProductsMenu(30));
+            }
+
+            if (action === 'tg_failprod_7') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderFailedProductsMenu(7));
+            }
+
+            if (action === 'tg_stats_topmember' || action === 'tg_topmem_all') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTopMembersTrxMenu(0));
+            }
+
+            if (action === 'tg_topmem_30') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTopMembersTrxMenu(30));
+            }
+
+            if (action === 'tg_topmem_7') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderTopMembersTrxMenu(7));
             }
 
             if (action === 'tg_lunas') {
@@ -4282,6 +4558,29 @@ try {
                     }
                 }
 
+                if (stateType === 'input_stats_date') {
+                    const dayData = analytics.getDayStats(text);
+                    if (!dayData.success) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format tanggal tidak valid!*\n\n${dayData.message}\n\n` +
+                            `• Contoh: \`19-09-2026\` atau \`2026-09-19\`\n` +
+                            `• Atau ketik: \`kemarin\``,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_stats' }]]
+                                }
+                            }
+                        );
+                    }
+                    global.tgInputState = null;
+                    const content = renderDateDetail(text);
+                    return global.botTg.sendMessage(chatId, content.text, {
+                        parse_mode: 'Markdown',
+                        reply_markup: content.reply_markup
+                    });
+                }
+
                 if (stateType === 'set_profit') {
                     const [katRaw, nomStr] = text.split(/\s+/);
                     const kat = (katRaw || '').toLowerCase();
@@ -4457,6 +4756,7 @@ setInterval(async () => {
             if (status === 'Sukses') {
                 order.status = 'success';
                 if (sn) order.sn = sn;
+                order.profit = analytics.calculateOrderProfit(order, db.ppob);
                 if (typeof db.saveOrders === 'function') db.saveOrders();
 
                 activeTransactions.delete(
