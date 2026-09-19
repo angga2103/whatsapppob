@@ -181,7 +181,9 @@ case "$1" in
 esac
 EOF
     chmod +x /usr/local/bin/bot-ppob 2>/dev/null || true
-    echo "✓ Pintasan perintah sistem 'bot-ppob' berhasil dipasang."
+    ln -sf "$PROJECT_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
+    chmod +x "$PROJECT_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
+    echo "✓ Pintasan perintah sistem 'botwa' dan 'bot-ppob' berhasil dipasang."
 fi
 
 # 6. Jalankan wizard instalasi Telegram Command Center

@@ -1255,16 +1255,45 @@ setInterval(() => {
 
 
 // ========================================
-// 🛡️ SMARTDATA TELEGRAM COMMAND CENTER (AUTO-BACKUP)
+// 🛡️ SMARTDATA TELEGRAM COMMAND CENTER (AUTO-BACKUP DINAMIS)
 // ========================================
-setInterval(() => {
-    const { exec } = require('child_process');
-    console.log('[SYSTEM] Menjalankan Auto-Backup 2 Jam ke Telegram...');
-    exec('node lib/backup/backup-telegram.js', (error, stdout, stderr) => {
-        if (error) console.log(`[BACKUP ERROR]: ${error.message}`);
-    });
-}, 2 * 60 * 60 * 1000); // Waktu Timer: 2 Jam
- // Eksekusi ketat setiap 10 detik
+let autoBackupIntervalTimer = null;
+
+function setupAutoBackupTimer() {
+    if (autoBackupIntervalTimer) {
+        clearInterval(autoBackupIntervalTimer);
+        autoBackupIntervalTimer = null;
+    }
+    const minutes = Number(db.store?.backupIntervalMinutes !== undefined ? db.store.backupIntervalMinutes : 60);
+    if (minutes <= 0) {
+        console.log('[SYSTEM] 🛑 Auto-backup ke Telegram dinonaktifkan.');
+        return;
+    }
+    const ms = minutes * 60 * 1000;
+    console.log(`[SYSTEM] 🛡️ Auto-backup ke Telegram aktif setiap ${minutes} menit.`);
+    autoBackupIntervalTimer = setInterval(() => {
+        const { exec } = require('child_process');
+        console.log(`[SYSTEM] 📦 Menjalankan Auto-Backup (${minutes}m) ke Telegram...`);
+        exec('node lib/backup/backup-telegram.js', (error, stdout, stderr) => {
+            if (error) console.log(`[BACKUP ERROR]: ${error.message}`);
+        });
+    }, ms);
+}
+
+setupAutoBackupTimer();
+
+// Otomatis pasang symlink CLI botwa jika berjalan di Linux
+if (process.platform === 'linux') {
+    try {
+        const { execSync } = require('child_process');
+        const botwaBin = path.resolve(__dirname, 'bin', 'botwa.sh');
+        if (fs.existsSync(botwaBin)) {
+            fs.chmodSync(botwaBin, '755');
+            execSync(`ln -sf "${botwaBin}" /usr/local/bin/botwa 2>/dev/null && chmod +x /usr/local/bin/botwa 2>/dev/null || true`);
+            execSync(`ln -sf "${botwaBin}" /usr/local/bin/bot-ppob 2>/dev/null && chmod +x /usr/local/bin/bot-ppob 2>/dev/null || true`);
+        }
+    } catch (_) {}
+}
 
 }
 
@@ -1655,7 +1684,7 @@ try {
                     ],
                     [
                         { text: '⚙️ Margin & Owner', callback_data: 'tg_settings_menu' },
-                        { text: '📦 Backup Data', callback_data: 'tg_backup' }
+                        { text: '📦 Auto-Backup & Restore', callback_data: 'tg_backup_menu' }
                     ],
                     [
                         { text: '🚀 Cek Pembaruan / Update Bot', callback_data: 'tg_check_update' }
@@ -1891,6 +1920,78 @@ try {
                 ]
             };
 
+            return { text, reply_markup };
+        };
+
+        const renderBackupMenu = () => {
+            const interval = Number(db.store?.backupIntervalMinutes !== undefined ? db.store.backupIntervalMinutes : 60);
+            const intervalText = interval > 0 ? `🟢 *AKTIF* (Setiap ${interval} Menit)` : `🔴 *NONAKTIF*`;
+
+            let latestBackup = 'Belum ada file backup';
+            let latestSize = '-';
+            try {
+                const zips = fs.readdirSync('.').filter(f => /^AUTO-BACKUP-[\w.-]+\.zip$/.test(f)).sort().reverse();
+                if (zips.length > 0) {
+                    latestBackup = zips[0];
+                    const stat = fs.statSync(latestBackup);
+                    latestSize = (stat.size / 1024 / 1024).toFixed(2) + ' MB';
+                }
+            } catch (_) {}
+
+            let text = `📦 *MANAJEMEN AUTO-BACKUP & RESTORE DATA*\n\n` +
+                       `• Status Auto-Backup : ${intervalText}\n` +
+                       `• Penyimpanan VPS    : ✅ *Hanya simpan 1 file terakhir* (Replace otomatis)\n` +
+                       `• File Backup VPS    : \`${latestBackup}\`\n` +
+                       `• Ukuran File Backup : *${latestSize}*\n\n` +
+                       `💡 _File backup mencakup seluruh database, konfigurasi akun, dan sesi WhatsApp lengkap untuk restore di VPS baru._\n\n` +
+                       `_Pilih aksi yang ingin Anda lakukan:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '📦 Backup Manual Sekarang', callback_data: 'tg_backup_now' }
+                    ],
+                    [
+                        { text: `⏱️ Atur Durasi (${interval > 0 ? interval + 'm' : 'Off'})`, callback_data: 'tg_backup_duration_menu' },
+                        { text: '🔄 Restore ke VPS Ini', callback_data: 'cmd_restore' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+            return { text, reply_markup };
+        };
+
+        const renderBackupDurationMenu = () => {
+            const currentInterval = Number(db.store?.backupIntervalMinutes !== undefined ? db.store.backupIntervalMinutes : 60);
+            let text = `⏱️ *PENGATURAN DURASI AUTO-BACKUP*\n\n` +
+                       `Durasi saat ini: *${currentInterval > 0 ? currentInterval + ' Menit' : 'Nonaktif'}*\n\n` +
+                       `Pilih seberapa sering sistem akan membuat file backup lengkap (.zip) dan mengirimkannya secara otomatis ke bot Telegram ini:\n\n` +
+                       `_(Di VPS, sistem selalu otomatis menghapus file lama dan hanya menyimpan 1 file backup terbaru agar hemat disk)_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: (currentInterval === 30 ? '✅ ' : '') + '⚡ 30 Menit', callback_data: 'tg_set_interval_30' },
+                        { text: (currentInterval === 60 ? '✅ ' : '') + '⏱️ 60 Menit (Default)', callback_data: 'tg_set_interval_60' }
+                    ],
+                    [
+                        { text: (currentInterval === 120 ? '✅ ' : '') + '🕒 2 Jam (120m)', callback_data: 'tg_set_interval_120' },
+                        { text: (currentInterval === 360 ? '✅ ' : '') + '🕕 6 Jam (360m)', callback_data: 'tg_set_interval_360' }
+                    ],
+                    [
+                        { text: (currentInterval === 720 ? '✅ ' : '') + '🕛 12 Jam', callback_data: 'tg_set_interval_720' },
+                        { text: (currentInterval === 1440 ? '✅ ' : '') + '📅 24 Jam (1 Hari)', callback_data: 'tg_set_interval_1440' }
+                    ],
+                    [
+                        { text: (currentInterval === 0 ? '✅ ' : '') + '🛑 Nonaktifkan Auto-Backup', callback_data: 'tg_set_interval_0' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Backup', callback_data: 'tg_backup_menu' }
+                    ]
+                ]
+            };
             return { text, reply_markup };
         };
 
@@ -2736,23 +2837,51 @@ try {
                 });
             }
 
-            if (action === 'tg_backup') {
+            if (action === 'tg_backup' || action === 'tg_backup_menu') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderBackupMenu());
+            }
+
+            if (action === 'tg_backup_duration_menu') {
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderBackupDurationMenu());
+            }
+
+            if (action.startsWith('tg_set_interval_')) {
+                const intervalMinutes = parseInt(action.replace('tg_set_interval_', ''), 10);
+                if (isNaN(intervalMinutes) || intervalMinutes < 0) {
+                    global.botTg.answerCallbackQuery(query.id, { text: '❌ Durasi tidak valid!' });
+                    return;
+                }
+                if (!db.store) db.store = {};
+                db.store.backupIntervalMinutes = intervalMinutes;
+                if (typeof db.saveStore === 'function') db.saveStore();
+
+                setupAutoBackupTimer();
+
+                const statusLabel = intervalMinutes > 0 ? `setiap ${intervalMinutes} menit` : 'dinonaktifkan';
+                global.botTg.answerCallbackQuery(query.id, { text: `✅ Auto-backup ${statusLabel}!` });
+                return updateOrSend(chatId, messageId, renderBackupDurationMenu());
+            }
+
+            if (action === 'tg_backup_now') {
                 global.botTg.answerCallbackQuery(query.id, { text: '⏳ Menjalankan backup...' });
-                await global.botTg.sendMessage(chatId, "⏳ *Membuat file backup dan mengirimkan ke chat ini...*", { parse_mode: 'Markdown' });
+                await global.botTg.sendMessage(chatId, "⏳ *Membuat file backup terbaru dan mengunggah ke Telegram...*\n_Harap tunggu sejenak, seluruh data & sesi sedang dikompresi..._", { parse_mode: 'Markdown' });
                 exec('node lib/backup/backup-telegram.js', (err) => {
                     if (err) {
-                        return global.botTg.sendMessage(chatId, `❌ Backup gagal: ${err.message}`, {
+                        return global.botTg.sendMessage(chatId, `❌ *Backup Gagal:*\n\`${err.message}\``, {
+                            parse_mode: 'Markdown',
                             reply_markup: {
-                                inline_keyboard: [[{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]]
+                                inline_keyboard: [[{ text: '⬅️ Kembali ke Menu Backup', callback_data: 'tg_backup_menu' }]]
                             }
                         });
                     }
-                    return global.botTg.sendMessage(chatId, `✅ *Backup Berhasil Dikirim!*\nFile arsip data telah terkirim ke Telegram.`, {
+                    return global.botTg.sendMessage(chatId, `✅ *Backup Berhasil Diselesaikan!*\nFile zip terbaru telah diunggah ke chat ini dan tersimpan di VPS.`, {
                         parse_mode: 'Markdown',
                         reply_markup: {
                             inline_keyboard: [
-                                [{ text: '📦 Restore Backup', callback_data: 'cmd_restore' }],
-                                [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                                [{ text: '🔄 Restore ke VPS Ini', callback_data: 'cmd_restore' }],
+                                [{ text: '⬅️ Kembali ke Menu Backup', callback_data: 'tg_backup_menu' }]
                             ]
                         }
                     });
@@ -2795,13 +2924,63 @@ try {
 
             if (action === 'cmd_restore') {
                 global.botTg.answerCallbackQuery(query.id);
-                global.botTg.sendMessage(chatId, "⏳ *Mengekstrak file backup...*\nMohon tunggu, proses penimpaan data sedang berlangsung...", {parse_mode: 'Markdown'});
+                try {
+                    const backupFiles = fs.readdirSync('.').filter(f => /^AUTO-BACKUP-[\w.-]+\.zip$/.test(f)).sort().reverse();
+                    if (backupFiles.length === 0) {
+                        return updateOrSend(chatId, messageId, {
+                            text: `❌ *FILE BACKUP TIDAK DITEMUKAN*\n\n` +
+                                  `Tidak ada file \`AUTO-BACKUP-*.zip\` yang tersedia di direktori VPS ini.\n\n` +
+                                  `_Silakan klik tombol di bawah untuk membuat file backup terlebih dahulu:_`,
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '📦 Backup Manual Sekarang', callback_data: 'tg_backup_now' }],
+                                    [{ text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }]
+                                ]
+                            }
+                        });
+                    }
+                    const targetZip = backupFiles[0];
+                    const stat = fs.statSync(targetZip);
+                    const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
+
+                    const confirmText = `⚠️ *KONFIRMASI RESTORE DATA DI VPS INI*\n\n` +
+                        `Apakah Anda yakin ingin memulihkan seluruh data bot dari file backup terakhir?\n\n` +
+                        `• *File Backup :* \`${targetZip}\`\n` +
+                        `• *Ukuran File  :* *${sizeMB} MB*\n` +
+                        `• *Tindakan     :* Database, konfigurasi toko, dan sesi WhatsApp aktif akan diekstrak dan ditimpa dari file backup ini.\n` +
+                        `• *Restart      :* Bot akan me-restart otomatis via PM2 sesaat setelah file diekstrak.\n\n` +
+                        `_PERINGATAN: Perubahan yang belum ter-backup akan ditimpa dengan data dari file backup ini._`;
+
+                    return updateOrSend(chatId, messageId, {
+                        text: confirmText,
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '✅ Ya, Pulihkan Data Sekarang', callback_data: 'cmd_restore_confirm' }],
+                                [{ text: '❌ Batalkan', callback_data: 'tg_backup_menu' }]
+                            ]
+                        }
+                    });
+                } catch (err) {
+                    return global.botTg.sendMessage(chatId, `❌ *Gagal memeriksa file backup:* ${err.message}`);
+                }
+            }
+
+            if (action === 'cmd_restore_confirm') {
+                global.botTg.answerCallbackQuery(query.id, { text: '⏳ Memulihkan data...' });
+                await global.botTg.sendMessage(chatId, 
+                    `⏳ *SEDANG MEMULIHKAN DATA DARI BACKUP...*\n\n` +
+                    `1. Mengekstrak file backup (\`unzip -o\`)\n` +
+                    `2. Menimpa database & sesi aktif\n` +
+                    `3. Mempersiapkan restart sistem via PM2\n\n` +
+                    `_Mohon tunggu sejenak..._`,
+                    { parse_mode: 'Markdown' }
+                );
                 try {
                     const { spawnSync } = require('child_process');
                     const path = require('path');
                     const backupFiles = fs.readdirSync('.').filter(f => /^AUTO-BACKUP-[\w.-]+\.zip$/.test(f)).sort().reverse();
                     if (backupFiles.length === 0) {
-                        return global.botTg.sendMessage(chatId, "❌ *Tidak ada file backup AUTO-BACKUP-*.zip yang valid ditemukan.*", {parse_mode: 'Markdown'});
+                        return global.botTg.sendMessage(chatId, "❌ *Tidak ada file backup AUTO-BACKUP-*.zip yang valid ditemukan.*", { parse_mode: 'Markdown' });
                     }
                     const targetZip = backupFiles[0];
                     const safeZipPath = path.resolve('.', targetZip);
@@ -2812,11 +2991,12 @@ try {
                         spawnSync('unzip', ['-o', safeZipPath, '-d', '.'], { stdio: 'ignore' });
                     }
                     fs.writeFileSync('RESTORE_SUCCESS.txt', 'true');
-                    global.botTg.sendMessage(chatId, `✅ *Restore Berhasil (${targetZip})!*\nSistem melakukan restart untuk menerapkan data baru...`, {parse_mode: 'Markdown'});
+                    await global.botTg.sendMessage(chatId, `✅ *Restore Berhasil (${targetZip})!*\nSeluruh data dan konfigurasi telah dipulihkan.\nSistem sedang melakukan restart via PM2...`, { parse_mode: 'Markdown' });
                     setTimeout(() => { process.exit(0); }, 2000);
                 } catch (err) {
                     global.botTg.sendMessage(chatId, "❌ *Gagal Restore:* " + err.message);
                 }
+                return;
             }
 
             if (action === 'tg_check_update') {
@@ -3920,7 +4100,17 @@ try {
                 }
             }
 
-            // 6. Default: Render Dashboard Interaktif Inline Keyboard
+            // 6. Perintah /backup atau backup langsung
+            if (/^\/?backup(@\w+)?$/i.test(text)) {
+                return updateOrSend(chatId, null, renderBackupMenu());
+            }
+
+            // 7. Perintah /restore atau restore langsung
+            if (/^\/?restore(@\w+)?$/i.test(text)) {
+                return updateOrSend(chatId, null, renderBackupMenu());
+            }
+
+            // 8. Default: Render Dashboard Interaktif Inline Keyboard
             return updateOrSend(chatId, null, renderTelegramDashboard());
         });
         
