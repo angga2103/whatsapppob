@@ -1177,20 +1177,199 @@ try {
         const normalizePhone = (raw) => {
             let p = String(raw || '').replace(/[^0-9]/g, '');
             if (p.startsWith('0')) p = '62' + p.slice(1);
+            else if (p.startsWith('8')) p = '62' + p;
             return p;
         };
 
         const findMember = (rawPhone) => {
             const clean = normalizePhone(rawPhone);
             if (!clean || clean.length < 9) return null;
+            if (db.users && db.users[clean]) return { jid: clean, user: db.users[clean], phone: clean };
             const directJid = `${clean}@s.whatsapp.net`;
             if (db.users && db.users[directJid]) return { jid: directJid, user: db.users[directJid], phone: clean };
             for (const [j, u] of Object.entries(db.users || {})) {
-                if (u && (u.phone === clean || j.startsWith(clean))) {
-                    return { jid: j, user: u, phone: clean };
+                if (u) {
+                    const uPhone = normalizePhone(u.phone || j);
+                    if (uPhone === clean || j.startsWith(clean)) {
+                        return { jid: j, user: u, phone: uPhone || clean };
+                    }
                 }
             }
             return null;
+        };
+
+        const getMemberList = () => {
+            const memberMap = new Map();
+            for (const [jid, u] of Object.entries(db.users || {})) {
+                if (!u || typeof u !== 'object') continue;
+                if (u.canonical) continue;
+
+                let rawPhone = u.phone;
+                if (!rawPhone) {
+                    if (jid.includes('@')) {
+                        rawPhone = jid.split('@')[0].split(':')[0];
+                    } else {
+                        rawPhone = jid;
+                    }
+                }
+                const phone = normalizePhone(rawPhone);
+                if (!phone || phone.length < 9) continue;
+
+                if (memberMap.has(phone)) {
+                    const existing = memberMap.get(phone);
+                    const preferCurrent = (Number(u.saldo) || 0) > (Number(existing.saldo) || 0) || (!existing.name && u.name);
+                    if (preferCurrent) {
+                        memberMap.set(phone, {
+                            jid,
+                            phone,
+                            name: u.name || existing.name || '',
+                            saldo: Number(u.saldo) || 0,
+                            date: u.date || existing.date || 0,
+                            user: u
+                        });
+                    }
+                } else {
+                    memberMap.set(phone, {
+                        jid,
+                        phone,
+                        name: u.name || '',
+                        saldo: Number(u.saldo) || 0,
+                        date: u.date || 0,
+                        user: u
+                    });
+                }
+            }
+            const list = Array.from(memberMap.values());
+            list.sort((a, b) => (b.date || 0) - (a.date || 0));
+            return list;
+        };
+
+        const renderMemberProfile = (rawPhone) => {
+            const found = findMember(rawPhone);
+            if (!found) {
+                return {
+                    text: `❌ *Member Tidak Ditemukan!*\n\nNomor \`${rawPhone}\` tidak terdaftar di database.`,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '➕ Tambah Member Manual', callback_data: 'tg_input_addmember' }],
+                            [{ text: '👥 Pilih Dari Daftar', callback_data: 'tg_input_cekuser' }],
+                            [{ text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }]
+                        ]
+                    }
+                };
+            }
+
+            const orders = (db.orders || []).filter(o => 
+                o.buyer === found.jid || o.sender === found.jid || (found.phone && o.buyer && o.buyer.includes(found.phone))
+            );
+            const successCount = orders.filter(o => o.status === 'success').length;
+            const failedCount = orders.filter(o => o.status === 'failed' || o.status === 'cancelled').length;
+            const totalBelanja = orders.filter(o => o.status === 'success').reduce((acc, o) => acc + Number(o.baseAmount || o.total || 0), 0);
+            const lastOrder = orders[orders.length - 1];
+            const lastDate = lastOrder ? new Date(lastOrder.timestamp || lastOrder.doneAt || 0).toLocaleString('id-ID') : '-';
+            const dateJoin = found.user.date ? new Date(found.user.date).toLocaleDateString('id-ID') : '-';
+            let histStr = '';
+            if (Array.isArray(found.user.history) && found.user.history.length > 0) {
+                histStr = '\n\n📜 *3 Riwayat Terakhir:*\n' + found.user.history.slice(-3).map(h => `• ${cleanMd(h)}`).join('\n');
+            }
+
+            const safeName = found.user.name ? cleanMd(found.user.name) : '-';
+
+            let report = `👤 *PROFIL LENGKAP MEMBER*\n\n` +
+                `📱 *Nomor:* \`+${found.phone}\`\n` +
+                `👤 *Nama:* *${safeName}*\n` +
+                `💰 *Saldo:* *${formatRupiah(found.user.saldo || 0)}*\n` +
+                `📅 *Terdaftar Sejak:* ${dateJoin}\n` +
+                `📦 *Total Transaksi:* ${orders.length} order (${successCount} sukses, ${failedCount} gagal)\n` +
+                `💵 *Total Belanja Sukses:* ${formatRupiah(totalBelanja)}\n` +
+                `🕒 *Trx Terakhir:* ${lastDate}${histStr}`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '➕ Tambah Saldo', callback_data: `tg_salplus_${found.phone}` },
+                        { text: '➖ Tarik Saldo', callback_data: `tg_salmin_${found.phone}` }
+                    ],
+                    [
+                        { text: '🔄 Refresh Profil', callback_data: `tg_viewuser_${found.phone}` },
+                        { text: '👥 Pilih Member Lain', callback_data: 'tg_input_cekuser' }
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }
+                    ]
+                ]
+            };
+
+            return { text: report, reply_markup };
+        };
+
+        const renderMemberPicker = (page = 0) => {
+            const members = getMemberList();
+            const totalUsers = members.length;
+
+            if (totalUsers === 0) {
+                return {
+                    text: `👥 *DAFTAR MEMBER TERDAFTAR*\n\n` +
+                          `_Belum ada member yang terdaftar di database._\n\n` +
+                          `Anda dapat mendaftarkan member baru secara manual atau menunggu pengguna berinteraksi di WhatsApp.`,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '➕ Tambah Member Manual', callback_data: 'tg_input_addmember' }],
+                            [{ text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }]
+                        ]
+                    }
+                };
+            }
+
+            const pageSize = 6;
+            const totalPages = Math.ceil(totalUsers / pageSize) || 1;
+            const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+            const startIdx = currentPage * pageSize;
+            const currentMembers = members.slice(startIdx, startIdx + pageSize);
+
+            let text = `🔍 *PILIH MEMBER UNTUK CEK PROFIL*\n\n`;
+            text += `_Klik tombol member di bawah untuk melihat detail profil & kelola saldo:_\n\n`;
+            text += `📊 *Total Member:* ${totalUsers} pengguna\n`;
+            text += `📄 *Halaman:* ${currentPage + 1} dari ${totalPages}\n\n`;
+            text += `_Daftar Member Halaman Ini:_\n`;
+
+            const inline_keyboard = [];
+
+            currentMembers.forEach((m, idx) => {
+                const num = startIdx + idx + 1;
+                const safeName = m.name ? cleanMd(m.name) : '';
+                const nameStr = safeName ? ` (${safeName})` : '';
+                text += `${num}. \`+${m.phone}\`${nameStr} — *${formatRupiah(m.saldo)}*\n`;
+
+                const btnText = m.name 
+                    ? `👤 ${m.name.slice(0, 15)} (+${m.phone.slice(-4)}) • ${formatRupiah(m.saldo)}`
+                    : `📱 +${m.phone} • ${formatRupiah(m.saldo)}`;
+
+                inline_keyboard.push([
+                    { text: btnText, callback_data: `tg_viewuser_${m.phone}` }
+                ]);
+            });
+
+            if (totalPages > 1) {
+                const navRow = [];
+                if (currentPage > 0) {
+                    navRow.push({ text: '◀️ Prev', callback_data: `tg_pick_member_${currentPage - 1}` });
+                }
+                navRow.push({ text: `📍 ${currentPage + 1}/${totalPages}`, callback_data: `tg_pick_member_${currentPage}` });
+                if (currentPage < totalPages - 1) {
+                    navRow.push({ text: 'Next ▶️', callback_data: `tg_pick_member_${currentPage + 1}` });
+                }
+                inline_keyboard.push(navRow);
+            }
+
+            inline_keyboard.push([
+                { text: '⌨️ Cari / Ketik Nomor Manual', callback_data: 'tg_input_cekuser_manual' }
+            ]);
+            inline_keyboard.push([
+                { text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }
+            ]);
+
+            return { text, reply_markup: { inline_keyboard } };
         };
 
         const getUniqueUserPhones = () => {
@@ -1679,36 +1858,41 @@ try {
 
             if (action === 'tg_listmember') {
                 global.botTg.answerCallbackQuery(query.id);
-                const users = Object.entries(db.users || {})
-                    .map(([jid, u]) => ({ jid, ...u }))
-                    .sort((a, b) => (b.date || 0) - (a.date || 0))
-                    .slice(0, 10);
+                const members = getMemberList().slice(0, 10);
 
                 let text = `👥 *10 MEMBER TERBARU*\n\n`;
-                if (users.length === 0) {
+                if (members.length === 0) {
                     text += `_Belum ada member terdaftar di database._`;
                 } else {
-                    users.forEach((u, i) => {
-                        const p = u.phone || (u.jid ? u.jid.split('@')[0] : '-');
-                        const nameStr = u.name ? ` (${u.name})` : '';
-                        const dateStr = u.date ? new Date(u.date).toLocaleDateString('id-ID') : '-';
-                        text += `${i + 1}. \`+${p}\`${nameStr}\n   💰 ${formatRupiah(u.saldo || 0)} | 📅 ${dateStr}\n\n`;
+                    members.forEach((m, i) => {
+                        const nameStr = m.name ? ` (${cleanMd(m.name)})` : '';
+                        const dateStr = m.date ? new Date(m.date).toLocaleDateString('id-ID') : '-';
+                        text += `${i + 1}. \`+${m.phone}\`${nameStr}\n   💰 ${formatRupiah(m.saldo || 0)} | 📅 ${dateStr}\n\n`;
                     });
                 }
 
+                const inline_keyboard = [];
+                // Tombol cepat langsung ke profil masing-masing member terbaru
+                members.slice(0, 5).forEach(m => {
+                    const label = m.name 
+                        ? `👤 ${m.name.slice(0, 14)} (+${m.phone.slice(-4)})` 
+                        : `📱 +${m.phone}`;
+                    inline_keyboard.push([
+                        { text: `${label} • ${formatRupiah(m.saldo)}`, callback_data: `tg_viewuser_${m.phone}` }
+                    ]);
+                });
+
+                inline_keyboard.push([
+                    { text: '🔍 Lihat Semua Member (Tombol)', callback_data: 'tg_input_cekuser' }
+                ]);
+                inline_keyboard.push([
+                    { text: '➕ Tambah Member', callback_data: 'tg_input_addmember' },
+                    { text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }
+                ]);
+
                 return updateOrSend(chatId, messageId, {
                     text,
-                    reply_markup: {
-                        inline_keyboard: [
-                            [
-                                { text: '➕ Tambah Member', callback_data: 'tg_input_addmember' },
-                                { text: '🔍 Cek Member', callback_data: 'tg_input_cekuser' }
-                            ],
-                            [
-                                { text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }
-                            ]
-                        ]
-                    }
+                    reply_markup: { inline_keyboard }
                 });
             }
 
@@ -1763,18 +1947,39 @@ try {
                 });
             }
 
-            if (action === 'tg_input_cekuser') {
+            if (action === 'tg_input_cekuser' || action.startsWith('tg_pick_member_')) {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                const page = action.startsWith('tg_pick_member_')
+                    ? parseInt(action.replace('tg_pick_member_', ''), 10) || 0
+                    : 0;
+                return updateOrSend(chatId, messageId, renderMemberPicker(page));
+            }
+
+            if (action === 'tg_input_cekuser_manual') {
                 global.botTg.answerCallbackQuery(query.id);
                 global.tgInputState = { type: 'awaiting_cekuser', chatId };
                 return global.botTg.sendMessage(chatId,
-                    `🔍 *CEK PROFIL MEMBER*\n\n` +
+                    `🔍 *CEK PROFIL MEMBER (KETIK MANUAL)*\n\n` +
                     `Silakan balas pesan ini dengan nomor WhatsApp member yang ingin dicek:\n` +
                     `Contoh: \`6281234567890\` atau \`081234567890\``,
                     {
                         parse_mode: 'Markdown',
-                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '👥 Pilih Dari Tombol Member', callback_data: 'tg_input_cekuser' }],
+                                [{ text: '❌ Batal', callback_data: 'tg_member_menu' }]
+                            ]
+                        }
                     }
                 );
+            }
+
+            if (action.startsWith('tg_viewuser_')) {
+                const phone = action.replace('tg_viewuser_', '');
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderMemberProfile(phone));
             }
 
             if (action === 'tg_input_editsaldo') {
@@ -1786,10 +1991,15 @@ try {
                     `Format: \`<NOMOR> <+ / -><NOMINAL>\`\n\n` +
                     `• Tambah Saldo: \`6281234567890 +50000\`\n` +
                     `• Tarik Saldo: \`6281234567890 -25000\`\n\n` +
-                    `_Sistem akan otomatis mengirimkan notifikasi WA ke member bersangkutan._`,
+                    `_Tips: Anda juga dapat memilih langsung dari tombol member di bawah:_`,
                     {
                         parse_mode: 'Markdown',
-                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '👥 Pilih Member Dari Tombol', callback_data: 'tg_input_cekuser' }],
+                                [{ text: '❌ Batal', callback_data: 'tg_member_menu' }]
+                            ]
+                        }
                     }
                 );
             }
@@ -2543,6 +2753,7 @@ try {
                                 reply_markup: {
                                     inline_keyboard: [
                                         [{ text: '➕ Daftarkan Member Ini', callback_data: 'tg_input_addmember' }],
+                                        [{ text: '👥 Pilih Dari Daftar', callback_data: 'tg_input_cekuser' }],
                                         [{ text: '⬅️ Kembali ke Menu Member', callback_data: 'tg_member_menu' }]
                                     ]
                                 }
@@ -2550,42 +2761,10 @@ try {
                         );
                     }
 
-                    const orders = (db.orders || []).filter(o => 
-                        o.buyer === found.jid || o.sender === found.jid || (found.phone && o.buyer && o.buyer.includes(found.phone))
-                    );
-                    const successCount = orders.filter(o => o.status === 'success').length;
-                    const failedCount = orders.filter(o => o.status === 'failed' || o.status === 'cancelled').length;
-                    const totalBelanja = orders.filter(o => o.status === 'success').reduce((acc, o) => acc + Number(o.baseAmount || o.total || 0), 0);
-                    const lastOrder = orders[orders.length - 1];
-                    const lastDate = lastOrder ? new Date(lastOrder.timestamp || lastOrder.doneAt || 0).toLocaleString('id-ID') : '-';
-                    const dateJoin = found.user.date ? new Date(found.user.date).toLocaleDateString('id-ID') : '-';
-                    let histStr = '';
-                    if (Array.isArray(found.user.history) && found.user.history.length > 0) {
-                        histStr = '\n\n📜 *3 Riwayat Terakhir:*\n' + found.user.history.slice(-3).map(h => `• ${cleanMd(h)}`).join('\n');
-                    }
-
-                    let report = `👤 *PROFIL LENGKAP MEMBER*\n\n` +
-                        `📱 *Nomor:* \`+${found.phone}\`\n` +
-                        `👤 *Nama:* *${found.user.name || '-'}*\n` +
-                        `💰 *Saldo:* *${formatRupiah(found.user.saldo || 0)}*\n` +
-                        `📅 *Terdaftar Sejak:* ${dateJoin}\n` +
-                        `📦 *Total Transaksi:* ${orders.length} order (${successCount} sukses, ${failedCount} gagal)\n` +
-                        `💵 *Total Belanja Sukses:* ${formatRupiah(totalBelanja)}\n` +
-                        `🕒 *Trx Terakhir:* ${lastDate}${histStr}`;
-
-                    return global.botTg.sendMessage(chatId, report, {
+                    const profile = renderMemberProfile(found.phone);
+                    return global.botTg.sendMessage(chatId, profile.text, {
                         parse_mode: 'Markdown',
-                        reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    { text: '➕ Tambah Saldo', callback_data: `tg_salplus_${found.phone}` },
-                                    { text: '➖ Tarik Saldo', callback_data: `tg_salmin_${found.phone}` }
-                                ],
-                                [
-                                    { text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }
-                                ]
-                            ]
-                        }
+                        reply_markup: profile.reply_markup
                     });
                 }
 
@@ -2635,7 +2814,8 @@ try {
                                 parse_mode: 'Markdown',
                                 reply_markup: {
                                     inline_keyboard: [
-                                        [{ text: '🔍 Cek Profil Member', callback_data: 'tg_input_cekuser' }],
+                                        [{ text: '👤 Lihat Profil Member Ini', callback_data: `tg_viewuser_${phone}` }],
+                                        [{ text: '👥 Daftar Semua Member', callback_data: 'tg_input_cekuser' }],
                                         [{ text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }]
                                     ]
                                 }
@@ -2675,7 +2855,8 @@ try {
                                 parse_mode: 'Markdown',
                                 reply_markup: {
                                     inline_keyboard: [
-                                        [{ text: '🔍 Cek Profil Member', callback_data: 'tg_input_cekuser' }],
+                                        [{ text: '👤 Lihat Profil Member Ini', callback_data: `tg_viewuser_${phone}` }],
+                                        [{ text: '👥 Daftar Semua Member', callback_data: 'tg_input_cekuser' }],
                                         [{ text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }]
                                     ]
                                 }
@@ -2836,8 +3017,9 @@ try {
                             parse_mode: 'Markdown',
                             reply_markup: {
                                 inline_keyboard: [
-                                    [{ text: '🔍 Cek Profil Member', callback_data: 'tg_input_cekuser' }],
-                                    [{ text: '👥 Menu Member', callback_data: 'tg_member_menu' }]
+                                    [{ text: '👤 Lihat Profil Member Ini', callback_data: `tg_viewuser_${cleanPhone}` }],
+                                    [{ text: '👥 Daftar Semua Member', callback_data: 'tg_input_cekuser' }],
+                                    [{ text: '⬅️ Menu Member', callback_data: 'tg_member_menu' }]
                                 ]
                             }
                         }

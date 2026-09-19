@@ -28,7 +28,7 @@ Seluruh konfigurasi, margin profit, API key, multi-owner, dan manajemen produk b
 Selain melalui chat WhatsApp, **seluruh pengaturan toko, member, produk, transaksi, dan operasional bot dapat dikendalikan 100% langsung lewat Telegram** menggunakan **Model Tombol Inline (Inline Keyboard)** interaktif:
 
 ### 1. 👥 Manajemen Member & Pengguna
-- **[🔍 Cek Profil Member]**: Masukkan nomor HP (contoh: `6281234567890`). Bot menampilkan info saldo, status pendaftaran, statistik total belanja, transaksi sukses/gagal, dan riwayat mutasi terakhir.
+- **[🔍 Cek Profil Member]**: Menampilkan daftar tombol seluruh member terdaftar secara interaktif (dilengkapi pagination & saldo). Admin cukup mengklik tombol nama/nomor member untuk langsung membuka profil lengkap tanpa perlu mengetik manual (tetap tersedia opsi ketik manual jika diinginkan).
 - **[➕ Tambah / ➖ Tarik Saldo Cepat]**: Tombol cepat di profil member atau format input `[Nomor] [+ / -][Nominal]` (contoh: `62812xxx +50000` atau `62812xxx -25000`). Sistem otomatis memperbarui saldo, mencatat riwayat audit, dan mengirim pesan konfirmasi ke WhatsApp member!
 - **[🏆 Top Member]**: Menampilkan Top 5 Member dengan saldo tertinggi serta Top 5 Member dengan total transaksi belanja sukses terbanyak.
 - **[➕ Tambah Member Manual]**: Daftarkan member baru langsung dari Telegram dengan format `[Nomor] [Nama] [SaldoAwal]`. Jika diberikan saldo awal, member akan otomatis menerima notifikasi penyambutan di WhatsApp.
