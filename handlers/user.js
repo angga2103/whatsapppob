@@ -954,9 +954,24 @@ if (txt === 'PROFIL') {
                 });
             }
 
+            const desc = data.desc || {};
+            const tarif = desc.tarif || '';
+            const daya = desc.daya ? `${desc.daya} VA` : '';
+            const lembar = Number(desc.lembar_tagihan) || (Array.isArray(desc.detail) ? desc.detail.length : 1);
+            
+            let totalPokok = 0;
+            let totalDenda = 0;
+            if (Array.isArray(desc.detail) && desc.detail.length > 0) {
+                desc.detail.forEach(d => {
+                    totalPokok += (Number(d.nilai_tagihan) || 0);
+                    totalDenda += (Number(d.denda) || 0);
+                });
+            }
+            const pokokDisplay = totalPokok > 0 ? totalPokok : Math.max(0, billAmount - adminFee);
+
             const pascaProfit = (config.profit && typeof config.profit.pasca === 'number') ? config.profit.pasca : 1500;
             const totalAmount = billAmount + pascaProfit;
-            const period = data.period || '-';
+            const period = data.periode || data.period || '-';
 
             session.tempInquiryRef = refId;
             session.tempItem = {
@@ -969,7 +984,11 @@ if (txt === 'PROFIL') {
                 customerName: customerName,
                 billAmount: billAmount,
                 adminFee: adminFee,
-                period: period
+                pascaProfit: pascaProfit,
+                period: period,
+                tarif: tarif,
+                daya: daya,
+                lembar: lembar
             };
             session.tempQty = 1;
             session.step = S.CONFIRM;
@@ -979,11 +998,19 @@ if (txt === 'PROFIL') {
 
             let invoiceText = `🧾 *RINCIAN TAGIHAN PASCABAYAR*\n\n`;
             invoiceText += `📦 Layanan: *${product.name}*\n`;
-            invoiceText += `👤 Nama Pelanggan: *${customerName}*\n`;
             invoiceText += `🎯 ID Pelanggan: *${target}*\n`;
-            invoiceText += `📅 Periode: *${period}*\n`;
-            invoiceText += `💵 Tagihan: *${formatRupiah(billAmount - adminFee)}*\n`;
-            invoiceText += `📑 Biaya Admin & Layanan: *${formatRupiah(adminFee + pascaProfit)}*\n`;
+            invoiceText += `👤 Nama Pelanggan: *${customerName}*\n`;
+            if (tarif || daya) {
+                invoiceText += `⚡ Tarif / Daya: *${[tarif, daya].filter(Boolean).join(' / ')}*\n`;
+            }
+            invoiceText += `📅 Periode: *${period}*${lembar > 1 ? ` (${lembar} Bulan)` : ''}\n`;
+            invoiceText += `────────────────────────\n`;
+            invoiceText += `💵 Tagihan Pokok: *${formatRupiah(pokokDisplay)}*\n`;
+            if (totalDenda > 0) {
+                invoiceText += `⚠️ Denda: *${formatRupiah(totalDenda)}*\n`;
+            }
+            invoiceText += `🏦 Admin Biller / Bank: *${formatRupiah(adminFee)}*\n`;
+            invoiceText += `🏪 Biaya Layanan Loket: *${formatRupiah(pascaProfit)}*\n`;
             invoiceText += `────────────────────────\n`;
             invoiceText += `💰 *TOTAL BAYAR: ${formatRupiah(totalAmount)}*\n\n`;
             invoiceText += `💵 Saldo Dompet Anda: ${formatRupiah(userSaldo)}\n`;

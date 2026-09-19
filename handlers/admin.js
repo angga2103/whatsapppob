@@ -19,8 +19,9 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.setpakasir* Project Key (Update Pakasir)\n`;
         t += `• *.setdigi* User Key (Update API Digiflazz)\n`;
         t += `• *.settg* Token ChatID (Update Telegram Alert)\n`;
-        t += `• *.settier* [kecil/sedang/besar/premium] Nominal\n`;
+        t += `• *.settier* [kecil/sedang/besar/premium] Nominal (Margin Prabayar)\n`;
         t += `• *.settier* range BatasKecil BatasSedang BatasBesar\n`;
+        t += `• *.setpasca* [nominal] (Biaya Admin Loket Pascabayar)\n`;
         t += `• *.margin* / *.tier* (Ringkasan Skema Margin Auto-Tier)\n`;
         t += `• *.addowner* NoHP | *.delowner* NoHP\n`;
         t += `• *.toko* [on/off] | *.namatoko* Nama Baru\n`;
@@ -850,9 +851,38 @@ ${rate}%`
         return sock.sendMessage(sender, { text: `✅ Keuntungan kategori *${kat.toUpperCase()}* disetel menjadi *${formatRupiah(nom)}*.` });
     }
 
+    if (cmd === 'setpasca' || cmd === 'setadminpasca') {
+        const nom = parseInt(args.trim().replace(/[^0-9]/g, ''), 10);
+        if (isNaN(nom) || nom < 0 || nom > 100000) {
+            return sock.sendMessage(sender, {
+                text: `❌ Format salah. Biaya admin loket pascabayar harus antara Rp0 - Rp100.000.\nContoh: *.setpasca 2000*`
+            });
+        }
+        if (!db.settings) db.settings = {};
+        const configData = require('../config');
+        if (!db.settings.profit) db.settings.profit = { ...configData.profit };
+        db.settings.profit.pasca = nom;
+        if (db.saveSettings) db.saveSettings();
+        return sock.sendMessage(sender, {
+            text: `✅ *BIAYA ADMIN LOKET PASCABAYAR DIPERBARUI!*\n\n` +
+                  `• Fee Admin Loket : *${formatRupiah(nom)}* per transaksi\n` +
+                  `• Layanan         : PLN Pasca, PDAM, BPJS, Telkom, dll.\n\n` +
+                  `_💡 Catatan: Skema margin pascabayar murni berasal dari Fee Admin Loket Toko + Komisi Biller, terpisah dari skema autotier prabayar._`
+        });
+    }
+
     if (cmd === 'settier') {
         const parts = args.trim().split(/\s+/);
         const sub = (parts[0] || '').toLowerCase();
+
+        if (sub === 'pasca') {
+            return sock.sendMessage(sender, {
+                text: `ℹ️ *PASCABAYAR MENGGUNAKAN FEE ADMIN LOKET*\n\n` +
+                      `Pascabayar tidak menggunakan rumus autotier berjenjang karena tagihan nominalnya dinamis.\n\n` +
+                      `Gunakan perintah: *.setpasca [nominal]*\n` +
+                      `Contoh: *.setpasca 2000*`
+            });
+        }
 
         if (sub === 'range' || sub === 'batas') {
             const k = parseInt(parts[1], 10);

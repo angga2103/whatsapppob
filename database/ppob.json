@@ -336,7 +336,7 @@
     "sku": "x100",
     "nama": "Xl 100.000",
     "hargaModal": 100025,
-    "hargaJual": 100775,
+    "hargaJual": 101025,
     "brand": "XL",
     "kategori": "Pulsa",
     "tipe": "Umum"
@@ -453,7 +453,7 @@
     "sku": "go100",
     "nama": "Go Pay 100.000",
     "hargaModal": 101000,
-    "hargaJual": 101750,
+    "hargaJual": 102000,
     "brand": "GO PAY",
     "kategori": "E-Money",
     "tipe": "Customer"
@@ -525,7 +525,7 @@
     "sku": "Hdhfj",
     "nama": "DANA 250.000",
     "hargaModal": 250045,
-    "hargaJual": 250795,
+    "hargaJual": 251045,
     "brand": "DANA",
     "kategori": "E-Money",
     "tipe": "Umum"
@@ -543,7 +543,7 @@
     "sku": "Hdushbd",
     "nama": "DANA 150.000",
     "hargaModal": 150200,
-    "hargaJual": 150950,
+    "hargaJual": 151200,
     "brand": "DANA",
     "kategori": "E-Money",
     "tipe": "Umum"
@@ -642,7 +642,7 @@
     "sku": "ovo100",
     "nama": "OVO 100.000",
     "hargaModal": 100620,
-    "hargaJual": 101370,
+    "hargaJual": 101620,
     "brand": "OVO",
     "kategori": "E-Money",
     "tipe": "Umum"
@@ -705,7 +705,7 @@
     "sku": "pre30976965",
     "nama": "DANA 100.000",
     "hargaModal": 100799,
-    "hargaJual": 101549,
+    "hargaJual": 101799,
     "brand": "DANA",
     "kategori": "E-Money",
     "tipe": "Umum"
@@ -714,7 +714,7 @@
     "sku": "pre30976966",
     "nama": "DANA 125.000",
     "hargaModal": 125080,
-    "hargaJual": 125830,
+    "hargaJual": 126080,
     "brand": "DANA",
     "kategori": "E-Money",
     "tipe": "Umum"
@@ -723,7 +723,7 @@
     "sku": "pre30976968",
     "nama": "DANA 200.000",
     "hargaModal": 200170,
-    "hargaJual": 200920,
+    "hargaJual": 201170,
     "brand": "DANA",
     "kategori": "E-Money",
     "tipe": "Umum"
@@ -786,7 +786,7 @@
     "sku": "shopee100",
     "nama": "SHOPEE PAY 100.000",
     "hargaModal": 100105,
-    "hargaJual": 100855,
+    "hargaJual": 101105,
     "brand": "SHOPEE PAY",
     "kategori": "E-Money",
     "tipe": "Umum"
@@ -876,7 +876,7 @@
     "sku": "pln100",
     "nama": "PLN 100.000",
     "hargaModal": 101749,
-    "hargaJual": 102499,
+    "hargaJual": 102749,
     "brand": "PLN",
     "kategori": "PLN",
     "tipe": "Umum"
@@ -1245,7 +1245,7 @@
     "sku": "HG215",
     "nama": "Tri Data HiFi Air 500 GB 30 Hari",
     "hargaModal": 221025,
-    "hargaJual": 221775,
+    "hargaJual": 222025,
     "brand": "TRI",
     "kategori": "Data",
     "tipe": "HiFi Air"
@@ -2163,7 +2163,7 @@
     "sku": "pre30645956",
     "nama": "Smartfren Internet 100.000",
     "hargaModal": 111225,
-    "hargaJual": 111975,
+    "hargaJual": 112225,
     "brand": "SMARTFREN",
     "kategori": "Data",
     "tipe": "Umum"
@@ -2307,7 +2307,7 @@
     "sku": "pre30646041",
     "nama": "by.U Data 100 GB 30 Hari",
     "hargaModal": 172025,
-    "hargaJual": 172775,
+    "hargaJual": 173025,
     "brand": "BY.U",
     "kategori": "Data",
     "tipe": "Umum"
@@ -2352,7 +2352,7 @@
     "sku": "pre30884081",
     "nama": "Indosat Data HiFi Air 500 GB 30 Hari",
     "hargaModal": 219775,
-    "hargaJual": 220525,
+    "hargaJual": 220775,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "HiFi Air"
@@ -2361,7 +2361,7 @@
     "sku": "pre30884133",
     "nama": "XL Data Akrab Kuota Bersama 45 GB / 30 Hari",
     "hargaModal": 193125,
-    "hargaJual": 193875,
+    "hargaJual": 194125,
     "brand": "XL",
     "kategori": "Data",
     "tipe": "Paket Akrab"
@@ -2370,7 +2370,7 @@
     "sku": "pre30884137",
     "nama": "XL Data FlexMax 100 GB 28 Hari",
     "hargaModal": 118050,
-    "hargaJual": 118800,
+    "hargaJual": 119050,
     "brand": "XL",
     "kategori": "Data",
     "tipe": "FlexMax"
@@ -2379,7 +2379,7 @@
     "sku": "pre30884138",
     "nama": "XL Data FlexMax 150 GB 28 Hari",
     "hargaModal": 144169,
-    "hargaJual": 144919,
+    "hargaJual": 145169,
     "brand": "XL",
     "kategori": "Data",
     "tipe": "FlexMax"
@@ -2388,7 +2388,7 @@
     "sku": "pre30884173",
     "nama": "XL Data FlexMax 500 GB 28 Hari",
     "hargaModal": 287970,
-    "hargaJual": 288720,
+    "hargaJual": 288970,
     "brand": "XL",
     "kategori": "Data",
     "tipe": "FlexMax"
@@ -2505,7 +2505,7 @@
     "sku": "pre30974669",
     "nama": "Tri Data AlwaysOn 16 GB + Unlimited",
     "hargaModal": 138999,
-    "hargaJual": 139749,
+    "hargaJual": 139999,
     "brand": "TRI",
     "kategori": "Data",
     "tipe": "AlwaysOn"
@@ -2667,7 +2667,7 @@
     "sku": "pre31076213",
     "nama": "Indosat Freedom Internet 150 GB 28 Hari",
     "hargaModal": 116975,
-    "hargaJual": 117725,
+    "hargaJual": 117975,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Internet"
@@ -2676,7 +2676,7 @@
     "sku": "pre31076219",
     "nama": "Indosat Freedom Internet 120 GB 28 Hari",
     "hargaModal": 139872,
-    "hargaJual": 140622,
+    "hargaJual": 140872,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Internet"
@@ -2685,7 +2685,7 @@
     "sku": "pre31076222",
     "nama": "Indosat Freedom Internet Sensasi 150 GB 28 Hari",
     "hargaModal": 136875,
-    "hargaJual": 137625,
+    "hargaJual": 137875,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Internet"
@@ -2694,7 +2694,7 @@
     "sku": "pre31076226",
     "nama": "Indosat Freedom Internet 350 GB 28 Hari",
     "hargaModal": 200000,
-    "hargaJual": 200750,
+    "hargaJual": 201000,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Internet"
@@ -2703,7 +2703,7 @@
     "sku": "pre31076227",
     "nama": "Indosat Freedom Internet Sensasi 200 GB 28 Hari",
     "hargaModal": 199999,
-    "hargaJual": 200749,
+    "hargaJual": 200999,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Internet"
@@ -2838,7 +2838,7 @@
     "sku": "pre32257352",
     "nama": "Telkomsel Data UnlimitedMAX 120.000",
     "hargaModal": 109945,
-    "hargaJual": 110695,
+    "hargaJual": 110945,
     "brand": "TELKOMSEL",
     "kategori": "Data",
     "tipe": "UnlimitedMAX"
@@ -2874,7 +2874,7 @@
     "sku": "pre32257356",
     "nama": "Indosat Data Ramadan Satspam+ 150 GB 28 Hari",
     "hargaModal": 133425,
-    "hargaJual": 134175,
+    "hargaJual": 134425,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "SATSPAM+"
@@ -2883,7 +2883,7 @@
     "sku": "pre32257357",
     "nama": "Indosat Data Ramadan Satspam+ 300 GB 28 Hari",
     "hargaModal": 177825,
-    "hargaJual": 178575,
+    "hargaJual": 178825,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "SATSPAM+"
@@ -2937,7 +2937,7 @@
     "sku": "pre32813046",
     "nama": "Telkomsel Data Bulk 17 GB / 30 Hari",
     "hargaModal": 137200,
-    "hargaJual": 137950,
+    "hargaJual": 138200,
     "brand": "TELKOMSEL",
     "kategori": "Data",
     "tipe": "Bulk"
@@ -2955,7 +2955,7 @@
     "sku": "pre32813048",
     "nama": "Telkomsel Data Bulk 28 GB / 30 Hari",
     "hargaModal": 134150,
-    "hargaJual": 134900,
+    "hargaJual": 135150,
     "brand": "TELKOMSEL",
     "kategori": "Data",
     "tipe": "Bulk"
@@ -3396,7 +3396,7 @@
     "sku": "pre32813558",
     "nama": "Telkomsel Data Terbaik Untukmu 30 GB 30 Hari",
     "hargaModal": 119095,
-    "hargaJual": 119845,
+    "hargaJual": 120095,
     "brand": "TELKOMSEL",
     "kategori": "Data",
     "tipe": "Terbaik Untukmu"
@@ -3891,7 +3891,7 @@
     "sku": "pre32816286",
     "nama": "Indosat Freedom Internet 250 GB 28 Hari",
     "hargaModal": 175000,
-    "hargaJual": 175750,
+    "hargaJual": 176000,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Internet"
@@ -3900,7 +3900,7 @@
     "sku": "pre32816287",
     "nama": "Indosat Freedom Internet Sensasi 150 GB 28 Hari",
     "hargaModal": 118625,
-    "hargaJual": 119375,
+    "hargaJual": 119625,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Internet"
@@ -3936,7 +3936,7 @@
     "sku": "pre32816405",
     "nama": "Indosat Data Gift Freedom U Jumbo 30 Hari",
     "hargaModal": 147134,
-    "hargaJual": 147884,
+    "hargaJual": 148134,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom U Gift"
@@ -3963,7 +3963,7 @@
     "sku": "pre32816460",
     "nama": "Indosat Umroh Haji Combo 10 Hari",
     "hargaModal": 257550,
-    "hargaJual": 258300,
+    "hargaJual": 258550,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Umroh Haji Combo"
@@ -3990,7 +3990,7 @@
     "sku": "pre32816465",
     "nama": "Indosat Umroh Haji Internet 10 Hari",
     "hargaModal": 196785,
-    "hargaJual": 197535,
+    "hargaJual": 197785,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Umroh Haji Internet"
@@ -3999,7 +3999,7 @@
     "sku": "pre32816466",
     "nama": "Indosat Umroh Haji Internet 15 Hari",
     "hargaModal": 260525,
-    "hargaJual": 261275,
+    "hargaJual": 261525,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Umroh Haji Internet"
@@ -4008,7 +4008,7 @@
     "sku": "pre32816467",
     "nama": "Indosat Umroh Haji Internet 20 Hari",
     "hargaModal": 281940,
-    "hargaJual": 282690,
+    "hargaJual": 282940,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Umroh Haji Internet"
@@ -4125,7 +4125,7 @@
     "sku": "pre32816509",
     "nama": "Indosat Data Ramadan 150 GB 28 Hari",
     "hargaModal": 119725,
-    "hargaJual": 120475,
+    "hargaJual": 120725,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Ramadan"
@@ -4134,7 +4134,7 @@
     "sku": "pre32816510",
     "nama": "Indosat Data Ramadan 300 GB 28 Hari",
     "hargaModal": 151600,
-    "hargaJual": 152350,
+    "hargaJual": 152600,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Ramadan"
@@ -4152,7 +4152,7 @@
     "sku": "pre32816524",
     "nama": "Indosat Data HiFi Air Booster 250 GB",
     "hargaModal": 173489,
-    "hargaJual": 174239,
+    "hargaJual": 174489,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "HiFi Air"
@@ -4233,7 +4233,7 @@
     "sku": "pre32816546",
     "nama": "Indosat Data Freedom Internet Spesial 150 GB 30 Hari",
     "hargaModal": 107800,
-    "hargaJual": 108550,
+    "hargaJual": 108800,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "Freedom Spesial"
@@ -4260,7 +4260,7 @@
     "sku": "pre32816562",
     "nama": "Indosat Data Ramadan Satspam+ 300 GB 28 Hari",
     "hargaModal": 176920,
-    "hargaJual": 177670,
+    "hargaJual": 177920,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "SATSPAM+"
@@ -4620,7 +4620,7 @@
     "sku": "pre32817029",
     "nama": "Axis Data BRONET 150 GB 28 Hari 5G",
     "hargaModal": 144225,
-    "hargaJual": 144975,
+    "hargaJual": 145225,
     "brand": "AXIS",
     "kategori": "Data",
     "tipe": "Bronet 5G"
@@ -4656,7 +4656,7 @@
     "sku": "pre7382837",
     "nama": "Indosat Data HiFi Air 200 GB 30 Hari",
     "hargaModal": 130273,
-    "hargaJual": 131023,
+    "hargaJual": 131273,
     "brand": "INDOSAT",
     "kategori": "Data",
     "tipe": "HiFi Air"

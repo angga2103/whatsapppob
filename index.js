@@ -776,7 +776,7 @@ Terima kasih telah berbelanja.`
                 'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
                 'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
-                'settier', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal'
+                'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal'
             ];
 
             if (isOwner && adminCommands.includes(cmd)) {
@@ -1884,14 +1884,15 @@ try {
             const configData = require('./config');
             const lim = marginHelper.getTierLimits();
             const tier = marginHelper.getProfitTier();
+            const pascaFee = (configData.profit && typeof configData.profit.pasca === 'number') ? configData.profit.pasca : 1500;
             const ppobCount = Array.isArray(db.ppob) ? db.ppob.length : 0;
 
             let text = `⚙️ *PENGATURAN TOKO & SKEMA MARGIN AUTOTIER*\n\n`;
             text += `🏪 *Nama Toko:* ${db.store.namaToko || "DIGITAL STORE"}\n`;
             text += `👑 *Owner Terdaftar:* ${configData.owner.map(o => o.split('@')[0]).join(', ') || 'Belum ada'}\n\n`;
 
-            text += `📊 *Skema Margin Auto-Tier (Berdasarkan Harga Modal):*\n`;
-            text += `_Keuntungan produk otomatis mengikuti nominal harga modalnya:_\n\n`;
+            text += `📊 *1. Skema Margin Auto-Tier Prabayar (Berdasarkan Modal):*\n`;
+            text += `_Keuntungan produk otomatis mengikuti nominal modal prabayar:_\n\n`;
 
             text += `🟢 *Tier Kecil* (Rp 0 - ${formatRupiah(lim.kecil)}):\n`;
             text += `   ➥ Margin: *${formatRupiah(tier.kecil)}*\n`;
@@ -1909,6 +1910,10 @@ try {
             text += `   ➥ Margin: *${formatRupiah(tier.premium)}*\n`;
             text += `   _(Token PLN 500k-1Jt, Game Voucher Besar, Kuota Tahunan)_\n\n`;
 
+            text += `📑 *2. Biaya Admin Loket Pascabayar:*\n`;
+            text += `   ➥ Fee Loket Toko: *${formatRupiah(pascaFee)}* per transaksi\n`;
+            text += `   _(PLN Pasca, PDAM, BPJS, Telkom, dll. Murni fee admin loket, terpisah dari autotier)_\n\n`;
+
             text += `📦 *Total Produk PPOB di Katalog:* ${ppobCount} Produk\n`;
             text += `_💡 Klik tombol di bawah untuk mengubah margin masing-masing tier secara dinamis:_`;
 
@@ -1923,14 +1928,15 @@ try {
                         { text: `🟣 Premium: ${formatRupiah(tier.premium)}`, callback_data: 'tg_set_tier_premium' }
                     ],
                     [
-                        { text: '🏷️ Ganti Nama Toko', callback_data: 'tg_input_namatoko' },
+                        { text: `📑 Fee Pasca: ${formatRupiah(pascaFee)}`, callback_data: 'tg_set_pasca_profit' },
                         { text: '📏 Atur Batas Range', callback_data: 'tg_set_tier_range' }
                     ],
                     [
-                        { text: '🔄 Hitung Ulang Semua Harga', callback_data: 'tg_recalc_prices' },
-                        { text: '👑 Tambah Owner', callback_data: 'tg_input_addowner' }
+                        { text: '🏷️ Ganti Nama Toko', callback_data: 'tg_input_namatoko' },
+                        { text: '🔄 Hitung Ulang Harga', callback_data: 'tg_recalc_prices' }
                     ],
                     [
+                        { text: '👑 Tambah Owner', callback_data: 'tg_input_addowner' },
                         { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
                     ]
                 ]
@@ -2967,6 +2973,17 @@ try {
                 const tier = marginHelper.getProfitTier();
                 global.tgInputState = { type: 'set_tier_margin', tierKey: 'premium', chatId };
                 return global.botTg.sendMessage(chatId, `🟣 *SET MARGIN TIER PREMIUM*\n\n• Rentang Produk : *> ${formatRupiah(lim.besar)}*\n• Margin Saat Ini : *${formatRupiah(tier.premium)}*\n• Contoh Produk   : Token PLN 500k-1Jt, Game Voucher Besar, Kuota Tahunan\n\nKetik nominal keuntungan (margin) baru yang diinginkan:\nContoh: \`3000\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_set_pasca_profit') {
+                global.botTg.answerCallbackQuery(query.id);
+                const configData = require('./config');
+                const curFee = (configData.profit && typeof configData.profit.pasca === 'number') ? configData.profit.pasca : 1500;
+                global.tgInputState = { type: 'set_pasca_profit', chatId };
+                return global.botTg.sendMessage(chatId, `📑 *SET BIAYA ADMIN LOKET PASCABAYAR*\n\n• Fee Loket Saat Ini : *${formatRupiah(curFee)}* per transaksi\n• Layanan : PLN Pasca, PDAM, BPJS, Telkom, dll.\n\n_💡 Margin pascabayar murni berasal dari Fee Admin Loket Toko + Komisi Biller, terpisah dari skema autotier prabayar._\n\nKetik nominal fee admin baru yang diinginkan:\nContoh: \`2000\``, {
                     parse_mode: 'Markdown',
                     reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
                 });
@@ -4207,6 +4224,46 @@ try {
                             `• Tier Besar  : ${formatRupiah(parts[1] + 1)} - ${formatRupiah(parts[2])}\n` +
                             `• Premium     : > ${formatRupiah(parts[2])}\n\n` +
                             `🔄 *${res.updatedCount}* produk PPOB langsung dikalkulasi ulang ke tier baru!`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '⚙️ Kembali ke Pengaturan', callback_data: 'tg_settings_menu' }],
+                                        [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    } catch (err) {
+                        return global.botTg.sendMessage(chatId, `❌ Terjadi kesalahan: ${err.message}`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '⚙️ Menu Pengaturan', callback_data: 'tg_settings_menu' }]] }
+                        });
+                    }
+                }
+
+                if (stateType === 'set_pasca_profit') {
+                    const nom = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                    if (isNaN(nom) || nom < 0 || nom > 100000) {
+                        return global.botTg.sendMessage(chatId, `❌ *Nominal tidak valid!*\nMasukkan angka biaya admin loket antara 0 - 100.000 (rupiah).\nContoh: \`2000\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                        });
+                    }
+
+                    try {
+                        if (!db.settings) db.settings = {};
+                        const configData = require('./config');
+                        if (!db.settings.profit) db.settings.profit = { ...configData.profit };
+                        db.settings.profit.pasca = nom;
+                        if (db.saveSettings) db.saveSettings();
+                        global.tgInputState = null;
+
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *BIAYA ADMIN LOKET PASCABAYAR BERHASIL DIUBAH!*\n\n` +
+                            `• Fee Loket Baru : *${formatRupiah(nom)}* per transaksi\n` +
+                            `• Layanan        : PLN Pasca, PDAM, BPJS, Telkom, dll.\n\n` +
+                            `_Setiap pelanggan yang mengecek tagihan pascabayar di WhatsApp akan otomatis ditambahkan biaya layanan ini._`,
                             {
                                 parse_mode: 'Markdown',
                                 reply_markup: {
