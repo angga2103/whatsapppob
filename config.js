@@ -76,14 +76,23 @@ const config = {
             pasca: (s.profit && s.profit.pasca !== undefined) ? Number(s.profit.pasca) : 1500
         };
     },
+    get tierLimits() {
+        const s = getSettings();
+        const lim = s.tierLimits || {};
+        return {
+            kecil: (typeof lim.kecil === 'number' && lim.kecil > 0) ? lim.kecil : 25000,
+            sedang: (typeof lim.sedang === 'number' && lim.sedang > 0) ? lim.sedang : 100000,
+            besar: (typeof lim.besar === 'number' && lim.besar > 0) ? lim.besar : 300000
+        };
+    },
     get profitTier() {
         const s = getSettings();
-        const tier = s.profitTier || s.marginTier || {};
+        const tier = s.marginTier || s.profitTier || {};
         return {
-            kecil: (tier.kecil !== undefined) ? Number(tier.kecil) : 1000,
-            sedang: (tier.sedang !== undefined) ? Number(tier.sedang) : 1500,
-            besar: (tier.besar !== undefined) ? Number(tier.besar) : 2000,
-            premium: (tier.premium !== undefined) ? Number(tier.premium) : 3000
+            kecil: (typeof tier.kecil === 'number' && tier.kecil >= 0) ? tier.kecil : 250,
+            sedang: (typeof tier.sedang === 'number' && tier.sedang >= 0) ? tier.sedang : 500,
+            besar: (typeof tier.besar === 'number' && tier.besar >= 0) ? tier.besar : 1000,
+            premium: (typeof tier.premium === 'number' && tier.premium >= 0) ? tier.premium : 2500
         };
     }
 };

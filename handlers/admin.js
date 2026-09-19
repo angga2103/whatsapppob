@@ -1,6 +1,7 @@
 const db = require('../database/db');
 const { formatRupiah } = require('../lib/utils');
 const api = require('../lib/api');
+const marginHelper = require('../lib/margin');
 const healthCheck = require('../system/health-check');
 
 const maskSecret = (str = '') => (str.length > 8 ? str.slice(0, 4) + '••••' + str.slice(-4) : '••••');
@@ -18,8 +19,9 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.setpakasir* Project Key (Update Pakasir)\n`;
         t += `• *.setdigi* User Key (Update API Digiflazz)\n`;
         t += `• *.settg* Token ChatID (Update Telegram Alert)\n`;
-        t += `• *.setprofit* [pulsa/data/emoney/pln] Nominal\n`;
         t += `• *.settier* [kecil/sedang/besar/premium] Nominal\n`;
+        t += `• *.settier* range BatasKecil BatasSedang BatasBesar\n`;
+        t += `• *.margin* / *.tier* (Ringkasan Skema Margin Auto-Tier)\n`;
         t += `• *.addowner* NoHP | *.delowner* NoHP\n`;
         t += `• *.toko* [on/off] | *.namatoko* Nama Baru\n`;
         t += `• *.sync* (Sinkronisasi Seluruh Produk PPOB)\n\n`;
@@ -744,6 +746,8 @@ ${rate}%`
     // ==========================================
     if (cmd === 'settings' || cmd === 'pengaturan') {
         const configData = require('../config');
+        const lim = marginHelper.getTierLimits();
+        const tier = marginHelper.getProfitTier();
         const activeGw = (configData.paymentGateway || 'paymentkita').toLowerCase();
         let t = `⚙️ *PENGATURAN BOT AKTIF*\n\n`;
         t += `🏪 *TOKO:*\n• Nama: *${db.store.namaToko || "DIGITAL STORE"}*\n• Status: *${db.store.buka ? "🟢 BUKA" : "🔴 TUTUP"}*\n\n`;
@@ -752,21 +756,20 @@ ${rate}%`
         t += `• Pakasir: Project \`${configData.pakasir.project || '-'}\` | Key \`${maskSecret(configData.pakasir.key)}\`\n\n`;
         t += `🔑 *DIGIFLAZZ API:*\n• User: \`${configData.digiflazz.username || '-'}\`\n• Key: \`${maskSecret(configData.digiflazz.key)}\`\n\n`;
         t += `🤖 *TELEGRAM COMMAND CENTER:*\n• Token: \`${maskSecret(configData.telegram.token)}\`\n• Chat ID: \`${configData.telegram.chatId || '-'}\`\n\n`;
-        t += `💰 *KEUNTUNGAN KATEGORI (MARKUP):*\n`;
-        t += `• Pulsa: ${formatRupiah(configData.profit.pulsa)}\n`;
-        t += `• Data: ${formatRupiah(configData.profit.data)}\n`;
-        t += `• E-Money: ${formatRupiah(configData.profit.emoney)}\n`;
-        t += `• PLN: ${formatRupiah(configData.profit.pln)}\n`;
-        t += `• Pascabayar: ${formatRupiah(configData.profit.pasca)}\n\n`;
-        t += `📊 *KEUNTUNGAN TIER NOMINAL:*\n`;
-        t += `• Kecil (≤ 25rb): ${formatRupiah(configData.profitTier.kecil)}\n`;
-        t += `• Sedang (≤ 100rb): ${formatRupiah(configData.profitTier.sedang)}\n`;
-        t += `• Besar (≤ 300rb): ${formatRupiah(configData.profitTier.besar)}\n`;
-        t += `• Premium (> 300rb): ${formatRupiah(configData.profitTier.premium)}\n\n`;
+        t += `📊 *SKEMA MARGIN AUTOTIER (HARGA MODAL):*\n`;
+        t += `• 🟢 Kecil (Rp 0 - ${formatRupiah(lim.kecil)}): *${formatRupiah(tier.kecil)}*\n`;
+        t += `• 🟡 Sedang (${formatRupiah(lim.kecil + 1)} - ${formatRupiah(lim.sedang)}): *${formatRupiah(tier.sedang)}*\n`;
+        t += `• 🔵 Besar (${formatRupiah(lim.sedang + 1)} - ${formatRupiah(lim.besar)}): *${formatRupiah(tier.besar)}*\n`;
+        t += `• 🟣 Premium (> ${formatRupiah(lim.besar)}): *${formatRupiah(tier.premium)}*\n`;
+        t += `• 📑 Biaya Admin Pascabayar: *${formatRupiah(configData.profit.pasca)}*\n\n`;
         t += `👑 *DAFTAR OWNER/ADMIN:*\n`;
         configData.owner.forEach((o, i) => t += `${i+1}. ${o}\n`);
         t += `\n_💡 Ketik .admin untuk melihat daftar perintah pengubahan._`;
         return sock.sendMessage(sender, { text: t });
+    }
+
+    if (cmd === 'margin' || cmd === 'tier') {
+        return sock.sendMessage(sender, { text: marginHelper.getMarginSummaryText() });
     }
 
     if (cmd === 'setgateway' || cmd === 'gateway') {
@@ -835,9 +838,9 @@ ${rate}%`
     if (cmd === 'setprofit') {
         const [katRaw, nomStr] = args.trim().split(/\s+/);
         const kat = (katRaw || '').toLowerCase();
-        const nom = parseInt(nomStr);
+        const nom = parseInt(nomStr, 10);
         if (!['pulsa', 'data', 'emoney', 'pln', 'pasca'].includes(kat) || isNaN(nom) || nom < 0 || nom > 500000) {
-            return sock.sendMessage(sender, { text: "❌ Format salah. Margin harus antara Rp0 - Rp500.000.\nContoh: .setprofit pulsa 750\nKategori: pulsa, data, emoney, pln, pasca" });
+            return sock.sendMessage(sender, { text: "❌ Format salah. Margin harus antara Rp0 - Rp500.000.\nContoh: .setprofit pasca 1500\nKategori: pulsa, data, emoney, pln, pasca" });
         }
         if (!db.settings) db.settings = {};
         const configData = require('../config');
@@ -848,18 +851,57 @@ ${rate}%`
     }
 
     if (cmd === 'settier') {
-        const [tierRaw, nomStr] = args.trim().split(/\s+/);
-        const tier = (tierRaw || '').toLowerCase();
-        const nom = parseInt(nomStr);
-        if (!['kecil', 'sedang', 'besar', 'premium'].includes(tier) || isNaN(nom) || nom < 0 || nom > 1000000) {
-            return sock.sendMessage(sender, { text: "❌ Format salah. Margin tier harus antara Rp0 - Rp1.000.000.\nContoh: .settier kecil 1200" });
+        const parts = args.trim().split(/\s+/);
+        const sub = (parts[0] || '').toLowerCase();
+
+        if (sub === 'range' || sub === 'batas') {
+            const k = parseInt(parts[1], 10);
+            const s = parseInt(parts[2], 10);
+            const b = parseInt(parts[3], 10);
+            if (isNaN(k) || isNaN(s) || isNaN(b) || k <= 0 || s <= k || b <= s) {
+                return sock.sendMessage(sender, {
+                    text: `❌ Format batas rentang tidak valid.\nContoh: .settier range 25000 100000 300000\nUrutan harus naik (Kecil < Sedang < Besar).`
+                });
+            }
+            try {
+                const res = marginHelper.setTierLimits(k, s, b);
+                return sock.sendMessage(sender, {
+                    text: `✅ *Batas Rentang Harga Berhasil Diperbarui!*\n\n` +
+                          `• Kecil  : ≤ ${formatRupiah(k)}\n` +
+                          `• Sedang : ${formatRupiah(k + 1)} - ${formatRupiah(s)}\n` +
+                          `• Besar  : ${formatRupiah(s + 1)} - ${formatRupiah(b)}\n` +
+                          `• Premium: > ${formatRupiah(b)}\n\n` +
+                          `🔄 *${res.updatedCount}* produk PPOB langsung diperbarui ke tier baru!`
+                });
+            } catch (err) {
+                return sock.sendMessage(sender, { text: `❌ Gagal update batas: ${err.message}` });
+            }
         }
-        if (!db.settings) db.settings = {};
-        const configData = require('../config');
-        if (!db.settings.profitTier) db.settings.profitTier = { ...configData.profitTier };
-        db.settings.profitTier[tier] = nom;
-        if (db.saveSettings) db.saveSettings();
-        return sock.sendMessage(sender, { text: `✅ Margin tier *${tier.toUpperCase()}* disetel menjadi *${formatRupiah(nom)}*.` });
+
+        const tier = sub;
+        const nom = parseInt(parts[1], 10);
+        if (!['kecil', 'sedang', 'besar', 'premium'].includes(tier) || isNaN(nom) || nom < 0 || nom > 1000000) {
+            return sock.sendMessage(sender, {
+                text: `❌ Format salah.\n• Ubah Margin: .settier [kecil/sedang/besar/premium] [nominal]\n  Contoh: .settier kecil 350\n• Ubah Batas Rentang: .settier range [k] [s] [b]\n  Contoh: .settier range 25000 100000 300000`
+            });
+        }
+
+        try {
+            const res = marginHelper.setTierMargin(tier, nom);
+            const info = marginHelper.getTierInfo(
+                tier === 'kecil' ? 10000 :
+                tier === 'sedang' ? 50000 :
+                tier === 'besar' ? 150000 : 500000
+            );
+            return sock.sendMessage(sender, {
+                text: `✅ *Margin Tier ${tier.toUpperCase()} Disetel!*\n\n` +
+                      `• Rentang Produk : *${info.rangeStr}*\n` +
+                      `• Margin Baru    : *${formatRupiah(nom)}*\n` +
+                      `• Rekalkulasi    : *${res.updatedCount}* dari ${res.totalCount} produk PPOB langsung diperbarui!`
+            });
+        } catch (err) {
+            return sock.sendMessage(sender, { text: `❌ Gagal update margin: ${err.message}` });
+        }
     }
 
     if (cmd === 'addowner') {

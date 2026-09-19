@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const config = require('./config');
 const db = require('./database/db');
 const api = require('./lib/api');
+const marginHelper = require('./lib/margin');
 const { formatRupiah, getTanggal, getTanggalLengkap, formatPlnToken } = require('./lib/utils');
 const { handleAdmin } = require('./handlers/admin');
 const { handleUser, S } = require('./handlers/user');
@@ -1881,28 +1882,53 @@ try {
 
         const renderSettingsMenu = () => {
             const configData = require('./config');
-            let text = `⚙️ *PENGATURAN HARGA & TOKO*\n\n`;
-            text += `🏪 Nama Toko: *${db.store.namaToko || "DIGITAL STORE"}*\n\n`;
-            text += `💰 *Markup Kategori:*\n`;
-            text += `• Pulsa: ${formatRupiah(configData.profit.pulsa)}\n`;
-            text += `• Data: ${formatRupiah(configData.profit.data)}\n`;
-            text += `• E-Money: ${formatRupiah(configData.profit.emoney)}\n`;
-            text += `• PLN: ${formatRupiah(configData.profit.pln)}\n\n`;
-            text += `📊 *Margin Tier:*\n`;
-            text += `• Kecil: ${formatRupiah(configData.profitTier.kecil)}\n`;
-            text += `• Sedang: ${formatRupiah(configData.profitTier.sedang)}\n`;
-            text += `• Besar: ${formatRupiah(configData.profitTier.besar)}\n`;
-            text += `• Premium: ${formatRupiah(configData.profitTier.premium)}\n\n`;
-            text += `👑 *Owner Terdaftar:* ${configData.owner.join(', ') || 'Belum ada'}\n`;
+            const lim = marginHelper.getTierLimits();
+            const tier = marginHelper.getProfitTier();
+            const ppobCount = Array.isArray(db.ppob) ? db.ppob.length : 0;
+
+            let text = `⚙️ *PENGATURAN TOKO & SKEMA MARGIN AUTOTIER*\n\n`;
+            text += `🏪 *Nama Toko:* ${db.store.namaToko || "DIGITAL STORE"}\n`;
+            text += `👑 *Owner Terdaftar:* ${configData.owner.map(o => o.split('@')[0]).join(', ') || 'Belum ada'}\n\n`;
+
+            text += `📊 *Skema Margin Auto-Tier (Berdasarkan Harga Modal):*\n`;
+            text += `_Keuntungan produk otomatis mengikuti nominal harga modalnya:_\n\n`;
+
+            text += `🟢 *Tier Kecil* (Rp 0 - ${formatRupiah(lim.kecil)}):\n`;
+            text += `   ➥ Margin: *${formatRupiah(tier.kecil)}*\n`;
+            text += `   _(Pulsa 5k-25k, Kuota Harian, E-Money 10k-20k)_\n\n`;
+
+            text += `🟡 *Tier Sedang* (${formatRupiah(lim.kecil + 1)} - ${formatRupiah(lim.sedang)}):\n`;
+            text += `   ➥ Margin: *${formatRupiah(tier.sedang)}*\n`;
+            text += `   _(Pulsa 30k-100k, Token PLN 50k/100k, Kuota Bulanan)_\n\n`;
+
+            text += `🔵 *Tier Besar* (${formatRupiah(lim.sedang + 1)} - ${formatRupiah(lim.besar)}):\n`;
+            text += `   ➥ Margin: *${formatRupiah(tier.besar)}*\n`;
+            text += `   _(Pulsa 150k-200k, Token PLN 200k, Kuota Jumbo)_\n\n`;
+
+            text += `🟣 *Tier Premium* (> ${formatRupiah(lim.besar)}):\n`;
+            text += `   ➥ Margin: *${formatRupiah(tier.premium)}*\n`;
+            text += `   _(Token PLN 500k-1Jt, Game Voucher Besar, Kuota Tahunan)_\n\n`;
+
+            text += `📦 *Total Produk PPOB di Katalog:* ${ppobCount} Produk\n`;
+            text += `_💡 Klik tombol di bawah untuk mengubah margin masing-masing tier secara dinamis:_`;
 
             const reply_markup = {
                 inline_keyboard: [
                     [
-                        { text: '🏷️ Ganti Nama Toko', callback_data: 'tg_input_namatoko' },
-                        { text: '💵 Set Margin Profit', callback_data: 'tg_input_profit' }
+                        { text: `🟢 Kecil: ${formatRupiah(tier.kecil)}`, callback_data: 'tg_set_tier_kecil' },
+                        { text: `🟡 Sedang: ${formatRupiah(tier.sedang)}`, callback_data: 'tg_set_tier_sedang' }
                     ],
                     [
-                        { text: '👑 Tambah Admin/Owner', callback_data: 'tg_input_addowner' }
+                        { text: `🔵 Besar: ${formatRupiah(tier.besar)}`, callback_data: 'tg_set_tier_besar' },
+                        { text: `🟣 Premium: ${formatRupiah(tier.premium)}`, callback_data: 'tg_set_tier_premium' }
+                    ],
+                    [
+                        { text: '🏷️ Ganti Nama Toko', callback_data: 'tg_input_namatoko' },
+                        { text: '📏 Atur Batas Range', callback_data: 'tg_set_tier_range' }
+                    ],
+                    [
+                        { text: '🔄 Hitung Ulang Semua Harga', callback_data: 'tg_recalc_prices' },
+                        { text: '👑 Tambah Owner', callback_data: 'tg_input_addowner' }
                     ],
                     [
                         { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
@@ -2902,12 +2928,94 @@ try {
                 });
             }
 
-            if (action === 'tg_input_profit') {
+            if (action === 'tg_set_tier_kecil') {
                 global.botTg.answerCallbackQuery(query.id);
-                global.tgInputState = { type: 'set_profit', chatId };
-                return global.botTg.sendMessage(chatId, `💵 *SET MARGIN KEUNTUNGAN KATEGORI*\n\nKetik kategori dan nominal margin dipisahkan spasi:\nFormat: \`<KATEGORI> <NOMINAL>\`\nKategori: \`pulsa\`, \`data\`, \`emoney\`, \`pln\`, \`pasca\`\nContoh: \`pulsa 750\``, {
+                const lim = marginHelper.getTierLimits();
+                const tier = marginHelper.getProfitTier();
+                global.tgInputState = { type: 'set_tier_margin', tierKey: 'kecil', chatId };
+                return global.botTg.sendMessage(chatId, `🟢 *SET MARGIN TIER KECIL*\n\n• Rentang Produk : *Rp 0 - ${formatRupiah(lim.kecil)}*\n• Margin Saat Ini : *${formatRupiah(tier.kecil)}*\n• Contoh Produk   : Pulsa 5k-25k, Kuota Harian, E-Money 10k-20k\n\nKetik nominal keuntungan (margin) baru yang diinginkan:\nContoh: \`350\``, {
                     parse_mode: 'Markdown',
                     reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_set_tier_sedang') {
+                global.botTg.answerCallbackQuery(query.id);
+                const lim = marginHelper.getTierLimits();
+                const tier = marginHelper.getProfitTier();
+                global.tgInputState = { type: 'set_tier_margin', tierKey: 'sedang', chatId };
+                return global.botTg.sendMessage(chatId, `🟡 *SET MARGIN TIER SEDANG*\n\n• Rentang Produk : *${formatRupiah(lim.kecil + 1)} - ${formatRupiah(lim.sedang)}*\n• Margin Saat Ini : *${formatRupiah(tier.sedang)}*\n• Contoh Produk   : Pulsa 30k-100k, Token PLN 50k/100k, Kuota 30hr\n\nKetik nominal keuntungan (margin) baru yang diinginkan:\nContoh: \`600\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_set_tier_besar') {
+                global.botTg.answerCallbackQuery(query.id);
+                const lim = marginHelper.getTierLimits();
+                const tier = marginHelper.getProfitTier();
+                global.tgInputState = { type: 'set_tier_margin', tierKey: 'besar', chatId };
+                return global.botTg.sendMessage(chatId, `🔵 *SET MARGIN TIER BESAR*\n\n• Rentang Produk : *${formatRupiah(lim.sedang + 1)} - ${formatRupiah(lim.besar)}*\n• Margin Saat Ini : *${formatRupiah(tier.besar)}*\n• Contoh Produk   : Pulsa 150k-200k, Token PLN 200k, Kuota Jumbo\n\nKetik nominal keuntungan (margin) baru yang diinginkan:\nContoh: \`1200\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_set_tier_premium') {
+                global.botTg.answerCallbackQuery(query.id);
+                const lim = marginHelper.getTierLimits();
+                const tier = marginHelper.getProfitTier();
+                global.tgInputState = { type: 'set_tier_margin', tierKey: 'premium', chatId };
+                return global.botTg.sendMessage(chatId, `🟣 *SET MARGIN TIER PREMIUM*\n\n• Rentang Produk : *> ${formatRupiah(lim.besar)}*\n• Margin Saat Ini : *${formatRupiah(tier.premium)}*\n• Contoh Produk   : Token PLN 500k-1Jt, Game Voucher Besar, Kuota Tahunan\n\nKetik nominal keuntungan (margin) baru yang diinginkan:\nContoh: \`3000\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_set_tier_range') {
+                global.botTg.answerCallbackQuery(query.id);
+                const lim = marginHelper.getTierLimits();
+                global.tgInputState = { type: 'set_tier_range', chatId };
+                return global.botTg.sendMessage(chatId, `📏 *ATUR BATAS RENTANG HARGA MODAL (TIER LIMITS)*\n\nBatas Nominal Saat Ini:\n• Batas Kecil  : ≤ ${formatRupiah(lim.kecil)}\n• Batas Sedang : ≤ ${formatRupiah(lim.sedang)}\n• Batas Besar  : ≤ ${formatRupiah(lim.besar)}\n• Tier Premium : > ${formatRupiah(lim.besar)}\n\nKetik 3 angka batas berurutan dipisahkan spasi:\nFormat: \`<BATAS_KECIL> <BATAS_SEDANG> <BATAS_BESAR>\`\nContoh: \`25000 100000 300000\``, {
+                    parse_mode: 'Markdown',
+                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                });
+            }
+
+            if (action === 'tg_recalc_prices') {
+                global.botTg.answerCallbackQuery(query.id, { text: 'Sedang menghitung ulang harga...' });
+                const res = marginHelper.recalculatePpobPrices();
+                const content = renderSettingsMenu();
+                await updateOrSend(chatId, messageId, content);
+                return global.botTg.sendMessage(chatId, `🔄 *REKALKULASI HARGA SELESAI!*\n\n✅ Berhasil memeriksa dan memperbarui *${res.updatedCount}* dari total *${res.totalCount}* produk PPOB di katalog sesuai skema margin tier aktif.`, {
+                    parse_mode: 'Markdown'
+                });
+            }
+
+            if (action === 'tg_input_profit') {
+                global.botTg.answerCallbackQuery(query.id);
+                const lim = marginHelper.getTierLimits();
+                const tier = marginHelper.getProfitTier();
+                return global.botTg.sendMessage(chatId, `📊 *PILIH TIER YANG INGIN DIATUR*\n\n` +
+                    `1. 🟢 Kecil (Rp 0 - ${formatRupiah(lim.kecil)}) : ${formatRupiah(tier.kecil)}\n` +
+                    `2. 🟡 Sedang (${formatRupiah(lim.kecil + 1)} - ${formatRupiah(lim.sedang)}) : ${formatRupiah(tier.sedang)}\n` +
+                    `3. 🔵 Besar (${formatRupiah(lim.sedang + 1)} - ${formatRupiah(lim.besar)}) : ${formatRupiah(tier.besar)}\n` +
+                    `4. 🟣 Premium (> ${formatRupiah(lim.besar)}) : ${formatRupiah(tier.premium)}\n\n` +
+                    `_Klik salah satu tombol di bawah untuk mengubah nominal margin:_`, {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: '🟢 Set Kecil', callback_data: 'tg_set_tier_kecil' },
+                                { text: '🟡 Set Sedang', callback_data: 'tg_set_tier_sedang' }
+                            ],
+                            [
+                                { text: '🔵 Set Besar', callback_data: 'tg_set_tier_besar' },
+                                { text: '🟣 Set Premium', callback_data: 'tg_set_tier_premium' }
+                            ],
+                            [{ text: '⬅️ Kembali ke Pengaturan', callback_data: 'tg_settings_menu' }]
+                        ]
+                    }
                 });
             }
 
@@ -4029,6 +4137,92 @@ try {
                             ]
                         }
                     });
+                }
+
+                if (stateType === 'set_tier_margin') {
+                    const tierKey = (global.tgInputState.tierKey || '').toLowerCase();
+                    const nom = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                    if (isNaN(nom) || nom < 0 || nom > 1000000) {
+                        return global.botTg.sendMessage(chatId, `❌ *Nominal tidak valid!*\nMasukkan angka keuntungan antara 0 - 1.000.000 (rupiah).\nContoh: \`500\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                        });
+                    }
+
+                    try {
+                        const res = marginHelper.setTierMargin(tierKey, nom);
+                        global.tgInputState = null;
+                        const info = marginHelper.getTierInfo(
+                            tierKey === 'kecil' ? 10000 :
+                            tierKey === 'sedang' ? 50000 :
+                            tierKey === 'besar' ? 150000 : 500000
+                        );
+
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *MARGIN TIER ${tierKey.toUpperCase()} BERHASIL DIUBAH!*\n\n` +
+                            `• Rentang Produk : *${info.rangeStr}*\n` +
+                            `• Margin Baru    : *${formatRupiah(nom)}*\n` +
+                            `• Rekalkulasi    : *${res.updatedCount}* dari ${res.totalCount} produk PPOB langsung diperbarui!\n\n` +
+                            `_Pelanggan WhatsApp kini langsung mendapatkan harga jual baru._`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '⚙️ Kembali ke Pengaturan', callback_data: 'tg_settings_menu' }],
+                                        [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    } catch (err) {
+                        return global.botTg.sendMessage(chatId, `❌ Terjadi kesalahan: ${err.message}`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '⚙️ Menu Pengaturan', callback_data: 'tg_settings_menu' }]] }
+                        });
+                    }
+                }
+
+                if (stateType === 'set_tier_range') {
+                    const parts = text.trim().split(/\s+/).map(p => parseInt(p.replace(/[^0-9]/g, ''), 10));
+                    if (parts.length < 3 || parts.some(isNaN) || parts[0] <= 0 || parts[1] <= parts[0] || parts[2] <= parts[1]) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format batas rentang tidak valid!*\n\n` +
+                            `Ketik 3 angka yang berurutan naik (Kecil < Sedang < Besar):\n` +
+                            `Format: \`<KECIL> <SEDANG> <BESAR>\`\n` +
+                            `Contoh: \`25000 100000 300000\``,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_settings_menu' }]] }
+                            }
+                        );
+                    }
+
+                    try {
+                        const res = marginHelper.setTierLimits(parts[0], parts[1], parts[2]);
+                        global.tgInputState = null;
+                        return global.botTg.sendMessage(chatId,
+                            `✅ *BATAS RENTANG HARGA BERHASIL DIPERBARUI!*\n\n` +
+                            `• Tier Kecil  : ≤ ${formatRupiah(parts[0])}\n` +
+                            `• Tier Sedang : ${formatRupiah(parts[0] + 1)} - ${formatRupiah(parts[1])}\n` +
+                            `• Tier Besar  : ${formatRupiah(parts[1] + 1)} - ${formatRupiah(parts[2])}\n` +
+                            `• Premium     : > ${formatRupiah(parts[2])}\n\n` +
+                            `🔄 *${res.updatedCount}* produk PPOB langsung dikalkulasi ulang ke tier baru!`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '⚙️ Kembali ke Pengaturan', callback_data: 'tg_settings_menu' }],
+                                        [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    } catch (err) {
+                        return global.botTg.sendMessage(chatId, `❌ Terjadi kesalahan: ${err.message}`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '⚙️ Menu Pengaturan', callback_data: 'tg_settings_menu' }]] }
+                        });
+                    }
                 }
 
                 if (stateType === 'set_profit') {
