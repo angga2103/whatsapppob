@@ -1268,9 +1268,8 @@ if (process.platform === 'linux') {
             execSync(`chmod +x "${botwaBin}" 2>/dev/null || true`);
             execSync(`ln -sf "${botwaBin}" /usr/local/bin/botwa 2>/dev/null || true`);
             execSync(`ln -sf "${botwaBin}" /usr/bin/botwa 2>/dev/null || true`);
-            execSync(`ln -sf "${botwaBin}" /usr/local/bin/bot-ppob 2>/dev/null || true`);
-            execSync(`ln -sf "${botwaBin}" /usr/bin/bot-ppob 2>/dev/null || true`);
-            execSync(`chmod +x /usr/local/bin/botwa /usr/bin/botwa /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true`);
+            execSync(`rm -f /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true`);
+            execSync(`chmod +x /usr/local/bin/botwa /usr/bin/botwa 2>/dev/null || true`);
         }
     } catch (_) {}
 }

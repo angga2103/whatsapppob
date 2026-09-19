@@ -126,65 +126,13 @@ else
     npm install --no-audit --no-fund
 fi
 
-# 5. Pasang pintasan perintah sistem 'bot-ppob' (Bisa dipanggil dari direktori mana saja)
+# 5. Pasang pintasan perintah sistem 'botwa' (Bisa dipanggil dari direktori mana saja)
 if [ -w /usr/local/bin ] 2>/dev/null; then
-    cat << 'EOF' > /usr/local/bin/bot-ppob
-#!/usr/bin/env bash
-TARGET="/var/www/bot-ppob"
-if [ ! -d "$TARGET" ]; then
-    echo "[ERROR] Direktori $TARGET tidak ditemukan."
-    exit 1
-fi
-cd "$TARGET"
-
-case "$1" in
-    status)
-        pm2 status bot-ppob 2>/dev/null || npm run status 2>/dev/null || pm2 status
-        ;;
-    logs|log)
-        pm2 logs bot-ppob
-        ;;
-    restart)
-        pm2 restart bot-ppob
-        ;;
-    stop)
-        pm2 stop bot-ppob
-        ;;
-    start)
-        pm2 start index.js --name "bot-ppob" 2>/dev/null || npm start
-        ;;
-    setup|pairing|login)
-        node installer.js
-        ;;
-    update)
-        git pull origin main && npm install --no-audit --no-fund && pm2 restart bot-ppob
-        ;;
-    *)
-        echo ""
-        echo "=================================================="
-        echo "   🤖 BOT PPOB & TOKO DIGITAL WHATSAPP - CLI"
-        echo "=================================================="
-        echo "Perintah cepat yang dapat dijalankan dari mana saja:"
-        echo "  bot-ppob status   : Cek status bot di background (PM2)"
-        echo "  bot-ppob logs     : Cek log pesan & transaksi live"
-        echo "  bot-ppob restart  : Restart proses bot"
-        echo "  bot-ppob stop     : Hentikan proses bot"
-        echo "  bot-ppob setup    : Buka wizard konfigurasi / pairing ulang"
-        echo "  bot-ppob update   : Tarik pembaruan terbaru dari Git"
-        echo "=================================================="
-        echo ""
-        read -p "Buka wizard instalasi / pairing sekarang? (Y/n): " opt
-        if [ "$opt" != "n" ] && [ "$opt" != "N" ]; then
-            node installer.js
-        fi
-        ;;
-esac
-EOF
-    chmod +x /usr/local/bin/bot-ppob 2>/dev/null || true
+    rm -f /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true
     ln -sf "$PROJECT_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
     ln -sf "$PROJECT_DIR/bin/botwa.sh" /usr/bin/botwa 2>/dev/null || true
     chmod +x "$PROJECT_DIR/bin/botwa.sh" /usr/local/bin/botwa /usr/bin/botwa 2>/dev/null || true
-    echo "✓ Pintasan perintah sistem 'botwa' dan 'bot-ppob' berhasil dipasang."
+    echo "✓ Pintasan perintah sistem 'botwa' berhasil dipasang."
 fi
 
 # 6. Jalankan wizard instalasi Telegram Command Center

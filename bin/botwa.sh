@@ -168,6 +168,7 @@ cmd_status() {
 # 2. Restart Bot
 cmd_restart() {
     echo -e "\n${YELLOW}🔄 Merestart proses bot secara bersih...${NC}"
+    rm -f /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true
     # 1. Bersihkan proses PM2 yang duplikat jika ada (selain bot-ppob)
     node -e "
         try {
@@ -213,6 +214,7 @@ cmd_restart() {
         }
     " 2>/dev/null
 
+    cd "$APP_DIR" || exit 1
     pm2 restart bot-ppob 2>/dev/null || pm2 start index.js --name bot-ppob
     pm2 save 2>/dev/null || true
     echo -e "${GREEN}✅ Bot berhasil direstart secara bersih!${NC}"
@@ -221,18 +223,18 @@ cmd_restart() {
 
 # 3. Stop Bot
 cmd_stop() {
-    local PNAME=$(get_pm2_process_name)
-    echo -e "\n${RED}⏹️ Menghentikan proses bot ($PNAME)...${NC}"
-    pm2 stop "$PNAME" 2>/dev/null || pm2 stop all 2>/dev/null || true
+    echo -e "\n${RED}⏹️ Menghentikan proses bot...${NC}"
+    pm2 stop bot-ppob 2>/dev/null || pm2 stop all 2>/dev/null || true
     echo -e "${GREEN}✅ Bot dihentikan.${NC}"
     sleep 2
 }
 
 # 4. Start Bot
 cmd_start() {
-    local PNAME=$(get_pm2_process_name)
-    echo -e "\n${GREEN}▶️ Menjalankan proses bot ($PNAME)...${NC}"
-    pm2 start "$PNAME" 2>/dev/null || pm2 start index.js --name bot-ppob
+    echo -e "\n${GREEN}▶️ Menjalankan proses bot (index.js via PM2)...${NC}"
+    rm -f /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true
+    cd "$APP_DIR" || exit 1
+    pm2 restart bot-ppob 2>/dev/null || pm2 start index.js --name bot-ppob
     pm2 save 2>/dev/null || true
     echo -e "${GREEN}✅ Bot berhasil dijalankan!${NC}"
     sleep 2
@@ -521,10 +523,13 @@ cmd_fix_conflict() {
     echo -e "${YELLOW}Masalah 409 Conflict terjadi karena token bot Telegram dipakai di 2 proses sekaligus.${NC}"
     echo -e "Mematikan seluruh proses ganda & zombie di VPS, lalu merestart 1 instance bersih...\n"
 
-    echo -e "${CYAN}1. Menghapus semua proses lama di PM2...${NC}"
+    echo -e "${CYAN}1. Menghapus symlink rusak /usr/local/bin/bot-ppob...${NC}"
+    rm -f /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true
+
+    echo -e "${CYAN}2. Menghapus semua proses lama di PM2...${NC}"
     pm2 delete all 2>/dev/null || true
 
-    echo -e "${CYAN}2. Mematikan seluruh proses Node.js background/zombie...${NC}"
+    echo -e "${CYAN}3. Mematikan seluruh proses Node.js background/zombie...${NC}"
     pkill -9 -f "node" 2>/dev/null || true
     sleep 2
 
