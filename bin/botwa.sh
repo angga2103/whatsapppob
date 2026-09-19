@@ -26,20 +26,87 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Helper Status PM2
+# Helper Deteksi Nama Proses PM2 Aktif
+get_pm2_process_name() {
+    local pname=$(node -e "
+        try {
+            const { execSync } = require('child_process');
+            const raw = execSync('pm2 jlist', { stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).toString();
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+                const proc = list.find(p => 
+                    p.name === 'bot-ppob' || 
+                    p.name === 'bot-kasir' || 
+                    p.name === 'index' ||
+                    (p.pm2_env && p.pm2_env.pm_exec_path && p.pm2_env.pm_exec_path.includes('index.js')) ||
+                    (p.pm2_env && p.pm2_env.status === 'online')
+                );
+                if (proc && proc.name) {
+                    console.log(proc.name);
+                    process.exit(0);
+                }
+            }
+        } catch (_) {}
+        console.log('bot-ppob');
+    " 2>/dev/null)
+    echo "${pname:-bot-ppob}"
+}
+
+# Helper Status Bot (PM2 & Direct Node)
 get_pm2_status() {
+    local st=""
     if command -v pm2 &> /dev/null; then
-        local st=$(pm2 jlist 2>/dev/null | grep -o '"name":"bot-ppob","pm_id":[0-9]*,"monit":{[^}]*},"pm2_env":{"status":"[^"]*"' | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
-        if [ "$st" == "online" ]; then
-            echo -e "${GREEN}● ONLINE (PM2)${NC}"
-        elif [ -n "$st" ]; then
-            echo -e "${YELLOW}● $st (PM2)${NC}"
-        else
-            echo -e "${RED}● STOPPED / OFFLINE${NC}"
-        fi
-    else
-        echo -e "${YELLOW}● PM2 BELUM TERPASANG${NC}"
+        st=$(node -e "
+            try {
+                const { execSync } = require('child_process');
+                const raw = execSync('pm2 jlist', { stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).toString();
+                const list = JSON.parse(raw);
+                if (Array.isArray(list)) {
+                    const proc = list.find(p => 
+                        p.name === 'bot-ppob' || 
+                        p.name === 'bot-kasir' || 
+                        p.name === 'index' ||
+                        (p.pm2_env && p.pm2_env.pm_exec_path && p.pm2_env.pm_exec_path.includes('index.js')) ||
+                        (p.pm2_env && p.pm2_env.status === 'online')
+                    );
+                    if (proc && proc.pm2_env) {
+                        const status = proc.pm2_env.status || 'unknown';
+                        const name = proc.name || 'bot-ppob';
+                        const mem = proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + 'MB' : '';
+                        console.log(status + '|' + name + '|' + mem);
+                        process.exit(0);
+                    }
+                }
+            } catch (_) {}
+            console.log('');
+        " 2>/dev/null)
     fi
+
+    if [ -n "$st" ]; then
+        local status=$(echo "$st" | cut -d'|' -f1)
+        local pname=$(echo "$st" | cut -d'|' -f2)
+        local mem=$(echo "$st" | cut -d'|' -f3)
+        if [ "$status" == "online" ]; then
+            if [ -n "$mem" ]; then
+                echo -e "${GREEN}● ONLINE (PM2: $pname | RAM: $mem)${NC}"
+            else
+                echo -e "${GREEN}● ONLINE (PM2: $pname)${NC}"
+            fi
+            return
+        elif [ -n "$status" ]; then
+            echo -e "${YELLOW}● $status (PM2: $pname)${NC}"
+            return
+        fi
+    fi
+
+    # Fallback 2: Cek proses node langsung (misal: dijalankan manual node index.js)
+    local node_pid=$(pgrep -f "node.*index\.js" 2>/dev/null | head -n 1)
+    if [ -n "$node_pid" ]; then
+        echo -e "${GREEN}● ONLINE (PID: $node_pid)${NC}"
+        return
+    fi
+
+    echo -e "${RED}● STOPPED / OFFLINE${NC}"
 }
 
 show_header() {
@@ -56,55 +123,67 @@ show_header() {
 # 1. Status Bot & Sistem
 cmd_status() {
     echo -e "\n${BOLD}📊 MEMERIKSA STATUS SISTEM & BOT...${NC}\n"
+    local PNAME=$(get_pm2_process_name)
     if command -v pm2 &> /dev/null; then
-        pm2 status bot-ppob || pm2 list
+        pm2 status "$PNAME" 2>/dev/null || pm2 list
     fi
     echo ""
-    echo -e "${BOLD}💾 Pemakaian RAM:${NC}"
+    echo -e "${BOLD}💾 Pemakaian RAM Server:${NC}"
     free -h
     echo ""
     echo -e "${BOLD}💽 Pemakaian Disk Storage:${NC}"
     df -h / | awk 'NR==1 || NR==2'
     echo ""
-    if [ -f "system/status.json" ]; then
-        echo -e "${BOLD}📱 Status WhatsApp:${NC}"
-        cat system/status.json
-        echo ""
-    fi
+    node -e "
+        try {
+            const fs = require('fs');
+            const hasSession = fs.existsSync('./session_bot');
+            console.log('📱 Sesi WhatsApp :', hasSession ? '🟢 Terdaftar (session_bot)' : '🔴 Belum Terhubung');
+            if (fs.existsSync('./system/status.json')) {
+                const st = JSON.parse(fs.readFileSync('./system/status.json', 'utf8'));
+                console.log('⚡ Status Modus   :', st.mode || 'normal');
+            }
+        } catch (_) {}
+    " 2>/dev/null
+    echo ""
     read -p "Tekan [ENTER] untuk kembali ke menu..."
 }
 
 # 2. Restart Bot
 cmd_restart() {
-    echo -e "\n${YELLOW}🔄 Merestart proses bot (PM2)...${NC}"
-    pm2 restart bot-ppob || pm2 start index.js --name bot-ppob
-    pm2 save
+    local PNAME=$(get_pm2_process_name)
+    echo -e "\n${YELLOW}🔄 Merestart proses bot ($PNAME)...${NC}"
+    pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+    pm2 save 2>/dev/null || true
     echo -e "${GREEN}✅ Bot berhasil direstart!${NC}"
     sleep 2
 }
 
 # 3. Stop Bot
 cmd_stop() {
-    echo -e "\n${RED}⏹️ Menghentikan proses bot...${NC}"
-    pm2 stop bot-ppob
+    local PNAME=$(get_pm2_process_name)
+    echo -e "\n${RED}⏹️ Menghentikan proses bot ($PNAME)...${NC}"
+    pm2 stop "$PNAME" 2>/dev/null || pm2 stop all 2>/dev/null || true
     echo -e "${GREEN}✅ Bot dihentikan.${NC}"
     sleep 2
 }
 
 # 4. Start Bot
 cmd_start() {
-    echo -e "\n${GREEN}▶️ Menjalankan proses bot...${NC}"
-    pm2 start bot-ppob 2>/dev/null || pm2 start index.js --name bot-ppob
-    pm2 save
+    local PNAME=$(get_pm2_process_name)
+    echo -e "\n${GREEN}▶️ Menjalankan proses bot ($PNAME)...${NC}"
+    pm2 start "$PNAME" 2>/dev/null || pm2 start index.js --name bot-ppob
+    pm2 save 2>/dev/null || true
     echo -e "${GREEN}✅ Bot berhasil dijalankan!${NC}"
     sleep 2
 }
 
 # 5. Lihat Log Real-Time
 cmd_logs() {
-    echo -e "\n${CYAN}📜 Menampilkan Log Real-Time (Tekan Ctrl+C untuk keluar)...${NC}\n"
+    local PNAME=$(get_pm2_process_name)
+    echo -e "\n${CYAN}📜 Menampilkan Log Real-Time ($PNAME) (Tekan Ctrl+C untuk keluar)...${NC}\n"
     sleep 1
-    pm2 logs bot-ppob --lines 50
+    pm2 logs "$PNAME" --lines 50 2>/dev/null || pm2 logs --lines 50
 }
 
 # 6. Backup Data Manual Sekarang
