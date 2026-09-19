@@ -38,7 +38,12 @@ console.log(`🚀 [TELEGRAM] Bridge Pairing Bot aktif! Admin ID: ${ADMIN_CHAT_ID
 
 // Tangkap error polling
 bot.on('polling_error', (error) => {
-    console.warn('⚠️ [TELEGRAM POLLING ERROR]:', error.code || error.message);
+    const desc = error.response?.body?.description || error.message || '';
+    const code = error.code || '';
+    if (code === 'EFATAL' || code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || code === 'ECONNRESET' || desc.includes('socket hang up')) {
+        return;
+    }
+    console.warn('⚠️ [TELEGRAM POLLING ERROR]:', desc || code);
 });
 
 // State Management

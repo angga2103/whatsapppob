@@ -1303,9 +1303,23 @@ try {
         global.botTg = new TelegramBot(config.telegram.token, { polling: true });
         global.tgInputState = null;
 
-        // Tangkap polling error agar tidak crash dan mudah dilacak
+        // Tangkap polling error agar tidak crash dan filter timeout rutin
         global.botTg.on('polling_error', (error) => {
-            console.warn('⚠️ [TELEGRAM POLLING]:', error.code || error.message);
+            const desc = error.response?.body?.description || error.message || '';
+            const code = error.code || '';
+
+            // Abaikan timeout koneksi berkala yang normal pada long-polling Telegram
+            if (code === 'EFATAL' || code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || code === 'ECONNRESET' || desc.includes('socket hang up') || desc.includes('ETIMEDOUT')) {
+                return;
+            }
+
+            // Peringatan jika token bot dipakai di 2 tempat sekaligus
+            if (desc.includes('Conflict') || desc.includes('terminated by other getUpdates')) {
+                console.warn('⚠️ [TELEGRAM CONFLICT]: Token bot ini sedang aktif di proses lain (409 Conflict). Pastikan hanya 1 bot yang berjalan.');
+                return;
+            }
+
+            console.warn('⚠️ [TELEGRAM POLLING]:', desc || code);
         });
 
         const maskSecret = (str = '') => (str && str.length > 8 ? str.slice(0, 4) + '••••' + str.slice(-4) : (str ? '••••••••' : '-'));
