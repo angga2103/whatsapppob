@@ -26,6 +26,14 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
+# Helper Jeda Menu (Hanya aktif di mode interaktif)
+pause_menu() {
+    if [ -t 0 ] && [ -z "$DIRECT_CMD" ]; then
+        echo ""
+        read -p "Tekan [ENTER] untuk kembali ke menu..."
+    fi
+}
+
 # Helper Deteksi Nama Proses PM2 Aktif
 get_pm2_process_name() {
     local pname=$(node -e "
@@ -146,7 +154,7 @@ cmd_status() {
         } catch (_) {}
     " 2>/dev/null
     echo ""
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    pause_menu
 }
 
 # 2. Restart Bot
@@ -190,8 +198,12 @@ cmd_logs() {
 cmd_backup() {
     echo -e "\n${CYAN}📦 Menjalankan Backup Data & Mengirim ke Telegram...${NC}"
     node lib/backup/backup-telegram.js
-    echo -e "\n${GREEN}✅ Proses backup selesai. Silakan cek pesan di bot Telegram Anda!${NC}"
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    if [ $? -eq 0 ]; then
+        echo -e "\n${GREEN}✅ Proses backup selesai. File arsip telah dikirim ke bot Telegram Anda!${NC}"
+    else
+        echo -e "\n${RED}❌ Proses backup mengalami kendala. Silakan periksa pesan log di atas.${NC}"
+    fi
+    pause_menu
 }
 
 # 7. Restore Data dari Backup Terakhir
@@ -200,7 +212,7 @@ cmd_restore() {
     local backup_file=$(ls -t AUTO-BACKUP-*.zip 2>/dev/null | head -n 1)
     if [ -z "$backup_file" ]; then
         echo -e "${RED}❌ Tidak ditemukan file AUTO-BACKUP-*.zip di folder $APP_DIR!${NC}"
-        read -p "Tekan [ENTER] untuk kembali..."
+        pause_menu
         return
     fi
 
@@ -214,13 +226,14 @@ cmd_restore() {
             apt-get update && apt-get install -y unzip
             unzip -o "$backup_file" -d "$APP_DIR"
         fi
-        echo -e "${GREEN}✅ Ekstraksi selesai. Merestart bot...${NC}"
-        pm2 restart bot-ppob
+        local PNAME=$(get_pm2_process_name)
+        echo -e "${GREEN}✅ Ekstraksi selesai. Merestart bot ($PNAME)...${NC}"
+        pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
         echo -e "${GREEN}✅ Restore berhasil!${NC}"
     else
         echo -e "${YELLOW}Restore dibatalkan.${NC}"
     fi
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    pause_menu
 }
 
 # 8. Ganti Token Telegram & Chat ID Admin (Solusi jika bot tersuspend Telegram)
@@ -253,10 +266,8 @@ cmd_change_telegram() {
     echo -e "\n${CYAN}Menyimpan ke konfigurasi dan .env...${NC}"
     node -e "
         const fs = require('fs');
-        const path = require('path');
-
-        const newToken = '$NEW_TOKEN'.trim();
-        const newChatId = '$NEW_CHAT_ID'.trim();
+        const newToken = (process.argv[1] || '').trim();
+        const newChatId = (process.argv[2] || '').trim();
 
         // 1. Update settings.json
         const sPath = './database/settings.json';
@@ -291,13 +302,15 @@ cmd_change_telegram() {
         }
         fs.writeFileSync(envPath, env.trim() + '\n', 'utf8');
         console.log('✓ File settings.json, settings.backup.json, dan .env berhasil diperbarui!');
-    "
+    " "$NEW_TOKEN" "$NEW_CHAT_ID"
 
     echo -e "${YELLOW}Menguji koneksi ke Bot Telegram baru...${NC}"
     node -e "
         const axios = require('axios');
-        axios.post('https://api.telegram.org/bot$NEW_TOKEN/sendMessage', {
-            chat_id: '$NEW_CHAT_ID',
+        const token = process.argv[1];
+        const chatId = process.argv[2];
+        axios.post('https://api.telegram.org/bot' + token + '/sendMessage', {
+            chat_id: chatId,
             text: '🚀 *TEST KONEKSI TELEGRAM BERHASIL*\n\nBot PPOB WhatsApp Anda berhasil dihubungkan ke bot Telegram ini melalui CLI Server (botwa)!',
             parse_mode: 'Markdown'
         }).then(() => {
@@ -305,12 +318,13 @@ cmd_change_telegram() {
         }).catch(err => {
             console.log('⚠️ Gagal kirim tes: ' + err.message);
         });
-    "
+    " "$NEW_TOKEN" "$NEW_CHAT_ID"
 
-    echo -e "${GREEN}Merestart bot untuk mengaktifkan Telegram baru...${NC}"
-    pm2 restart bot-ppob
+    local PNAME=$(get_pm2_process_name)
+    echo -e "${GREEN}Merestart bot ($PNAME) untuk mengaktifkan Telegram baru...${NC}"
+    pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
     echo -e "${GREEN}✅ Selesai! Bot Telegram baru Anda kini aktif sepenuhnya.${NC}"
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    pause_menu
 }
 
 # 9. Ganti Kredensial Gateway
@@ -326,21 +340,25 @@ cmd_change_gateway() {
     echo "0) Batal"
     read -p "Pilihan Anda [0-3]: " gw_opt
 
+    local PNAME=$(get_pm2_process_name)
+
     if [ "$gw_opt" == "1" ]; then
         read -p "Masukkan Digiflazz Username : " DIGI_USER
         read -p "Masukkan Digiflazz Key/Secret: " DIGI_KEY
         if [ -n "$DIGI_USER" ] && [ -n "$DIGI_KEY" ]; then
             node -e "
                 const fs = require('fs');
+                const u = (process.argv[1] || '').trim();
+                const k = (process.argv[2] || '').trim();
                 ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
                     let s = {}; try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_){}
-                    s.digiflazz = { username: '$DIGI_USER'.trim(), key: '$DIGI_KEY'.trim() };
+                    s.digiflazz = { username: u, key: k };
                     fs.writeFileSync(f, JSON.stringify(s, null, 2), 'utf8');
                 });
                 console.log('✓ Digiflazz berhasil diperbarui!');
-            "
-            pm2 restart bot-ppob
-            echo -e "${GREEN}✅ Kredensial Digiflazz tersimpan dan bot direstart.${NC}"
+            " "$DIGI_USER" "$DIGI_KEY"
+            pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+            echo -e "${GREEN}✅ Kredensial Digiflazz tersimpan dan bot ($PNAME) direstart.${NC}"
         fi
     elif [ "$gw_opt" == "2" ]; then
         read -p "Masukkan Paymentkita Merchant ID: " PK_ID
@@ -348,16 +366,18 @@ cmd_change_gateway() {
         if [ -n "$PK_ID" ] && [ -n "$PK_SECRET" ]; then
             node -e "
                 const fs = require('fs');
+                const m = (process.argv[1] || '').trim();
+                const sec = (process.argv[2] || '').trim();
                 ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
                     let s = {}; try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_){}
-                    s.paymentkita = { merchantId: '$PK_ID'.trim(), secret: '$PK_SECRET'.trim() };
+                    s.paymentkita = { merchantId: m, secret: sec };
                     s.paymentGateway = 'paymentkita';
                     fs.writeFileSync(f, JSON.stringify(s, null, 2), 'utf8');
                 });
                 console.log('✓ Paymentkita berhasil diperbarui!');
-            "
-            pm2 restart bot-ppob
-            echo -e "${GREEN}✅ Kredensial Paymentkita tersimpan dan bot direstart.${NC}"
+            " "$PK_ID" "$PK_SECRET"
+            pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+            echo -e "${GREEN}✅ Kredensial Paymentkita tersimpan dan bot ($PNAME) direstart.${NC}"
         fi
     elif [ "$gw_opt" == "3" ]; then
         read -p "Masukkan Pakasir Project Slug: " PAKA_PROJ
@@ -365,19 +385,21 @@ cmd_change_gateway() {
         if [ -n "$PAKA_PROJ" ] && [ -n "$PAKA_KEY" ]; then
             node -e "
                 const fs = require('fs');
+                const p = (process.argv[1] || '').trim();
+                const k = (process.argv[2] || '').trim();
                 ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
                     let s = {}; try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_){}
-                    s.pakasir = { project: '$PAKA_PROJ'.trim(), key: '$PAKA_KEY'.trim() };
+                    s.pakasir = { project: p, key: k };
                     s.paymentGateway = 'pakasir';
                     fs.writeFileSync(f, JSON.stringify(s, null, 2), 'utf8');
                 });
                 console.log('✓ Pakasir berhasil diperbarui!');
-            "
-            pm2 restart bot-ppob
-            echo -e "${GREEN}✅ Kredensial Pakasir tersimpan dan bot direstart.${NC}"
+            " "$PAKA_PROJ" "$PAKA_KEY"
+            pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+            echo -e "${GREEN}✅ Kredensial Pakasir tersimpan dan bot ($PNAME) direstart.${NC}"
         fi
     fi
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    pause_menu
 }
 
 # 10. Reset Sesi & Pairing WhatsApp
@@ -387,15 +409,16 @@ cmd_reset_whatsapp() {
     echo -e "${RED}====================================================================${NC}\n"
     read -p "Yakin ingin menghapus sesi WhatsApp saat ini dan login nomor baru? (y/N): " wa_confirm
     if [[ "$wa_confirm" =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}Menghentikan bot dan menghapus session_bot/...${NC}"
-        pm2 stop bot-ppob 2>/dev/null || true
+        local PNAME=$(get_pm2_process_name)
+        echo -e "${YELLOW}Menghentikan bot ($PNAME) dan menghapus session_bot/...${NC}"
+        pm2 stop "$PNAME" 2>/dev/null || pm2 stop all 2>/dev/null || true
         rm -rf session_bot/
         echo -e "${GREEN}✓ Sesi WhatsApp lama berhasil dihapus.${NC}"
         echo -e "${CYAN}Menjalankan wizard pairing terminal...${NC}"
         node installer.js
-        pm2 restart bot-ppob
+        pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
     fi
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    pause_menu
 }
 
 # 11. Update Bot ke Versi Terbaru
@@ -404,9 +427,13 @@ cmd_update() {
     git stash 2>/dev/null || true
     git pull origin main
     npm install --no-audit --no-fund
-    pm2 restart bot-ppob
-    echo -e "\n${GREEN}✅ Pembaruan berhasil diterapkan dan bot telah direstart!${NC}"
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    chmod +x "$APP_DIR/bin/botwa.sh" 2>/dev/null || true
+    ln -sf "$APP_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
+    ln -sf "$APP_DIR/bin/botwa.sh" /usr/bin/botwa 2>/dev/null || true
+    local PNAME=$(get_pm2_process_name)
+    pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+    echo -e "\n${GREEN}✅ Pembaruan berhasil diterapkan dan bot ($PNAME) telah direstart!${NC}"
+    pause_menu
 }
 
 # 12. Bersihkan Storage (Log, Cache, dan Backup Lama)
@@ -432,36 +459,64 @@ cmd_clean() {
     fi
 
     echo -e "${GREEN}✅ Pembersihan storage selesai!${NC}"
-    read -p "Tekan [ENTER] untuk kembali ke menu..."
+    pause_menu
 }
 
 # JIKA ADA ARGUMEN BARIS PERINTAH LANGSUNG (Contoh: botwa restart / botwa status / botwa logs)
-case "$1" in
-    status|stat)
-        cmd_status; exit 0 ;;
-    restart|reboot)
-        cmd_restart; exit 0 ;;
-    stop)
-        cmd_stop; exit 0 ;;
-    start)
-        cmd_start; exit 0 ;;
-    logs|log)
-        cmd_logs; exit 0 ;;
-    backup)
-        cmd_backup; exit 0 ;;
-    restore)
-        cmd_restore; exit 0 ;;
-    update)
-        cmd_update; exit 0 ;;
-    clean)
-        cmd_clean; exit 0 ;;
-esac
+if [ -n "$1" ]; then
+    export DIRECT_CMD=1
+    case "$1" in
+        status|stat)
+            cmd_status; exit 0 ;;
+        restart|reboot)
+            cmd_restart; exit 0 ;;
+        stop)
+            cmd_stop; exit 0 ;;
+        start)
+            cmd_start; exit 0 ;;
+        logs|log)
+            cmd_logs; exit 0 ;;
+        backup)
+            cmd_backup; exit 0 ;;
+        restore)
+            cmd_restore; exit 0 ;;
+        telegram|tele)
+            cmd_change_telegram; exit 0 ;;
+        gateway|gw)
+            cmd_change_gateway; exit 0 ;;
+        reset-wa|pairing)
+            cmd_reset_whatsapp; exit 0 ;;
+        update)
+            cmd_update; exit 0 ;;
+        clean)
+            cmd_clean; exit 0 ;;
+        help|--help|-h)
+            echo -e "${BOLD}Panduan Penggunaan Perintah 'botwa':${NC}"
+            echo "  botwa               - Buka menu kontrol interaktif"
+            echo "  botwa status        - Cek status bot & resource server"
+            echo "  botwa restart       - Restart proses bot WhatsApp"
+            echo "  botwa stop          - Hentikan bot WhatsApp"
+            echo "  botwa start         - Jalankan bot WhatsApp"
+            echo "  botwa logs          - Pantau log real-time"
+            echo "  botwa backup        - Backup data sekarang & kirim Telegram"
+            echo "  botwa restore       - Pulihkan data dari backup terakhir"
+            echo "  botwa telegram      - Ganti Token & Chat ID Telegram"
+            echo "  botwa gateway       - Ganti Kredensial Digiflazz / Gateway"
+            echo "  botwa reset-wa      - Reset sesi dan pairing ulang WA"
+            echo "  botwa update        - Update bot ke commit Git terbaru"
+            echo "  botwa clean         - Bersihkan log & backup lama"
+            exit 0 ;;
+        *)
+            echo -e "${RED}Perintah '$1' tidak dikenal.${NC} Ketik ${BOLD}botwa help${NC} untuk melihat daftar perintah."
+            exit 1 ;;
+    esac
+fi
 
 # MENU INTERAKTIF NOMOR UTAMA
 while true; do
     show_header
     echo -e " ${BOLD}[1]${NC}  📊 Status Bot & Sistem (PM2, RAM, Port, Disk)"
-    echo -e " ${BOLD}[2]${NC}  🔄 Restart Bot (pm2 restart bot-ppob)"
+    echo -e " ${BOLD}[2]${NC}  🔄 Restart Bot (Restart Proses PM2)"
     echo -e " ${BOLD}[3]${NC}  ⏹️ Hentikan Bot (Stop)"
     echo -e " ${BOLD}[4]${NC}  ▶️ Jalankan Bot (Start)"
     echo -e " ${BOLD}[5]${NC}  📜 Lihat Log Real-Time (pm2 logs)"

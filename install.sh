@@ -182,7 +182,8 @@ esac
 EOF
     chmod +x /usr/local/bin/bot-ppob 2>/dev/null || true
     ln -sf "$PROJECT_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
-    chmod +x "$PROJECT_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
+    ln -sf "$PROJECT_DIR/bin/botwa.sh" /usr/bin/botwa 2>/dev/null || true
+    chmod +x "$PROJECT_DIR/bin/botwa.sh" /usr/local/bin/botwa /usr/bin/botwa 2>/dev/null || true
     echo "✓ Pintasan perintah sistem 'botwa' dan 'bot-ppob' berhasil dipasang."
 fi
 
