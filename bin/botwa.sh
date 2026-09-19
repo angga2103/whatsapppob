@@ -117,20 +117,118 @@ get_pm2_status() {
     echo -e "${RED}● STOPPED / OFFLINE${NC}"
 }
 
+# Helper Status Bot WhatsApp
+get_whatsapp_status() {
+    local res=$(node -e "
+        try {
+            const fs = require('fs');
+            let st = {};
+            if (fs.existsSync('./system/bot-status.json')) {
+                try { st = JSON.parse(fs.readFileSync('./system/bot-status.json', 'utf8')); } catch(_) {}
+            }
+            const wa = st.whatsapp || {};
+            const hasCreds = fs.existsSync('./session_bot/creds.json');
+            if (wa.connected && wa.status === 'online') {
+                const phone = wa.phone ? '+' + wa.phone : 'Terhubung';
+                console.log('ONLINE|' + phone);
+            } else if (wa.status === 'connecting' || wa.status === 'reconnecting') {
+                console.log('CONNECTING|Menghubungkan...');
+            } else if (hasCreds) {
+                console.log('READY|Sesi tersimpan (Siap)');
+            } else {
+                console.log('OFFLINE|Belum Login / Scan QR');
+            }
+        } catch (_) {
+            console.log('UNKNOWN|Periksa log');
+        }
+    " 2>/dev/null)
+
+    local code=$(echo "$res" | cut -d'|' -f1)
+    local desc=$(echo "$res" | cut -d'|' -f2-)
+    if [ "$code" == "ONLINE" ]; then
+        echo -e "${GREEN}● ONLINE ($desc)${NC}"
+    elif [ "$code" == "CONNECTING" ]; then
+        echo -e "${YELLOW}● MENGHUBUNGKAN ($desc)${NC}"
+    elif [ "$code" == "READY" ]; then
+        echo -e "${YELLOW}● SIAP ($desc)${NC}"
+    elif [ "$code" == "OFFLINE" ]; then
+        echo -e "${RED}● OFFLINE ($desc)${NC}"
+    else
+        echo -e "${YELLOW}● $code ($desc)${NC}"
+    fi
+}
+
+# Helper Status Bot Telegram
+get_telegram_status() {
+    local res=$(node -e "
+        try {
+            const fs = require('fs');
+            let st = {};
+            if (fs.existsSync('./system/bot-status.json')) {
+                try { st = JSON.parse(fs.readFileSync('./system/bot-status.json', 'utf8')); } catch(_) {}
+            }
+            const cfg = require('./config');
+            const tg = st.telegram || {};
+            const token = cfg.telegram?.token || '';
+            const hasToken = Boolean(token && token.includes(':'));
+
+            if (!hasToken) {
+                console.log('DISABLED|Token belum diatur');
+            } else if (tg.status === 'conflict') {
+                console.log('CONFLICT|409 Conflict (Ganda/Zombie)');
+            } else if (tg.status === 'unauthorized') {
+                console.log('UNAUTHORIZED|401 Token Tidak Valid');
+            } else if (tg.status === 'online' || tg.active) {
+                const u = tg.username ? '@' + tg.username : 'Aktif';
+                console.log('ONLINE|' + u + ' (Polling OK)');
+            } else if (tg.status === 'restarting') {
+                console.log('RESTARTING|Sedang Restart...');
+            } else if (tg.lastError) {
+                console.log('ERROR|' + tg.lastError.slice(0, 25));
+            } else {
+                console.log('OFFLINE|Tidak Aktif / Menunggu');
+            }
+        } catch (_) {
+            console.log('UNKNOWN|Periksa log');
+        }
+    " 2>/dev/null)
+
+    local code=$(echo "$res" | cut -d'|' -f1)
+    local desc=$(echo "$res" | cut -d'|' -f2-)
+    if [ "$code" == "ONLINE" ]; then
+        echo -e "${GREEN}● ONLINE ($desc)${NC}"
+    elif [ "$code" == "RESTARTING" ]; then
+        echo -e "${YELLOW}● RESTART ($desc)${NC}"
+    elif [ "$code" == "CONFLICT" ]; then
+        echo -e "${RED}● KONFLIK ($desc)${NC}"
+    elif [ "$code" == "UNAUTHORIZED" ]; then
+        echo -e "${RED}● UNAUTHORIZED ($desc)${NC}"
+    elif [ "$code" == "DISABLED" ]; then
+        echo -e "${YELLOW}● NONAKTIF ($desc)${NC}"
+    else
+        echo -e "${RED}● OFFLINE ($desc)${NC}"
+    fi
+}
+
 show_header() {
     clear
     echo -e "${CYAN}====================================================================${NC}"
     echo -e "${BOLD}     🤖 BOT PPOB & TOKO DIGITAL WHATSAPP - COMMAND CENTER CLI${NC}"
     echo -e "${CYAN}====================================================================${NC}"
-    echo -e " 📁 Direktori : ${BOLD}$APP_DIR${NC}"
-    echo -e " ⚡ Status Bot : $(get_pm2_status)"
-    echo -e " 🕒 Waktu VPS  : $(date '+%d/%m/%Y %H:%M:%S WIB')"
+    echo -e " 📁 Direktori    : ${BOLD}$APP_DIR${NC}"
+    echo -e " ⚡ Status PM2   : $(get_pm2_status)"
+    echo -e " 📱 Bot WhatsApp : $(get_whatsapp_status)"
+    echo -e " ✈️ Bot Telegram : $(get_telegram_status)"
+    echo -e " 🕒 Waktu VPS    : $(date '+%d/%m/%Y %H:%M:%S WIB')"
     echo -e "${CYAN}--------------------------------------------------------------------${NC}"
 }
 
 # 1. Status Bot & Sistem
 cmd_status() {
-    echo -e "\n${BOLD}📊 MEMERIKSA STATUS SISTEM & BOT...${NC}\n"
+    echo -e "\n${BOLD}📊 MEMERIKSA STATUS SISTEM & STATUS KEDUA BOT...${NC}\n"
+    echo -e " 📱 WhatsApp Bot : $(get_whatsapp_status)"
+    echo -e " ✈️ Telegram Bot : $(get_telegram_status)"
+    echo ""
     if command -v pm2 &> /dev/null; then
         echo -e "${BOLD}📋 Daftar Seluruh Proses PM2:${NC}"
         pm2 list
@@ -153,11 +251,17 @@ cmd_status() {
     node -e "
         try {
             const fs = require('fs');
-            const hasSession = fs.existsSync('./session_bot');
-            console.log('📱 Sesi WhatsApp :', hasSession ? '🟢 Terdaftar (session_bot)' : '🔴 Belum Terhubung');
+            const hasSession = fs.existsSync('./session_bot/creds.json');
+            console.log('📱 Sesi WhatsApp :', hasSession ? '🟢 Terdaftar (session_bot/creds.json)' : '🔴 Belum Terhubung');
+            if (fs.existsSync('./system/bot-status.json')) {
+                const st = JSON.parse(fs.readFileSync('./system/bot-status.json', 'utf8'));
+                if (st.whatsapp?.phone) console.log('📞 Nomor WA Aktif:', '+' + st.whatsapp.phone);
+                if (st.telegram?.username) console.log('✈️ User Telegram :', '@' + st.telegram.username + ' (' + (st.telegram.status || 'unknown') + ')');
+                if (st.telegram?.adminId) console.log('👤 Admin Chat ID :', st.telegram.adminId);
+            }
             if (fs.existsSync('./system/status.json')) {
                 const st = JSON.parse(fs.readFileSync('./system/status.json', 'utf8'));
-                console.log('⚡ Status Modus   :', st.mode || 'normal');
+                console.log('⚡ Modus Operasi :', st.mode || 'normal');
             }
         } catch (_) {}
     " 2>/dev/null
@@ -165,9 +269,9 @@ cmd_status() {
     pause_menu
 }
 
-# 2. Restart Bot
+# 2. Restart Bot Total (PM2 Proses)
 cmd_restart() {
-    echo -e "\n${YELLOW}🔄 Merestart proses bot secara bersih...${NC}"
+    echo -e "\n${YELLOW}🔄 Merestart proses bot total (PM2 bot-ppob)...${NC}"
     rm -f /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true
     # 1. Bersihkan proses PM2 yang duplikat jika ada (selain bot-ppob)
     node -e "
@@ -217,8 +321,172 @@ cmd_restart() {
     cd "$APP_DIR" || exit 1
     pm2 restart bot-ppob 2>/dev/null || pm2 start index.js --name bot-ppob
     pm2 save 2>/dev/null || true
-    echo -e "${GREEN}✅ Bot berhasil direstart secara bersih!${NC}"
+    echo -e "${GREEN}✅ Seluruh sistem bot berhasil direstart secara bersih!${NC}"
     sleep 2
+}
+
+# 3. Restart Bot WhatsApp Saja
+cmd_restart_wa() {
+    echo -e "\n${CYAN}====================================================================${NC}"
+    echo -e "${BOLD}   📱 RESTART KONEKSI BOT WHATSAPP SAJA${NC}"
+    echo -e "   (Menghubungkan ulang Baileys socket tanpa menghentikan Telegram)"
+    echo -e "${CYAN}====================================================================${NC}\n"
+    mkdir -p "$APP_DIR/system"
+    touch "$APP_DIR/system/.restart-wa"
+    echo -e "Mengirim sinyal restart socket ke Bot WhatsApp..."
+    sleep 3
+    echo -e "${GREEN}✅ Sinyal restart dikirim.${NC}"
+    echo -e "Status WhatsApp: $(get_whatsapp_status)"
+    pause_menu
+}
+
+# 4. Restart Bot Telegram Saja
+cmd_restart_tg() {
+    echo -e "\n${CYAN}====================================================================${NC}"
+    echo -e "${BOLD}   ✈️ RESTART BOT TELEGRAM SAJA${NC}"
+    echo -e "   (Mereset long-polling Telegram tanpa memutus koneksi WhatsApp)"
+    echo -e "${CYAN}====================================================================${NC}\n"
+    node -e "
+        const https = require('https');
+        const cfg = require('./config');
+        if (cfg.telegram?.token) {
+            https.get('https://api.telegram.org/bot' + cfg.telegram.token + '/deleteWebhook?drop_pending_updates=false', res => {
+                res.on('data', () => {});
+            }).on('error', () => {});
+        }
+    " 2>/dev/null
+    mkdir -p "$APP_DIR/system"
+    touch "$APP_DIR/system/.restart-tg"
+    echo -e "Mengirim sinyal restart polling ke Bot Telegram..."
+    sleep 3
+    echo -e "${GREEN}✅ Sinyal restart dikirim.${NC}"
+    echo -e "Status Telegram: $(get_telegram_status)"
+    pause_menu
+}
+
+# 8. Diagnostik & Tes Koneksi Telegram
+cmd_test_tg() {
+    echo -e "\n${CYAN}====================================================================${NC}"
+    echo -e "${BOLD}       ✈️ DIAGNOSTIK & TES KONEKSI BOT TELEGRAM${NC}"
+    echo -e "${CYAN}====================================================================${NC}\n"
+    node -e "
+        const https = require('https');
+        const fs = require('fs');
+        const cfg = require('./config');
+        const token = cfg.telegram?.token || '';
+        const chatId = cfg.telegram?.chatId || '';
+
+        if (!token || !token.includes(':')) {
+            console.log('❌ Token Telegram belum diatur di file .env / config.js!');
+            process.exit(0);
+        }
+
+        console.log('🔑 Token               : ' + token.slice(0, 6) + '••••' + token.slice(-4));
+        console.log('👤 Admin Chat ID       : ' + (chatId || '(Belum diatur)'));
+        console.log('\n📡 Menghubungi Server Telegram API (getMe)...');
+
+        https.get('https://api.telegram.org/bot' + token + '/getMe', res => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(data);
+                    if (json.ok) {
+                        console.log('✅ Token Valid! Bot: @' + json.result.username + ' (' + json.result.first_name + ')');
+                        console.log('   ID Bot Telegram     : ' + json.result.id);
+                        console.log('   Grup Diizinkan      : ' + (json.result.can_join_groups ? 'Ya' : 'Tidak'));
+
+                        // Cek Webhook
+                        https.get('https://api.telegram.org/bot' + token + '/getWebhookInfo', wRes => {
+                            let wData = '';
+                            wRes.on('data', c => wData += c);
+                            wRes.on('end', () => {
+                                try {
+                                    const wJson = JSON.parse(wData);
+                                    if (wJson.ok) {
+                                        console.log('🌐 Webhook URL         : ' + (wJson.result.url || '(Kosong - Polling Mode Siap)'));
+                                        console.log('📬 Pending Update Count: ' + (wJson.result.pending_update_count || 0) + ' pesan');
+                                    }
+                                } catch(_) {}
+
+                                if (chatId) {
+                                    console.log('\n✉️ Mengirim Pesan Uji Coba ke Admin (' + chatId + ')...');
+                                    const payload = JSON.stringify({
+                                        chat_id: chatId,
+                                        text: '🔔 *TES KONEKSI BOT TELEGRAM*\n\n✅ Halo Admin! Bot Telegram terhubung dengan baik ke server VPS.\nWaktu: ' + new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
+                                        parse_mode: 'Markdown'
+                                    });
+                                    const req = https.request({
+                                        hostname: 'api.telegram.org',
+                                        path: '/bot' + token + '/sendMessage',
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+                                    }, sRes => {
+                                        let sData = '';
+                                        sRes.on('data', sc => sData += sc);
+                                        sRes.on('end', () => {
+                                            try {
+                                                const sJson = JSON.parse(sData);
+                                                if (sJson.ok) {
+                                                    console.log('✅ Pesan uji coba berhasil masuk ke Telegram Anda!');
+                                                } else {
+                                                    console.log('⚠️ Gagal kirim pesan ke Admin: ' + (sJson.description || 'Unknown error'));
+                                                }
+                                            } catch(_) {}
+                                        });
+                                    });
+                                    req.on('error', e => console.log('⚠️ Error kirim pesan: ' + e.message));
+                                    req.write(payload);
+                                    req.end();
+                                } else {
+                                    console.log('ℹ️ Admin Chat ID belum diset di .env sehingga pesan tes tidak dikirim.');
+                                }
+                            });
+                        });
+                    } else {
+                        console.log('❌ Token Gagal / Ditolak Telegram: ' + (json.description || 'Unknown error'));
+                    }
+                } catch(err) {
+                    console.log('❌ Gagal memproses respon Telegram: ' + err.message);
+                }
+            });
+        }).on('error', err => {
+            console.log('❌ Gagal koneksi ke api.telegram.org: ' + err.message);
+        });
+    " 2>/dev/null
+    echo ""
+    pause_menu
+}
+
+# 9. Diagnostik & Cek Sesi WhatsApp
+cmd_test_wa() {
+    echo -e "\n${CYAN}====================================================================${NC}"
+    echo -e "${BOLD}       📱 DIAGNOSTIK & STATUS LENGKAP BOT WHATSAPP${NC}"
+    echo -e "${CYAN}====================================================================${NC}\n"
+    node -e "
+        const fs = require('fs');
+        console.log('1. Direktori Sesi (session_bot) : ' + (fs.existsSync('./session_bot') ? '✅ Ada' : '❌ Tidak Ada'));
+        const credsExists = fs.existsSync('./session_bot/creds.json');
+        if (credsExists) {
+            const sz = fs.statSync('./session_bot/creds.json').size;
+            console.log('2. File Sesi Kredensial (creds) : ✅ Ada (' + sz + ' bytes)');
+        } else {
+            console.log('2. File Sesi Kredensial (creds) : ❌ Belum Ada / Belum Scan QR/Pairing');
+        }
+
+        let st = {};
+        if (fs.existsSync('./system/bot-status.json')) {
+            try { st = JSON.parse(fs.readFileSync('./system/bot-status.json', 'utf8')); } catch(_) {}
+        }
+        const wa = st.whatsapp || {};
+        console.log('3. Status Koneksi              : ' + (wa.connected ? '🟢 TERHUBUNG (ONLINE)' : '🔴 TERPUTUS (' + (wa.status || 'offline') + ')'));
+        console.log('4. Nomor HP Bot WhatsApp       : ' + (wa.phone ? '+' + wa.phone : '(Belum Terdeteksi)'));
+        if (wa.updatedAt) {
+            console.log('5. Terakhir Diperbarui         : ' + new Date(wa.updatedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB');
+        }
+    " 2>/dev/null
+    echo ""
+    pause_menu
 }
 
 # 3. Stop Bot
@@ -565,6 +833,14 @@ if [ -n "$1" ]; then
             cmd_status; exit 0 ;;
         restart|reboot)
             cmd_restart; exit 0 ;;
+        restart-wa|reboot-wa)
+            cmd_restart_wa; exit 0 ;;
+        restart-tg|reboot-tg|restart-tele)
+            cmd_restart_tg; exit 0 ;;
+        test-tg|cek-tg|diag-tg)
+            cmd_test_tg; exit 0 ;;
+        test-wa|cek-wa|diag-wa)
+            cmd_test_wa; exit 0 ;;
         stop)
             cmd_stop; exit 0 ;;
         start)
@@ -591,7 +867,11 @@ if [ -n "$1" ]; then
             echo -e "${BOLD}Panduan Penggunaan Perintah 'botwa':${NC}"
             echo "  botwa               - Buka menu kontrol interaktif"
             echo "  botwa status        - Cek status bot & resource server"
-            echo "  botwa restart       - Restart proses bot WhatsApp"
+            echo "  botwa restart       - Restart total bot (PM2 bot-ppob)"
+            echo "  botwa restart-wa    - Restart koneksi Bot WhatsApp saja"
+            echo "  botwa restart-tg    - Restart polling Bot Telegram saja"
+            echo "  botwa test-tg       - Diagnostik & tes kirim pesan Telegram"
+            echo "  botwa test-wa       - Diagnostik & status sesi WhatsApp"
             echo "  botwa stop          - Hentikan bot WhatsApp"
             echo "  botwa start         - Jalankan bot WhatsApp"
             echo "  botwa logs          - Pantau log real-time"
@@ -614,40 +894,48 @@ fi
 while true; do
     show_header
     echo -e " ${BOLD}[1]${NC}  📊 Status Bot & Sistem (PM2, RAM, Port, Disk)"
-    echo -e " ${BOLD}[2]${NC}  🔄 Restart Bot (Restart Proses PM2)"
-    echo -e " ${BOLD}[3]${NC}  ⏹️ Hentikan Bot (Stop)"
-    echo -e " ${BOLD}[4]${NC}  ▶️ Jalankan Bot (Start)"
-    echo -e " ${BOLD}[5]${NC}  📜 Lihat Log Real-Time (pm2 logs)"
+    echo -e " ${BOLD}[2]${NC}  🔄 Restart Bot Total (Semua Proses PM2)"
+    echo -e " ${BOLD}[3]${NC}  📱 Restart Bot WhatsApp Saja (Reconnect Baileys)"
+    echo -e " ${BOLD}[4]${NC}  ✈️ Restart Bot Telegram Saja (Reset Polling)"
+    echo -e " ${BOLD}[5]${NC}  ⏹️ Hentikan Bot (Stop)"
+    echo -e " ${BOLD}[6]${NC}  ▶️ Jalankan Bot (Start)"
+    echo -e " ${BOLD}[7]${NC}  📜 Lihat Log Real-Time (pm2 logs)"
     echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-    echo -e " ${BOLD}[6]${NC}  📦 Backup Data Manual Sekarang (Kirim ke Telegram)"
-    echo -e " ${BOLD}[7]${NC}  🔄 Restore Data dari Backup Terakhir"
+    echo -e " ${BOLD}[8]${NC}  ✈️ Diagnostik & Tes Koneksi Telegram (Kirim Pesan Uji Coba)"
+    echo -e " ${BOLD}[9]${NC}  📱 Diagnostik & Cek Sesi WhatsApp"
+    echo -e " ${BOLD}[10]${NC} 🛠️ Perbaiki Konflik Bot Telegram (Kill Zombie & Fix 409)"
     echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-    echo -e " ${BOLD}[8]${NC}  🔑 Ganti Token Telegram & Chat ID (Jika Bot Disuspend)"
-    echo -e " ${BOLD}[9]${NC}  💳 Ganti Akun Gateway (Digiflazz & Paymentkita/Pakasir)"
-    echo -e " ${BOLD}[10]${NC} 📱 Reset Sesi & Pairing Ulang WhatsApp"
-    echo -e " ${BOLD}[11]${NC} 🚀 Update Bot ke Versi Terbaru (Git Pull + Restart)"
-    echo -e " ${BOLD}[12]${NC} 🧹 Bersihkan Cache, Log & File Backup Lama"
-    echo -e " ${BOLD}[13]${NC} 🛠️ Perbaiki Konflik Bot Telegram (Kill Zombie & Fix 409)"
+    echo -e " ${BOLD}[11]${NC} 📦 Backup Data Manual Sekarang (Kirim ke Telegram)"
+    echo -e " ${BOLD}[12]${NC} 🔄 Restore Data dari Backup Terakhir"
+    echo -e " ${BOLD}[13]${NC} 🔑 Ganti Token Telegram & Chat ID (Jika Bot Disuspend)"
+    echo -e " ${BOLD}[14]${NC} 💳 Ganti Akun Gateway (Digiflazz & Paymentkita/Pakasir)"
+    echo -e " ${BOLD}[15]${NC} 📱 Reset Sesi & Pairing Ulang WhatsApp"
+    echo -e " ${BOLD}[16]${NC} 🚀 Update Bot ke Versi Terbaru (Git Pull + Restart)"
+    echo -e " ${BOLD}[17]${NC} 🧹 Bersihkan Cache, Log & File Backup Lama"
     echo -e "${CYAN}--------------------------------------------------------------------${NC}"
     echo -e " ${BOLD}[0]${NC}  ❌ Keluar"
     echo -e "${CYAN}====================================================================${NC}"
-    read -p " Masukkan pilihan angka Anda [0-13]: " choice
+    read -p " Masukkan pilihan angka Anda [0-17]: " choice
 
     case "$choice" in
         1) cmd_status ;;
         2) cmd_restart ;;
-        3) cmd_stop ;;
-        4) cmd_start ;;
-        5) cmd_logs ;;
-        6) cmd_backup ;;
-        7) cmd_restore ;;
-        8) cmd_change_telegram ;;
-        9) cmd_change_gateway ;;
-        10) cmd_reset_whatsapp ;;
-        11) cmd_update ;;
-        12) cmd_clean ;;
-        13) cmd_fix_conflict ;;
+        3) cmd_restart_wa ;;
+        4) cmd_restart_tg ;;
+        5) cmd_stop ;;
+        6) cmd_start ;;
+        7) cmd_logs ;;
+        8) cmd_test_tg ;;
+        9) cmd_test_wa ;;
+        10) cmd_fix_conflict ;;
+        11) cmd_backup ;;
+        12) cmd_restore ;;
+        13) cmd_change_telegram ;;
+        14) cmd_change_gateway ;;
+        15) cmd_reset_whatsapp ;;
+        16) cmd_update ;;
+        17) cmd_clean ;;
         0) echo -e "\nSampai jumpa! 👋\n"; exit 0 ;;
-        *) echo -e "\n${RED}❌ Pilihan tidak valid! Masukkan angka 0-13.${NC}"; sleep 1.5 ;;
+        *) echo -e "\n${RED}❌ Pilihan tidak valid! Masukkan angka 0-17.${NC}"; sleep 1.5 ;;
     esac
 done

@@ -220,6 +220,67 @@ function formatDigiflazzMessage(text = '') {
         .trim();
 }
 
+// =====================================
+// 📊 SISTEM MONITORING STATUS STATUS GANDA (WA & TELEGRAM)
+// =====================================
+const saveBotStatus = (patch = {}) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const dir = path.resolve(__dirname, 'system');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const filePath = path.resolve(dir, 'bot-status.json');
+        let cur = {};
+        if (fs.existsSync(filePath)) {
+            try { cur = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (_) {}
+        }
+        const waUser = global.sock?.user;
+        const waPhone = waUser?.id ? waUser.id.split(':')[0].replace(/[^0-9]/g, '') : (cur.whatsapp?.phone || '');
+        const waConnected = Boolean(global.sock && waUser);
+
+        const tgToken = config.telegram?.token || '';
+        const tgActive = Boolean(global.botTg && tgToken && tgToken.includes(':'));
+
+        const data = {
+            whatsapp: {
+                status: waConnected ? 'online' : (cur.whatsapp?.status === 'connecting' ? 'connecting' : 'offline'),
+                connected: waConnected,
+                phone: waPhone,
+                updatedAt: Date.now(),
+                ...(cur.whatsapp || {}),
+                ...(patch.whatsapp || {})
+            },
+            telegram: {
+                status: patch.telegramStatus || cur.telegram?.status || (tgActive ? 'online' : 'offline'),
+                active: tgActive,
+                username: global.tgBotInfo?.username || cur.telegram?.username || 'ipay_wabot',
+                botName: global.tgBotInfo?.first_name || cur.telegram?.botName || 'ipay_wa',
+                adminId: config.telegram?.chatId || cur.telegram?.adminId || '',
+                tokenMasked: tgToken.length > 10 ? tgToken.slice(0, 6) + '••••' + tgToken.slice(-4) : '',
+                lastError: (patch.telegramError !== undefined) ? patch.telegramError : (cur.telegram?.lastError || null),
+                updatedAt: Date.now(),
+                ...(cur.telegram || {}),
+                ...(patch.telegram || {})
+            },
+            updatedAt: Date.now()
+        };
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (_) {}
+};
+global.saveBotStatus = saveBotStatus;
+
+global.restartWhatsAppBot = async () => {
+    console.log('[SYSTEM] 🔄 Merestart koneksi WhatsApp Bot...');
+    saveBotStatus({ whatsapp: { status: 'connecting', connected: false } });
+    try {
+        if (global.sock && typeof global.sock.end === 'function') {
+            global.sock.end();
+        }
+    } catch (_) {}
+    setTimeout(() => {
+        startBot().catch(err => console.error('[WHATSAPP RESTART ERROR]:', err.message));
+    }, 2000);
+};
 
 async function startBot(targetPhone = null, tgChatId = null) {
     const { state, saveCreds } = await useMultiFileAuthState('session_bot');
@@ -372,9 +433,11 @@ try {
     );
 } catch(e) {}
 
+                saveBotStatus({ whatsapp: { status: 'reconnecting', connected: false } });
                 setTimeout(startBot, 5000);
             } else {
                 console.log('❌ Sesi Log Out. Silakan hapus folder session_bot dan scan ulang.');
+                saveBotStatus({ whatsapp: { status: 'session_lost', connected: false, phone: '' } });
 
 try {
 
@@ -408,6 +471,8 @@ try {
 
             }
         } else if (connection === 'open') {
+            const botNumberRaw = sock.user?.id ? sock.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
+            saveBotStatus({ whatsapp: { status: 'online', connected: true, phone: botNumberRaw } });
             // Cek apakah ini adalah sesi bangun tidur sehabis di-restore
             if (require('fs').existsSync('RESTORE_SUCCESS.txt')) {
                 try {
@@ -1307,14 +1372,31 @@ setupAutoBackupTimer();
 // ==========================================
 // 🎧 TELEGRAM COMMAND CENTER LISTENER (INLINE KEYBOARD)
 // ==========================================
-try {
-    const TelegramBot = require('node-telegram-bot-api');
-    const { exec, spawnSync } = require('child_process');
-    
-    // Mencegah bentrok / double polling jika file dimuat ulang
-    if (!global.botTg && config.telegram.token && config.telegram.token.includes(':')) {
-        global.botTg = new TelegramBot(config.telegram.token, { polling: true });
-        global.tgInputState = null;
+function initTelegramBot() {
+    try {
+        const TelegramBot = require('node-telegram-bot-api');
+        const { exec, spawnSync } = require('child_process');
+        
+        // Mencegah bentrok / double polling jika file dimuat ulang
+        if (config.telegram?.token && config.telegram.token.includes(':')) {
+            if (global.botTg) {
+                try {
+                    if (typeof global.botTg.stopPolling === 'function') global.botTg.stopPolling();
+                } catch (_) {}
+                global.botTg = null;
+            }
+            global.botTg = new TelegramBot(config.telegram.token, { polling: true });
+            global.tgInputState = null;
+
+        // Verifikasi getMe & simpan status
+        global.botTg.getMe().then(me => {
+            global.tgBotInfo = me;
+            console.log(`[SYSTEM] 🎧 Telegram Bot @${me.username} (${me.first_name}) Aktif & Polling! (Admin ID: ${config.telegram.chatId || 'Belum Diatur'})`);
+            saveBotStatus({ telegramStatus: 'online', telegramError: null, username: me.username, botName: me.first_name });
+        }).catch(err => {
+            console.warn(`⚠️ [TELEGRAM GETME ERROR]: ${err.message}`);
+            saveBotStatus({ telegramStatus: 'error', telegramError: err.message });
+        });
 
         // Tangkap polling error agar tidak crash dan filter timeout rutin
         global.botTg.on('polling_error', (error) => {
@@ -1329,10 +1411,18 @@ try {
             // Peringatan jika token bot dipakai di 2 tempat sekaligus
             if (desc.includes('Conflict') || desc.includes('terminated by other getUpdates')) {
                 console.warn('⚠️ [TELEGRAM CONFLICT]: Token bot ini sedang aktif di proses lain (409 Conflict). Pastikan hanya 1 bot yang berjalan.');
+                saveBotStatus({ telegramStatus: 'conflict', telegramError: '409 Conflict' });
+                return;
+            }
+
+            if (desc.includes('Unauthorized') || error.response?.statusCode === 401) {
+                console.warn('⚠️ [TELEGRAM 401]: Token Bot Telegram tidak valid atau telah dicabut (Unauthorized).');
+                saveBotStatus({ telegramStatus: 'unauthorized', telegramError: '401 Unauthorized' });
                 return;
             }
 
             console.warn('⚠️ [TELEGRAM POLLING]:', desc || code);
+            saveBotStatus({ telegramStatus: 'error', telegramError: desc || code });
         });
 
         const maskSecret = (str = '') => (str && str.length > 8 ? str.slice(0, 4) + '••••' + str.slice(-4) : (str ? '••••••••' : '-'));
@@ -4735,12 +4825,63 @@ try {
         });
         
         console.log(`[SYSTEM] 🎧 Telegram Command Center (Inline Keyboard) Aktif! (Admin ID: ${config.telegram.chatId || 'Belum Diatur'})`);
-    } else if (!config.telegram.token || !config.telegram.token.includes(':')) {
+    } else if (!config.telegram?.token || !config.telegram.token.includes(':')) {
         console.warn('⚠️ [TELEGRAM] TELEGRAM_TOKEN belum diatur di file .env. Command Center Telegram dinonaktifkan.');
+        saveBotStatus({ telegramStatus: 'disabled', telegramError: 'Token belum diatur' });
     }
 } catch (e) {
     console.log('[SYSTEM ERROR] Gagal memuat Telegram Listener:', e.message);
+    saveBotStatus({ telegramStatus: 'error', telegramError: e.message });
 }
+}
+
+global.initTelegramBot = initTelegramBot;
+initTelegramBot();
+
+// ==========================================
+// 🔄 FUNGSI RESTART INDEPENDEN TELEGRAM & IPC WATCHER
+// ==========================================
+global.restartTelegramBot = async () => {
+    console.log('[SYSTEM] 🔄 Merestart koneksi Telegram Bot...');
+    saveBotStatus({ telegramStatus: 'restarting' });
+    try {
+        if (global.botTg && typeof global.botTg.stopPolling === 'function') {
+            await global.botTg.stopPolling();
+        }
+    } catch (_) {}
+    global.botTg = null;
+
+    setTimeout(() => {
+        try {
+            initTelegramBot();
+        } catch (err) {
+            console.error('[TELEGRAM RESTART ERROR]:', err.message);
+        }
+    }, 2000);
+};
+
+// Polling file trigger setiap 2 detik (.restart-wa dan .restart-tg)
+setInterval(() => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const triggerTg = path.resolve(__dirname, 'system', '.restart-tg');
+        const triggerWa = path.resolve(__dirname, 'system', '.restart-wa');
+
+        if (fs.existsSync(triggerTg)) {
+            try { fs.unlinkSync(triggerTg); } catch (_) {}
+            if (typeof global.restartTelegramBot === 'function') {
+                global.restartTelegramBot();
+            }
+        }
+        if (fs.existsSync(triggerWa)) {
+            try { fs.unlinkSync(triggerWa); } catch (_) {}
+            if (typeof global.restartWhatsAppBot === 'function') {
+                global.restartWhatsAppBot();
+            }
+        }
+    } catch (_) {}
+}, 2000);
 
 
 
