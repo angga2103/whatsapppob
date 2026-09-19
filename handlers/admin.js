@@ -31,6 +31,7 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.delmenu* ID | *.editmenu* ID Harga | *.stok* ID Qty\n\n`;
         t += `⚙️ *PENGGUNA & TRANSAKSI*\n`;
         t += `• *.addsaldo* NoHP Nominal\n`;
+        t += `• *.setnama* NoHP NamaBaru\n`;
         t += `• *.member* | *.info* 628xxxx\n`;
         t += `• *.topsaldo* | *.toptrx*\n`;
         t += `• *.lunas* (Cek Antrian) | *.resend* INV-xxx\n`;
@@ -185,6 +186,35 @@ if (cmd === 'namatoko') {
 
         await sock.sendMessage(targetJid, { text: `⚠️ Saldo Anda dikoreksi/ditarik Admin sebesar ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` }).catch(()=>{});
         return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditarik ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` });
+    }
+
+    if (cmd === 'setnama' || cmd === 'editnama') {
+        const parts = args.trim().split(/\s+/);
+        if (parts.length < 2) {
+            return sock.sendMessage(sender, { text: "❌ Format: .setnama [NomorHP] [Nama Baru]\nContoh: .setnama 081775700114 Ansor studio" });
+        }
+        const phoneRaw = parts[0];
+        const newName = parts.slice(1).join(' ').trim();
+        let phone = phoneRaw.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+        if (phone.length < 10) {
+            return sock.sendMessage(sender, { text: "❌ Nomor tujuan tidak valid. Format: 08xxx atau 628xxx." });
+        }
+        const targetJid = `${phone}@s.whatsapp.net`;
+        const user = db.getUser(targetJid);
+        const oldName = user.name || '-';
+        if (db.setUserName) {
+            db.setUserName(phone, newName);
+        } else {
+            user.name = newName;
+            user.customName = true;
+            db.saveUsers();
+        }
+
+        const displayPhone = phone.startsWith('62') ? '0' + phone.slice(2) : phone;
+        return sock.sendMessage(sender, { 
+            text: `✅ *NAMA MEMBER BERHASIL DIUBAH!*\n\n📱 Nomor HP: *${displayPhone}* (+${phone})\n👤 Nama Lama: ${oldName}\n👤 Nama Baru: *${newName}*` 
+        });
     }
 
     // --- FITUR CRUD MANUAL (DIJAMIN AKTIF) ---
@@ -473,12 +503,16 @@ lastDate = new Date(
 ).toLocaleString('id-ID');
         }
 
+        let displayPhone = user.phone || jid.split('@')[0];
+        if (displayPhone.startsWith('62')) displayPhone = '0' + displayPhone.slice(2);
+        const namePart = user.name ? `\n👤 Nama:\n${user.name}\n` : '';
+
         return sock.sendMessage(sender,{
             text:
 `👤 *DETAIL MEMBER*
-
-📱 Nomor:
-${user.phone || '-'}
+${namePart}
+📱 Nomor HP:
+${displayPhone}
 
 🆔 JID:
 ${jid}

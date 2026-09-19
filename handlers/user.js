@@ -638,17 +638,14 @@ ${depositId}`
 
 if (txt === 'PROFIL') {
         session.step = S.IDLE;
-        
-        let realJid = sender;
-        if (sender.includes('@lid')) {
-            let pPhone = (db.users[sender] && db.users[sender].phone) ? String(db.users[sender].phone).replace(/[^0-9]/g, '') : sender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-            if (pPhone.startsWith('0')) pPhone = '62' + pPhone.slice(1);
-            let findMain = Object.entries(db.users).find(([j, u]) => !j.includes('@lid') && (u.phone === pPhone || j.startsWith(pPhone)));
-            if (findMain) realJid = findMain[0];
-        }
-        
-        let p = db.users[realJid] || db.users[sender] || {};
-        return sock.sendMessage(sender, { text: `👤 *PROFIL*\n📱 HP: ${p.phone || realJid.split('@')[0].replace(/[^0-9]/g, '')}\n💰 Saldo: *${typeof formatRupiah !== 'undefined' ? formatRupiah(p.saldo || 0) : 'Rp ' + (p.saldo || 0).toLocaleString('id-ID')}*\n\n_Ketik *DEPOSIT* untuk isi saldo._` });
+        const u = db.getUser(sender);
+        let displayNo = u.phone || '';
+        if (displayNo.startsWith('62')) displayNo = '0' + displayNo.slice(2);
+        if (!displayNo && !sender.includes('@lid')) displayNo = sender.split('@')[0].split(':')[0];
+        const namePart = u.name ? `\n👤 Nama: *${u.name}*` : '';
+        return sock.sendMessage(sender, { 
+            text: `👤 *PROFIL PENGGUNA*${namePart}\n📱 Nomor HP: *${displayNo || '-'}*\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau ketik *DEPOSIT* untuk isi saldo._` 
+        });
     }
 
     if (txt === 'B' || txt === '0') {
@@ -713,8 +710,12 @@ if (txt === 'PROFIL') {
         } else if (txt === '8') {
             session.step = S.IDLE;
             const u = db.getUser(sender);
+            let displayNo = u.phone || '';
+            if (displayNo.startsWith('62')) displayNo = '0' + displayNo.slice(2);
+            if (!displayNo && !sender.includes('@lid')) displayNo = sender.split('@')[0].split(':')[0];
+            const namePart = u.name ? `\n👤 Nama: *${u.name}*` : '';
             return sock.sendMessage(sender, {
-                text: `👤 *PROFIL PENGGUNA*\n📱 Nomor: ${u.phone || sender.split('@')[0]}\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau balas *7* untuk isi saldo._`
+                text: `👤 *PROFIL PENGGUNA*${namePart}\n📱 Nomor HP: *${displayNo || '-'}*\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau balas *7* untuk isi saldo._`
             });
         } else if (txt === '9') {
             session.step = S.IDLE;

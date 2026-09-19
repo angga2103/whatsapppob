@@ -196,11 +196,42 @@ const db = {
     // 🧬 Penyatuan Dompet Akun (Wallet Consolidation)
     consolidateWallets: () => {
         let changed = false;
+        
+        // Deteksi ID bot dari creds jika ada
+        let botPhone = '';
+        let botLid = '';
+        try {
+            if (fs.existsSync('./session_bot/creds.json')) {
+                const creds = JSON.parse(fs.readFileSync('./session_bot/creds.json', 'utf8'));
+                if (creds?.me?.id) botPhone = creds.me.id.split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
+                if (creds?.me?.lid) botLid = creds.me.lid.split(':')[0].split('@')[0].replace(/[^0-9]/g, '');
+            }
+        } catch (_) {}
+
         for (const [jid, user] of Object.entries(db.users)) {
+            if (!user || typeof user !== 'object') continue;
+
+            // Bersihkan entity non-user (broadcast / newsletter)
+            if (jid.includes('@newsletter') || jid.includes('@broadcast') || jid.includes('@g.us')) {
+                delete db.users[jid];
+                changed = true;
+                continue;
+            }
+
+            // Jika ini akun bot sendiri, tandai dan lewati
+            if (botPhone && (jid.startsWith(botPhone) || user.phone === botPhone)) {
+                user.isBot = true;
+                continue;
+            }
+            if (botLid && jid.startsWith(botLid)) {
+                user.isBot = true;
+                continue;
+            }
+
             if (jid.includes('@lid') && user && user.phone) {
                 let cleanPhone = String(user.phone).replace(/[^0-9]/g, '');
                 if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
-                if (cleanPhone.length >= 10 && cleanPhone.startsWith('62')) {
+                if (cleanPhone.length >= 10 && cleanPhone.startsWith('628')) {
                     const canonicalJid = `${cleanPhone}@s.whatsapp.net`;
                     if (!db.users[canonicalJid]) {
                         db.users[canonicalJid] = {
@@ -215,6 +246,10 @@ const db = {
                         changed = true;
                     } else {
                         // Jika akun canonical sudah ada, gabungkan saldo dan history
+                        if (!db.users[canonicalJid].phone) {
+                            db.users[canonicalJid].phone = cleanPhone;
+                            changed = true;
+                        }
                         if (user.saldo && Number(user.saldo) > 0) {
                             db.users[canonicalJid].saldo = (Number(db.users[canonicalJid].saldo) || 0) + Number(user.saldo);
                             user.saldo = 0;
@@ -225,12 +260,130 @@ const db = {
                             db.users[canonicalJid].history = [...new Set([...db.users[canonicalJid].history, ...user.history])];
                             changed = true;
                         }
+                        if (user.name && (!db.users[canonicalJid].name || !db.users[canonicalJid].customName)) {
+                            db.users[canonicalJid].name = user.name;
+                            changed = true;
+                        }
                         user.canonical = canonicalJid;
+                    }
+                }
+            }
+
+            if (jid.includes('@s.whatsapp.net')) {
+                const p = jid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+                if (p.startsWith('628') && p.length >= 10 && p.length <= 14) {
+                    if (!user.phone) {
+                        user.phone = p;
+                        changed = true;
                     }
                 }
             }
         }
         if (changed) db.saveUsers();
+    },
+
+    // 🔗 Hubungkan LID ke Nomor Telepon Asli (Canonical JID)
+    linkLidToPhone: (lidJid, phone, name) => {
+        if (!lidJid || !phone) return null;
+        let cleanPhone = String(phone).replace(/[^0-9]/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+        if (cleanPhone.length < 10) return null;
+
+        const canonicalJid = `${cleanPhone}@s.whatsapp.net`;
+        const cleanLid = lidJid.includes(':') ? lidJid.split(':')[0] + '@lid' : lidJid;
+
+        if (!db.users[canonicalJid]) {
+            db.users[canonicalJid] = {
+                name: name || '',
+                phone: cleanPhone,
+                saldo: 0,
+                history: [],
+                date: Date.now()
+            };
+        }
+
+        const canUser = db.users[canonicalJid];
+        canUser.phone = cleanPhone;
+        canUser.lid = cleanLid;
+        if (name && (!canUser.name || canUser.name === 'User' || !canUser.customName)) {
+            canUser.name = name;
+        }
+
+        if (db.users[cleanLid]) {
+            const lidUser = db.users[cleanLid];
+            if (Number(lidUser.saldo) > 0) {
+                canUser.saldo = (Number(canUser.saldo) || 0) + Number(lidUser.saldo);
+                lidUser.saldo = 0;
+            }
+            if (Array.isArray(lidUser.history) && lidUser.history.length > 0) {
+                if (!Array.isArray(canUser.history)) canUser.history = [];
+                canUser.history = [...new Set([...canUser.history, ...lidUser.history])];
+            }
+            lidUser.canonical = canonicalJid;
+            lidUser.phone = cleanPhone;
+            if (name) lidUser.name = name;
+        } else {
+            db.users[cleanLid] = {
+                canonical: canonicalJid,
+                phone: cleanPhone,
+                name: name || '',
+                saldo: 0,
+                history: [],
+                date: Date.now()
+            };
+        }
+
+        db.saveUsers();
+        return canUser;
+    },
+
+    // ✏️ Ubah / Set Nama Member
+    setUserName: (phoneOrJid, newName) => {
+        if (!phoneOrJid || !newName) return false;
+        let clean = String(phoneOrJid).trim();
+        let targetUser = null;
+        let canonicalJid = null;
+
+        if (db.users[clean]) {
+            targetUser = db.users[clean];
+            canonicalJid = targetUser.canonical || clean;
+        } else {
+            let p = clean.replace(/[^0-9]/g, '');
+            if (p.startsWith('0')) p = '62' + p.slice(1);
+            canonicalJid = `${p}@s.whatsapp.net`;
+            if (db.users[canonicalJid]) {
+                targetUser = db.users[canonicalJid];
+            } else {
+                for (const [j, u] of Object.entries(db.users)) {
+                    if (u && (u.phone === p || j.startsWith(p))) {
+                        targetUser = u;
+                        canonicalJid = u.canonical || j;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!targetUser) return false;
+
+        const valName = newName.trim();
+        targetUser.name = valName;
+        targetUser.customName = true;
+
+        if (canonicalJid && db.users[canonicalJid]) {
+            db.users[canonicalJid].name = valName;
+            db.users[canonicalJid].customName = true;
+        }
+
+        for (const [j, u] of Object.entries(db.users)) {
+            if (u && (u.canonical === canonicalJid || (targetUser.phone && u.phone === targetUser.phone))) {
+                u.name = valName;
+                u.customName = true;
+            }
+        }
+
+        db.saveUsers();
+        return true;
     },
 
     // 🧬 Normalisasi JID Terpusat (Resolusi @lid dan Multi-Device ke Canonical @s.whatsapp.net)
@@ -263,18 +416,37 @@ const db = {
     },
 
     // 👤 Ambil User Secara Konsisten (Selalu Menggunakan Akun Canonical)
-    getUser: (sender) => {
+    getUser: (sender, extra = {}) => {
         const jid = db.normalizeJid(sender);
+        let phone = extra.phone || null;
+        if (!phone && jid.includes('@s.whatsapp.net')) {
+            phone = jid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+        }
+        if (phone && phone.startsWith('0')) phone = '62' + phone.slice(1);
+
         if (!db.users[jid]) {
-            let phone = jid.includes('@lid') ? null : jid.split('@')[0].replace(/[^0-9]/g, '');
-            if (phone && phone.startsWith('0')) phone = '62' + phone.slice(1);
-            db.users[jid] = { saldo: 0, phone: phone, history: [], date: Date.now() };
+            db.users[jid] = { 
+                saldo: 0, 
+                phone: phone, 
+                name: extra.name || '', 
+                history: [], 
+                date: Date.now() 
+            };
             db.saveUsers();
         }
+        const u = db.users[jid];
         // Pastikan format struktur data valid
-        if (typeof db.users[jid].saldo === 'undefined') db.users[jid].saldo = 0;
-        if (!Array.isArray(db.users[jid].history)) db.users[jid].history = [];
-        return db.users[jid];
+        if (typeof u.saldo === 'undefined') u.saldo = 0;
+        if (!Array.isArray(u.history)) u.history = [];
+        if (phone && (!u.phone || u.phone !== phone)) {
+            u.phone = phone;
+            db.saveUsers();
+        }
+        if (extra.name && (!u.name || u.name === 'User' || !u.customName)) {
+            u.name = extra.name;
+            db.saveUsers();
+        }
+        return u;
     },
 
     // 💸 Potong Saldo Atomik & Tercatat

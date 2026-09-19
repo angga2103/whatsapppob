@@ -120,15 +120,19 @@ Selain melalui chat WhatsApp, **seluruh pengaturan toko, member, produk, transak
 
 ---
 
-## 5. Manajemen Saldo & Operasional Transaksi
+## 5. Manajemen Saldo, Profil & Nama Member
 
 | Perintah | Deskripsi | Contoh |
 | :--- | :--- | :--- |
+| `.setnama [NoHP] [NamaBaru]` | Menambah / mengubah nama member di sistem | `.setnama 081775700114 Ansor studio` |
 | `.addsaldo [NoHP] [nominal]` | Menambah/menyesuaikan saldo member | `.addsaldo 08123456789 50000` |
-| `.info [NoHP]` | Cek profil lengkap dan saldo member | `.info 08123456789` |
+| `.info [NoHP]` | Cek profil lengkap, nama, dan saldo member | `.info 08123456789` |
 | `.topsaldo` | Melihat daftar member dengan saldo terbanyak | `.topsaldo` |
 | `.toptrx` | Melihat daftar member paling sering transaksi | `.toptrx` |
 | *Reply pesan order manual* dengan kata `BATAL` | Membatalkan order dan mengembalikan saldo 1x secara otomatis | Balas: `BATAL` |
+
+> [!TIP]
+> **Identitas Member Otomatis**: Bot secara cerdas menangkap nama profil WhatsApp pengguna (`pushName`) dan nomor telepon asli (format `081775700114`), bukan ID internal WhatsApp yang rumit. Admin juga dapat mengubah nama member kapan saja melalui Telegram (`[ ✏️ Ubah Nama Member ]`) atau WhatsApp (`.setnama`).
 
 ---
 
