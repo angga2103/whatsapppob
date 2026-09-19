@@ -1215,44 +1215,48 @@ startBot();
 let processingWatcherStarted = false;
 
 function startProcessingWatcher(sock) {
+    // AUTO CLEAN TRANSACTION LOCK
+    setInterval(() => {
+        const now = Date.now();
+        for (const trx of activeTransactions) {
+            const order = db.orders.find(o =>
+                (o.buyer + '-' + o.sku + '-' + o.target) === trx
+            );
 
-
-    // 🗑️ WATCHER LAMA YANG MOGOK TELAH DIHAPUS
-
-
-
-// AUTO CLEAN TRANSACTION LOCK
-setInterval(() => {
-
-    const now = Date.now();
-
-    for (const trx of activeTransactions) {
-
-        const order = db.orders.find(o =>
-
-            (o.buyer + '-' + o.sku + '-' + o.target) === trx
-        );
-
-        if (
-            !order ||
-            order.status === 'success' ||
-            order.status === 'failed' ||
-            order.status === 'cancelled'
-        ) {
-
-            activeTransactions.delete(trx);
+            if (
+                !order ||
+                order.status === 'success' ||
+                order.status === 'failed' ||
+                order.status === 'cancelled'
+            ) {
+                activeTransactions.delete(trx);
+            } else if (
+                now - order.timestamp > 30 * 60 * 1000
+            ) {
+                activeTransactions.delete(trx);
+            }
         }
+    }, 60000);
+}
 
-        else if (
-            now - order.timestamp > 30 * 60 * 1000
-        ) {
-
-            activeTransactions.delete(trx);
+// ========================================
+// 🛠️ OTOMATIS PASANG SYMLINK CLI botwa (LINUX)
+// ========================================
+if (process.platform === 'linux') {
+    try {
+        const { execSync } = require('child_process');
+        const botwaBin = path.resolve(__dirname, 'bin', 'botwa.sh');
+        if (fs.existsSync(botwaBin)) {
+            try { fs.chmodSync(botwaBin, 0o755); } catch (_) {}
+            execSync(`chmod +x "${botwaBin}" 2>/dev/null || true`);
+            execSync(`ln -sf "${botwaBin}" /usr/local/bin/botwa 2>/dev/null || true`);
+            execSync(`ln -sf "${botwaBin}" /usr/bin/botwa 2>/dev/null || true`);
+            execSync(`ln -sf "${botwaBin}" /usr/local/bin/bot-ppob 2>/dev/null || true`);
+            execSync(`ln -sf "${botwaBin}" /usr/bin/bot-ppob 2>/dev/null || true`);
+            execSync(`chmod +x /usr/local/bin/botwa /usr/bin/botwa /usr/local/bin/bot-ppob /usr/bin/bot-ppob 2>/dev/null || true`);
         }
-    }
-
-}, 60000);
-
+    } catch (_) {}
+}
 
 // ========================================
 // 🛡️ SMARTDATA TELEGRAM COMMAND CENTER (AUTO-BACKUP DINAMIS)
@@ -1274,28 +1278,14 @@ function setupAutoBackupTimer() {
     autoBackupIntervalTimer = setInterval(() => {
         const { exec } = require('child_process');
         console.log(`[SYSTEM] 📦 Menjalankan Auto-Backup (${minutes}m) ke Telegram...`);
-        exec('node lib/backup/backup-telegram.js', (error, stdout, stderr) => {
+        const targetChat = config.telegram.chatId || '';
+        exec(`node lib/backup/backup-telegram.js ${targetChat}`, (error, stdout, stderr) => {
             if (error) console.log(`[BACKUP ERROR]: ${error.message}`);
         });
     }, ms);
 }
 
 setupAutoBackupTimer();
-
-// Otomatis pasang symlink CLI botwa jika berjalan di Linux
-if (process.platform === 'linux') {
-    try {
-        const { execSync } = require('child_process');
-        const botwaBin = path.resolve(__dirname, 'bin', 'botwa.sh');
-        if (fs.existsSync(botwaBin)) {
-            fs.chmodSync(botwaBin, '755');
-            execSync(`ln -sf "${botwaBin}" /usr/local/bin/botwa 2>/dev/null && chmod +x /usr/local/bin/botwa 2>/dev/null || true`);
-            execSync(`ln -sf "${botwaBin}" /usr/local/bin/bot-ppob 2>/dev/null && chmod +x /usr/local/bin/bot-ppob 2>/dev/null || true`);
-        }
-    } catch (_) {}
-}
-
-}
 
 
 // ==========================================
@@ -2867,16 +2857,24 @@ try {
             if (action === 'tg_backup_now') {
                 global.botTg.answerCallbackQuery(query.id, { text: '⏳ Menjalankan backup...' });
                 await global.botTg.sendMessage(chatId, "⏳ *Membuat file backup terbaru dan mengunggah ke Telegram...*\n_Harap tunggu sejenak, seluruh data & sesi sedang dikompresi..._", { parse_mode: 'Markdown' });
-                exec('node lib/backup/backup-telegram.js', (err) => {
-                    if (err) {
-                        return global.botTg.sendMessage(chatId, `❌ *Backup Gagal:*\n\`${err.message}\``, {
+                exec(`node lib/backup/backup-telegram.js ${chatId}`, (err, stdout, stderr) => {
+                    const backupFiles = fs.readdirSync('.').filter(f => /^AUTO-BACKUP-[\w.-]+\.zip$/.test(f)).sort().reverse();
+                    if (err || backupFiles.length === 0) {
+                        const errMsg = (err ? err.message : '') + (stderr ? '\n' + stderr : '') + (stdout ? '\n' + stdout : '');
+                        return global.botTg.sendMessage(chatId, `❌ *Backup Gagal Dibuat / Dikirim:*\n\`\`\`\n${errMsg.slice(0, 400) || 'File zip tidak berhasil terbuat di server'}\n\`\`\`\n\n_Sistem akan mencoba membuat backup ulang dengan modul Python fallback._`, {
                             parse_mode: 'Markdown',
                             reply_markup: {
-                                inline_keyboard: [[{ text: '⬅️ Kembali ke Menu Backup', callback_data: 'tg_backup_menu' }]]
+                                inline_keyboard: [
+                                    [{ text: '🔄 Coba Backup Lagi', callback_data: 'tg_backup_now' }],
+                                    [{ text: '⬅️ Kembali ke Menu Backup', callback_data: 'tg_backup_menu' }]
+                                ]
                             }
                         });
                     }
-                    return global.botTg.sendMessage(chatId, `✅ *Backup Berhasil Diselesaikan!*\nFile zip terbaru telah diunggah ke chat ini dan tersimpan di VPS.`, {
+                    const targetZip = backupFiles[0];
+                    const stat = fs.statSync(targetZip);
+                    const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
+                    return global.botTg.sendMessage(chatId, `✅ *Backup Berhasil Diselesaikan!*\n\n• File: \`${targetZip}\`\n• Ukuran: *${sizeMB} MB*\n\nFile zip telah terkirim ke obrolan Telegram ini dan tersimpan di VPS.`, {
                         parse_mode: 'Markdown',
                         reply_markup: {
                             inline_keyboard: [
@@ -3104,6 +3102,19 @@ try {
                         } catch (npmErr) {
                             npmNotice = `\n⚠️ Gagal update npm: ${npmErr.message}`;
                         }
+                    }
+
+                    // Pastikan CLI botwa selalu aktif dan executable di Linux
+                    if (process.platform === 'linux') {
+                        try {
+                            const botwaBin = path.resolve(__dirname, 'bin', 'botwa.sh');
+                            if (fs.existsSync(botwaBin)) {
+                                execSync(`chmod +x "${botwaBin}" 2>/dev/null || true`);
+                                execSync(`ln -sf "${botwaBin}" /usr/local/bin/botwa 2>/dev/null || true`);
+                                execSync(`ln -sf "${botwaBin}" /usr/bin/botwa 2>/dev/null || true`);
+                                execSync(`chmod +x /usr/local/bin/botwa /usr/bin/botwa 2>/dev/null || true`);
+                            }
+                        } catch (_) {}
                     }
 
                     await global.botTg.sendMessage(chatId,
