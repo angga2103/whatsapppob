@@ -23,13 +23,15 @@ const {
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
+const config = require('./config');
+
 // 1. Inisialisasi Konfigurasi & Bot Telegram
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
-const ADMIN_CHAT_ID = String(process.env.TELEGRAM_CHAT_ID || '').trim();
+const TELEGRAM_TOKEN = config.telegram.token || process.env.TELEGRAM_TOKEN || '';
+const ADMIN_CHAT_ID = String(config.telegram.chatId || process.env.TELEGRAM_CHAT_ID || '').trim();
 const SESSION_DIR = path.resolve(__dirname, 'session_bot');
 
 if (!TELEGRAM_TOKEN || !TELEGRAM_TOKEN.includes(':')) {
-    console.error('❌ TELEGRAM_TOKEN belum diatur atau tidak valid di file .env!');
+    console.error('❌ TELEGRAM_TOKEN belum diatur atau tidak valid di settings.json atau .env!');
     process.exit(1);
 }
 
@@ -40,7 +42,11 @@ console.log(`🚀 [TELEGRAM] Bridge Pairing Bot aktif! Admin ID: ${ADMIN_CHAT_ID
 bot.on('polling_error', (error) => {
     const desc = error.response?.body?.description || error.message || '';
     const code = error.code || '';
-    if (code === 'EFATAL' || code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || code === 'ECONNRESET' || desc.includes('socket hang up')) {
+    if (code === 'EFATAL' || code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || code === 'ECONNRESET' || desc.includes('socket hang up') || desc.includes('ETIMEDOUT')) {
+        return;
+    }
+    if (desc.includes('Conflict') || desc.includes('terminated by other getUpdates')) {
+        console.warn('⚠️ [TELEGRAM CONFLICT]: Token bot ini sedang aktif di proses lain (409 Conflict). Pastikan hanya 1 bot yang berjalan.');
         return;
     }
     console.warn('⚠️ [TELEGRAM POLLING ERROR]:', desc || code);

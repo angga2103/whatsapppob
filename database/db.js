@@ -115,8 +115,8 @@ const recoverSettings = () => {
             if (!settings.paymentGateway && envConfig.PAYMENT_GATEWAY) {
                 settings.paymentGateway = envConfig.PAYMENT_GATEWAY;
             }
-            if (!settings.telegram?.token && envConfig.TELEGRAM_TOKEN) {
-                settings.telegram = { token: envConfig.TELEGRAM_TOKEN, chatId: envConfig.TELEGRAM_CHAT_ID || '' };
+            if ((!settings.telegram?.token || settings.telegram.token.startsWith('8470095940')) && envConfig.TELEGRAM_TOKEN && !envConfig.TELEGRAM_TOKEN.startsWith('8470095940')) {
+                settings.telegram = { token: envConfig.TELEGRAM_TOKEN, chatId: envConfig.TELEGRAM_CHAT_ID || settings.telegram?.chatId || '' };
             }
         } catch (_) {}
     }
@@ -125,7 +125,7 @@ const recoverSettings = () => {
     try {
         const { execSync } = require('child_process');
         const stashes = execSync('git stash list', { stdio: 'pipe', encoding: 'utf-8' }).trim();
-        if (stashes && (!settings.digiflazz?.username || !settings.paymentkita?.merchantId)) {
+        if (stashes && (!settings.digiflazz?.username || !settings.paymentkita?.merchantId || !settings.telegram?.token || settings.telegram?.token.startsWith('8470095940'))) {
             const stashLines = stashes.split('\n');
             for (let i = 0; i < Math.min(stashLines.length, 5); i++) {
                 try {
@@ -146,6 +146,12 @@ const recoverSettings = () => {
                         }
                         if (stashedObj.paymentGateway && !settings.paymentGateway) {
                             settings.paymentGateway = stashedObj.paymentGateway;
+                        }
+                        if (stashedObj.telegram?.token && !stashedObj.telegram.token.startsWith('8470095940')) {
+                            if (!settings.telegram?.token || settings.telegram.token.startsWith('8470095940')) {
+                                settings.telegram = stashedObj.telegram;
+                                console.log(`[RECOVERY] 🛡️ Berhasil memulihkan Telegram bot dari git stash@{${i}}!`);
+                            }
                         }
                     }
                 } catch (_) {}
