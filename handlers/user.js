@@ -82,6 +82,107 @@ function parseProduct(name, brand) {
     };
 }
 
+// --- SMART FILTER & SEARCH ENGINE ---
+function filterSmartProducts(sourceProducts, rawKeyword) {
+    if (!rawKeyword || !Array.isArray(sourceProducts) || sourceProducts.length === 0) {
+        return null;
+    }
+
+    const keyword = rawKeyword.toLowerCase().trim();
+
+    // 1. Filter Kuota: e.g. "2gb", "2 gb", "1.5gb", "500mb"
+    const gbMatch = keyword.match(/^(\d+(?:\.\d+)?)\s*(gb|giga|gigabyte)$/i);
+    const mbMatch = keyword.match(/^(\d+(?:\.\d+)?)\s*(mb|mega|megabyte)$/i);
+    if (gbMatch) {
+        const targetGb = parseFloat(gbMatch[1]);
+        const matched = sourceProducts
+            .filter(p => (p.quotaGb && p.quotaGb > 0) || (p.nama && p.nama.toLowerCase().includes(`${targetGb}gb`)))
+            .sort((a, b) => {
+                const aDiff = Math.abs((a.quotaGb || 0) - targetGb);
+                const bDiff = Math.abs((b.quotaGb || 0) - targetGb);
+                if (aDiff !== bDiff) return aDiff - bDiff;
+                return a.hargaJual - b.hargaJual;
+            });
+        if (matched.length > 0) return matched.slice(0, 10);
+    } else if (mbMatch) {
+        const targetMb = parseFloat(mbMatch[1]);
+        const matched = sourceProducts
+            .filter(p => (p.quotaMb && p.quotaMb > 0) || (p.nama && p.nama.toLowerCase().includes(`${targetMb}mb`)))
+            .sort((a, b) => {
+                const aDiff = Math.abs((a.quotaMb || 0) - targetMb);
+                const bDiff = Math.abs((b.quotaMb || 0) - targetMb);
+                if (aDiff !== bDiff) return aDiff - bDiff;
+                return a.hargaJual - b.hargaJual;
+            });
+        if (matched.length > 0) return matched.slice(0, 10);
+    }
+
+    // 2. Filter Masa Aktif: e.g. "30hari", "30 hari", "30h", "7h", "7hari", "1hari"
+    const hariMatch = keyword.match(/^(\d+)\s*(h|hari|hr|day|days)$/i);
+    if (hariMatch) {
+        const targetHari = parseInt(hariMatch[1], 10);
+        const matched = sourceProducts
+            .filter(p => p.validityDays && p.validityDays > 0 && p.validityDays !== 999)
+            .sort((a, b) => {
+                const aDiff = Math.abs((a.validityDays || 0) - targetHari);
+                const bDiff = Math.abs((b.validityDays || 0) - targetHari);
+                if (aDiff !== bDiff) return aDiff - bDiff;
+                return a.hargaJual - b.hargaJual;
+            });
+        if (matched.length > 0) return matched.slice(0, 10);
+    }
+
+    // 3. Filter Harga: e.g. "50k", "50 k", "50rb", "50 rb", "50000", "25k"
+    const hargaMatch = keyword.match(/^(?:rp\.?\s*)?(\d+)\s*(k|rb|ribu)?$/i);
+    if (hargaMatch) {
+        let val = parseInt(hargaMatch[1], 10);
+        const unit = (hargaMatch[2] || '').toLowerCase();
+        if (unit === 'k' || unit === 'rb' || unit === 'ribu') {
+            val *= 1000;
+        } else if (val < 1000) {
+            val *= 1000;
+        }
+        const matched = [...sourceProducts]
+            .sort((a, b) => {
+                const aDiff = Math.abs(a.hargaJual - val);
+                const bDiff = Math.abs(b.hargaJual - val);
+                if (aDiff !== bDiff) return aDiff - bDiff;
+                return a.hargaJual - b.hargaJual;
+            });
+        if (matched.length > 0) return matched.slice(0, 10);
+    }
+
+    // 4. Pencarian Teks / Nama Paket (e.g. "akrab", "combo", "unlimited", "booster")
+    let matched = sourceProducts.filter(p => {
+        const nama = (p.nama || '').toLowerCase();
+        const clean = (p.cleanName || '').toLowerCase();
+        const group = (p.groupName || '').toLowerCase();
+        return nama.includes(keyword) || clean.includes(keyword) || group.includes(keyword);
+    });
+
+    if (matched.length === 0) {
+        const words = keyword.split(/\s+/).filter(Boolean);
+        if (words.length > 1) {
+            matched = sourceProducts.filter(p => {
+                const combined = ((p.nama || '') + ' ' + (p.cleanName || '') + ' ' + (p.groupName || '')).toLowerCase();
+                return words.every(w => combined.includes(w));
+            });
+        }
+    }
+
+    if (matched.length > 0) {
+        matched.sort((a, b) => {
+            const aExact = (a.nama || '').toLowerCase().includes(keyword) ? 1 : 0;
+            const bExact = (b.nama || '').toLowerCase().includes(keyword) ? 1 : 0;
+            if (aExact !== bExact) return bExact - aExact;
+            return a.hargaJual - b.hargaJual;
+        });
+        return matched.slice(0, 10);
+    }
+
+    return [];
+}
+
 async function showProductList(sock, sender, session) {
     const perPage = 10;
     const total = session.tempList.length;
@@ -94,6 +195,9 @@ async function showProductList(sock, sender, session) {
     const pageItems = session.tempList.slice(start, end);
     
     let t = `📱 *KATALOG ${session.tempOp || session.tempBrand}*\n`;
+    if (session.tempSearchKeyword) {
+        t += `🔍 *Hasil Filter:* "${session.tempSearchKeyword}" (${total} paket ditemukan)\n`;
+    }
     t += `Halaman *${session.tempPage + 1}* dari *${maxPage + 1}*\n`;
     
     let currentGroup = "";
@@ -108,10 +212,23 @@ async function showProductList(sock, sender, session) {
     
     t += `\n👇 Balas angka pilihan Anda.`;
 
-    if (session.tempSmartMode) {
+    if (session.tempSmartMode || session.tempSearchKeyword) {
         t += `\n\n➡️ Ketik *LANJUT* atau *Z* untuk melihat seluruh katalog ${session.tempOp || session.tempBrand || ''}.`;
     } else if (maxPage > 0) {
         t += `\n➡️ Ketik *LANJUT* atau *Z* untuk halaman berikutnya (${session.tempPage + 1}/${maxPage + 1}).`;
+    }
+
+    // PANDUAN PENCARIAN & PEMBELIAN CEPAT (SESUAI PERMINTAAN USER)
+    if (session.tempTipe === 'Data') {
+        t += `\n\n⚡ *Pencarian Cepat Paket Data:*\n`;
+        t += `Balas langsung kriteria paket yang Anda inginkan:\n`;
+        t += `• Kuota : ketik *2gb*, *10gb*, *500mb*, dll\n`;
+        t += `• Masa Aktif : ketik *30hari*, *7hari*, *1hari*, dll\n`;
+        t += `• Rentang Harga : ketik *25k*, *50k*, *100k*, dll\n`;
+        t += `• Nama Paket : ketik kata kunci (contoh: *combo*, *akrab*)`;
+    } else if (session.tempTipe === 'Pulsa' || session.tempTipe === 'E-Money') {
+        t += `\n\n⚡ *Pencarian Cepat Nominal:*\n`;
+        t += `Ketik nominal yang dicari, contoh: *10k*, *50k*, *100k*`;
     }
     
     await sock.sendMessage(sender, { text: t });
@@ -546,7 +663,7 @@ if (txt === 'PROFIL') {
             session.step = S.INPUT_TARGET_PULSA;
             if (session.tempTipe === 'Data') {
                 return sock.sendMessage(sender, {
-                    text: `📶 *PAKET DATA INTERNET*\n\nSilakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\nKetik *0* atau *B* untuk batal.`
+                    text: `📶 *PAKET DATA INTERNET*\n\nSilakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\n⚡ *Tips Beli Cepat Langsung Filter:*\nBisa sertakan kata kunci setelah nomor, contoh:\n• _08123456789 2gb_ (Paket ~2GB)\n• _08123456789 30hari_ (Paket 30 Hari)\n• _08123456789 50k_ (Paket ~Rp50.000)\n\nKetik *0* atau *B* untuk batal.`
                 });
             }
             return sock.sendMessage(sender, {
@@ -786,16 +903,18 @@ if (txt === 'PROFIL') {
     // 3. ALUR PULSA/DATA (Auto Detect -> Sort -> Group -> Paginate)
     if (session.step === S.INPUT_TARGET_PULSA) {
         let searchKeyword = '';
-
         let rawInput = text.trim();
 
-        if (
-            session.tempTipe === 'Data' &&
-            rawInput.includes('.')
-        ) {
-            const parts = rawInput.split('.');
-            rawInput = parts[0];
-            searchKeyword = parts.slice(1).join('.').trim();
+        if (session.tempTipe === 'Data') {
+            if (rawInput.includes('.')) {
+                const parts = rawInput.split('.');
+                rawInput = parts[0];
+                searchKeyword = parts.slice(1).join('.').trim();
+            } else if (rawInput.includes(' ')) {
+                const parts = rawInput.split(/\s+/);
+                rawInput = parts[0];
+                searchKeyword = parts.slice(1).join(' ').trim();
+            }
         }
 
         const phone = rawInput.replace(/[^0-9]/g, '');
@@ -817,11 +936,9 @@ if (txt === 'PROFIL') {
         session.tempOp = operator;
         
         const produkRaw = db.ppob.filter(p => {
-
             if (session.tempTipe === 'PLN') {
                 return p.kategori === 'PLN';
             }
-
             return p.kategori === session.tempTipe && p.brand === operator;
         });
         if (produkRaw.length === 0) return sock.sendMessage(sender, { text: `❌ Produk ${session.tempTipe} untuk ${operator} sedang kosong.` });
@@ -836,129 +953,28 @@ if (txt === 'PROFIL') {
             return a.hargaJual - b.hargaJual;
         });
 
+        // Simpan seluruh katalog lengkap operator untuk fitur search & reset
+        session.tempAllProducts = [...parsedProducts];
+
         // SMART DATA
         if (session.tempTipe === 'Data') {
-
-            session.tempSearchKeyword = searchKeyword;
-
+            session.tempSearchKeyword = searchKeyword || '';
 
             if (searchKeyword) {
-
-                const keyword =
-                    searchKeyword.toLowerCase().trim();
-
-                if (keyword.endsWith('gb')) {
-
-                    const target =
-                        parseFloat(
-                            keyword.replace('gb','')
-                        );
-
-                    parsedProducts =
-                        parsedProducts
-                        .filter(
-                            p => p.quotaGb > 0
-                        )
-                        .sort(
-                            (a,b)=>
-                                Math.abs(a.quotaGb-target)
-                                -
-                                Math.abs(b.quotaGb-target)
-                        )
-                        .slice(0,10);
-
+                const filtered = filterSmartProducts(parsedProducts, searchKeyword);
+                if (filtered && filtered.length > 0) {
+                    parsedProducts = filtered;
+                    session.tempSmartMode = false;
+                } else {
+                    session.tempSmartMode = false;
                 }
-
-                else if (
-                    keyword.endsWith('k')
-                ) {
-
-                    const target =
-                        parseInt(
-                            keyword.replace('k','')
-                        ) * 1000;
-
-                    parsedProducts =
-                        parsedProducts
-                        .sort(
-                            (a,b)=>
-                                Math.abs(a.hargaJual-target)
-                                -
-                                Math.abs(b.hargaJual-target)
-                        )
-                        .slice(0,10);
-
-                }
-
-                else if (
-                    keyword.endsWith('h')
-                ) {
-
-                    const target =
-                        parseInt(
-                            keyword.replace('h','')
-                        );
-
-                    parsedProducts =
-                        parsedProducts
-                        .filter(
-                            p => p.validityDays > 0
-                        )
-                        .sort(
-                            (a,b)=>
-                                Math.abs(a.validityDays-target)
-                                -
-                                Math.abs(b.validityDays-target)
-                        )
-                        .slice(0,10);
-
-                }
-
-                else {
-
-                    parsedProducts =
-                        parsedProducts.filter(p => {
-
-                            const gabung =
-                                (
-                                    (p.nama || '') +
-                                    ' ' +
-                                    (p.cleanName || '') +
-                                    ' ' +
-                                    (p.groupName || '')
-                                ).toLowerCase();
-
-                            return gabung.includes(
-                                keyword
-                            );
-
-                        }).slice(0,10);
-
-                }
-
             } else {
-
-                parsedProducts =
-                    parsedProducts
-                    .sort(
-                        (a,b)=>
-                            a.hargaJual-b.hargaJual
-                    )
-                    .slice(0,5);
-
+                parsedProducts = parsedProducts
+                    .sort((a, b) => a.hargaJual - b.hargaJual)
+                    .slice(0, 5);
                 session.tempSmartMode = true;
-
             }
         }
-
-        session.tempAllProducts =
-            produkRaw.map(p => ({
-                ...p,
-                ...parseProduct(
-                    p.nama,
-                    operator
-                )
-            }));
 
         session.tempList = parsedProducts;
         session.tempPage = 0; // Mulai dari Halaman 1
@@ -990,6 +1006,7 @@ if (txt === 'PROFIL') {
             return a.hargaJual - b.hargaJual;
         });
 
+        session.tempAllProducts = [...parsedProducts];
         session.tempList = parsedProducts;
         session.tempPage = 0;
         session.step = S.PILIH_PRODUK_EMONEY;
@@ -997,202 +1014,67 @@ if (txt === 'PROFIL') {
         return showProductList(sock, sender, session);
     }
 
-    
-
-// ========================================
-// SMART SEARCH PRODUK
-// ========================================
-
-if (
-    session.step === S.PILIH_PRODUK_PULSA ||
-    session.step === S.PILIH_PRODUK_EMONEY
-) {
-
-    const isNextCmd = ['Z', 'N', 'NEXT', 'L', 'LANJUT', '00', '>'].includes(txt);
-
-    // MODE SEARCH
-    if (
-        !/^\d+$/.test(txt) &&
-        !isNextCmd
-    ) {
-
-        const keyword = txt.toLowerCase();
-
-        let sourceProducts =
-            session.tempAllProducts ||
-            session.tempList;
-
-        // SMART SEARCH GB
-        if (keyword.endsWith('gb')) {
-
-            const targetGb =
-                parseFloat(
-                    keyword.replace('gb','')
-                );
-
-            const hasilGb =
-                sourceProducts
-                    .filter(
-                        p => p.quotaGb > 0
-                    )
-                    .sort(
-                        (a,b)=>
-                            Math.abs(a.quotaGb-targetGb)
-                            -
-                            Math.abs(b.quotaGb-targetGb)
-                    )
-                    .slice(0,10);
-
-            if (hasilGb.length > 0) {
-                session.tempList = hasilGb;
-                session.tempPage = 0;
-                return showProductList(sock, sender, session);
-            }
-        }
-
-        // SMART SEARCH HARI
-        if (keyword.endsWith('h')) {
-
-            const targetHari =
-                parseInt(
-                    keyword.replace('h','')
-                );
-
-            const hasilHari =
-                sourceProducts
-                    .filter(
-                        p => p.validityDays > 0
-                    )
-                    .sort(
-                        (a,b)=>
-                            Math.abs(a.validityDays-targetHari)
-                            -
-                            Math.abs(b.validityDays-targetHari)
-                    )
-                    .slice(0,10);
-
-            if (hasilHari.length > 0) {
-                session.tempList = hasilHari;
-                session.tempPage = 0;
-                return showProductList(sock, sender, session);
-            }
-        }
-
-        // SMART SEARCH HARGA
-        if (keyword.endsWith('k')) {
-
-            const targetHarga =
-                parseInt(
-                    keyword.replace('k','')
-                ) * 1000;
-
-            const hasilHarga =
-                [...sourceProducts]
-                    .sort(
-                        (a,b)=>
-                            Math.abs(a.hargaJual-targetHarga)
-                            -
-                            Math.abs(b.hargaJual-targetHarga)
-                    )
-                    .slice(0,10);
-
-            if (hasilHarga.length > 0) {
-                session.tempList = hasilHarga;
-                session.tempPage = 0;
-                return showProductList(sock, sender, session);
-            }
-        }
-
-        let hasil = sourceProducts.filter(p => {
-            const nama = p.nama.toLowerCase();
-            const clean = (p.cleanName || '').toLowerCase();
-            const group = (p.groupName || '').toLowerCase();
-
-            return (
-                nama.includes(keyword) ||
-                clean.includes(keyword) ||
-                group.includes(keyword)
-            );
-        });
-
-        // MULTI KEYWORD
-        if (hasil.length === 0) {
-            const words = keyword.split(' ');
-
-            hasil = sourceProducts.filter(p => {
-                const gabung = (
-                    p.nama + ' ' +
-                    (p.cleanName || '') + ' ' +
-                    (p.groupName || '')
-                ).toLowerCase();
-
-                return words.every(w =>
-                    gabung.includes(w)
-                );
-            });
-        }
-
-        // SORT
-        hasil.sort((a, b) => {
-            const aExact =
-                a.nama.toLowerCase().includes(keyword)
-                ? 1 : 0;
-
-            const bExact =
-                b.nama.toLowerCase().includes(keyword)
-                ? 1 : 0;
-
-            if (aExact !== bExact)
-                return bExact - aExact;
-
-            return a.hargaJual - b.hargaJual;
-        });
-
-        if (hasil.length === 0) {
-            return sock.sendMessage(sender, {
-                text:
-`⚠️ Paket "${txt}" tidak ditemukan pada katalog ${session.tempOp || session.tempBrand || ''} saat ini.
-
-💡 Tips pencarian:
-• 30gb  → cari kuota
-• 30h   → cari masa aktif
-• 25k   → cari harga
-
-Atau ketik *LANJUT* / *Z* untuk melihat katalog lengkap.`
-            });
-        }
-
-        session.tempList = hasil;
-        session.tempPage = 0;
-
-        return showProductList(
-            sock,
-            sender,
-            session
-        );
-    }
-}
-
-// 5. TANGKAP INPUT (PULSA & EMONEY) & LOGIKA NEXT (Z/LANJUT/NEXT)
+    // 5. TANGKAP INPUT PRODUK (PULSA/DATA/EMONEY) & SMART FILTER / PAGINASI
     if (session.step === S.PILIH_PRODUK_PULSA || session.step === S.PILIH_PRODUK_EMONEY) {
-        const isNextCmd = ['Z', 'N', 'NEXT', 'L', 'LANJUT', '00', '>'].includes(txt);
+        const upperTxt = txt.trim().toUpperCase();
+        const isResetCmd = ['ALL', 'SEMUA', 'RESET'].includes(upperTxt);
+        const isNextCmd = ['Z', 'N', 'NEXT', 'L', 'LANJUT', '00', '>'].includes(upperTxt) || isResetCmd;
+
+        // 1. Paginasi & Navigasi Halaman
         if (isNextCmd) {
-            if (
-                session.tempSmartMode &&
-                session.tempAllProducts
-            ) {
+            if ((session.tempSmartMode || session.tempSearchKeyword || isResetCmd) && session.tempAllProducts) {
                 session.tempList = session.tempAllProducts;
                 session.tempPage = 0;
                 session.tempSmartMode = false;
+                delete session.tempSearchKeyword;
                 return showProductList(sock, sender, session);
             }
 
-            session.tempPage += 1;
+            const maxPage = Math.floor((session.tempList.length - 1) / 10);
+            if (session.tempPage >= maxPage) {
+                session.tempPage = 0;
+            } else {
+                session.tempPage += 1;
+            }
             return showProductList(sock, sender, session);
         }
-        
-        const idx = parseInt(txt) - 1;
-        if (isNaN(idx) || !session.tempList[idx]) return sock.sendMessage(sender, { text: `❌ Pilihan tidak valid. Balas nomor produk, atau ketik *LANJUT* / *Z* untuk ganti halaman.` });
+
+        // 2. Pencarian & Filter Cerdas (Jika bukan angka pemilihan produk)
+        if (!/^\d+$/.test(txt.trim())) {
+            const rawSearch = txt.trim();
+            const sourceProducts = session.tempAllProducts || session.tempList;
+            const hasil = filterSmartProducts(sourceProducts, rawSearch);
+
+            if (!hasil || hasil.length === 0) {
+                return sock.sendMessage(sender, {
+                    text:
+`⚠️ Paket "${rawSearch}" tidak ditemukan pada katalog ${session.tempOp || session.tempBrand || ''} saat ini.
+
+⚡ *Tips Pencarian Cepat:*
+• Kuota : ketik *2gb*, *10gb*, *500mb*
+• Masa Aktif : ketik *30hari*, *7hari*, *1hari*
+• Rentang Harga : ketik *25k*, *50k*, *100k*
+• Nama Paket : ketik kata kunci (contoh: *combo*, *akrab*)
+
+Ketik *LANJUT* atau *SEMUA* untuk melihat katalog lengkap.`
+                });
+            }
+
+            session.tempList = hasil;
+            session.tempPage = 0;
+            session.tempSearchKeyword = rawSearch;
+            session.tempSmartMode = false;
+
+            return showProductList(sock, sender, session);
+        }
+
+        // 3. Pemilihan Produk dengan Angka
+        const idx = parseInt(txt.trim(), 10) - 1;
+        if (isNaN(idx) || !session.tempList[idx]) {
+            return sock.sendMessage(sender, {
+                text: `❌ Pilihan tidak valid. Balas nomor produk (1-${session.tempList.length}), ketik pencarian paket (cth: *2gb*, *30hari*, *50k*), atau ketik *LANJUT* / *Z* untuk ganti halaman.`
+            });
+        }
         
         session.tempItem = session.tempList[idx];
         session.step = S.CONFIRM;

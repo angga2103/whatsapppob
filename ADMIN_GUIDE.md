@@ -41,6 +41,8 @@ Selain melalui chat WhatsApp, **seluruh pengaturan toko, member, produk, transak
 ### 3. 📦 Manajemen Produk Digital & Akun Lokal
 - **[📂 List Produk Digital]**: Melihat daftar produk akun (Netflix, Spotify, Canva, dsb), harga, stok, dan jumlah data akun mentah tersimpan.
 - **[➕ Tambah Produk]**: Format input `[Nama]|[Harga]|[Stok]` (contoh: `Netflix Premium 1 Bulan|35000|10`).
+- **[💰 Edit Harga]**: Ubah harga produk digital langsung dari Telegram dengan format `[ID] [HargaBaru]` (contoh: `1 15000`).
+- **[📦 Edit Stok]**: Ubah stok produk digital langsung dari Telegram dengan format `[ID] [StokBaru]` (contoh: `1 50`).
 - **[📥 Isi Stok Data Akun]**: Format `[ID] [Data Akun]` atau untuk banyak stok `[ID] [Jumlah] [Data]`.
 - **[🗑️ Hapus Produk]**: Hapus produk digital lokal berdasarkan ID.
 
@@ -127,3 +129,23 @@ Selain melalui chat WhatsApp, **seluruh pengaturan toko, member, produk, transak
 | `.topsaldo` | Melihat daftar member dengan saldo terbanyak | `.topsaldo` |
 | `.toptrx` | Melihat daftar member paling sering transaksi | `.toptrx` |
 | *Reply pesan order manual* dengan kata `BATAL` | Membatalkan order dan mengembalikan saldo 1x secara otomatis | Balas: `BATAL` |
+
+---
+
+## 6. ⚡ Fitur Pembelian & Pencarian Cepat (WhatsApp Pengguna)
+
+Pengguna tidak perlu scroll ratusan produk! Bot WhatsApp sudah dilengkapi **Smart Filter Engine** untuk menemukan paket dalam hitungan detik:
+
+### A. Pencarian Cepat Sekaligus Input Nomor
+Saat diminta memasukkan nomor tujuan paket data, pengguna dapat langsung menyertakan kriteria paket dipisahkan spasi atau titik:
+- `08123456789 2gb` atau `08123456789.2gb` → Langsung memfilter paket kisaran 2 GB.
+- `08123456789 30hari` atau `08123456789.30hari` → Langsung memfilter paket masa aktif 30 hari.
+- `08123456789 50k` atau `08123456789.50k` → Langsung memfilter paket di kisaran harga Rp50.000.
+
+### B. Filter Pintar di Sesi Katalog (Saat Memilih Paket)
+Di layar katalog, pengguna cukup membalas pesan dengan kata kunci:
+- **Filter Kuota**: Ketik `2gb`, `5gb`, `10gb`, `500mb`, dll.
+- **Filter Masa Aktif**: Ketik `30hari`, `7hari`, `1hari`, `30h`, `7h`, dll.
+- **Filter Rentang Harga**: Ketik `25k`, `50k`, `100k`, `50rb`, dll.
+- **Filter Nama / Jenis Paket**: Ketik `combo`, `akrab`, `unlimited`, `booster`, `mini`, dll.
+- **Kembali ke Katalog Lengkap**: Ketik `LANJUT`, `Z`, `SEMUA`, atau `RESET`.

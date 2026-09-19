@@ -1589,6 +1589,10 @@ try {
                         { text: '➕ Tambah Produk', callback_data: 'tg_input_addmenu' }
                     ],
                     [
+                        { text: '💰 Edit Harga Produk', callback_data: 'tg_input_editharga' },
+                        { text: '📦 Edit Stok Produk', callback_data: 'tg_input_editstok' }
+                    ],
+                    [
                         { text: '📥 Isi Stok Data Akun', callback_data: 'tg_input_adddata' },
                         { text: '🗑️ Hapus Produk', callback_data: 'tg_input_delmenu' }
                     ],
@@ -2080,6 +2084,10 @@ try {
                                 { text: '📥 Isi Stok Akun', callback_data: 'tg_input_adddata' }
                             ],
                             [
+                                { text: '💰 Edit Harga', callback_data: 'tg_input_editharga' },
+                                { text: '📦 Edit Stok', callback_data: 'tg_input_editstok' }
+                            ],
+                            [
                                 { text: '🗑️ Hapus Produk', callback_data: 'tg_input_delmenu' },
                                 { text: '⬅️ Menu Digital', callback_data: 'tg_digital_menu' }
                             ]
@@ -2100,6 +2108,50 @@ try {
                     {
                         parse_mode: 'Markdown',
                         reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                    }
+                );
+            }
+
+            if (action === 'tg_input_editharga') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_editharga', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `💰 *EDIT HARGA PRODUK DIGITAL*\n\n` +
+                    `Kirimkan ID Produk dan Harga Baru dipisahkan spasi:\n` +
+                    `Format: \`<ID_PRODUK> <HARGA_BARU>\`\n\n` +
+                    `Contoh: \`1 15000\`\n` +
+                    `Contoh: \`4 7500000\`\n\n` +
+                    `_Catatan: Ketik ID sesuai yang tertera pada Daftar Produk Digital._`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '📂 Lihat Daftar Produk', callback_data: 'tg_listproduk' }],
+                                [{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]
+                            ]
+                        }
+                    }
+                );
+            }
+
+            if (action === 'tg_input_editstok') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_editstok', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `📦 *EDIT STOK PRODUK DIGITAL*\n\n` +
+                    `Kirimkan ID Produk dan Jumlah Stok Baru dipisahkan spasi:\n` +
+                    `Format: \`<ID_PRODUK> <STOK_BARU>\`\n\n` +
+                    `Contoh: \`1 50\`\n` +
+                    `Contoh: \`2 10\`\n\n` +
+                    `_Catatan: Untuk stok yang menggunakan akun mentah, Anda juga bisa menggunakan menu Isi Stok Data Akun._`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '📂 Lihat Daftar Produk', callback_data: 'tg_listproduk' }],
+                                [{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]
+                            ]
+                        }
                     }
                 );
             }
@@ -3075,6 +3127,116 @@ try {
                                 inline_keyboard: [
                                     [{ text: '📥 Isi Stok Akun Ini', callback_data: 'tg_input_adddata' }],
                                     [{ text: '📂 Daftar Produk', callback_data: 'tg_listproduk' }]
+                                ]
+                            }
+                        }
+                    );
+                }
+
+                // === AWAITING EDIT HARGA PRODUK DIGITAL ===
+                if (stateType === 'awaiting_editharga') {
+                    const match = text.match(/^(\d+)\s+(\d+)$/);
+                    if (!match) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format salah!*\n\nFormat: \`<ID_PRODUK> <HARGA_BARU>\`\nContoh: \`1 15000\``,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                            }
+                        );
+                    }
+
+                    const id = parseInt(match[1], 10);
+                    const hargaBaru = parseInt(match[2], 10);
+                    const item = (db.menu || []).find(m => m.id === id);
+
+                    if (!item) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Produk Digital ID ${id} tidak ditemukan!*\nSilakan cek ID produk pada menu Daftar Produk.`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '📂 Daftar Produk', callback_data: 'tg_listproduk' }],
+                                        [{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    }
+
+                    const hargaLama = item.harga;
+                    item.harga = hargaBaru;
+                    if (db.saveMenu) db.saveMenu();
+                    else if (db.save) db.save();
+                    global.tgInputState = null;
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *Harga Produk Berhasil Diperbarui!*\n\n` +
+                        `• Produk: *${item.nama}* (ID ${item.id})\n` +
+                        `• Harga Lama: ${formatRupiah(hargaLama)}\n` +
+                        `• Harga Baru: *${formatRupiah(hargaBaru)}*`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '📂 Cek Daftar Produk', callback_data: 'tg_listproduk' }],
+                                    [{ text: '⬅️ Menu Digital', callback_data: 'tg_digital_menu' }]
+                                ]
+                            }
+                        }
+                    );
+                }
+
+                // === AWAITING EDIT STOK PRODUK DIGITAL ===
+                if (stateType === 'awaiting_editstok') {
+                    const match = text.match(/^(\d+)\s+(\d+)$/);
+                    if (!match) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format salah!*\n\nFormat: \`<ID_PRODUK> <STOK_BARU>\`\nContoh: \`1 50\``,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]] }
+                            }
+                        );
+                    }
+
+                    const id = parseInt(match[1], 10);
+                    const stokBaru = parseInt(match[2], 10);
+                    const item = (db.menu || []).find(m => m.id === id);
+
+                    if (!item) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Produk Digital ID ${id} tidak ditemukan!*\nSilakan cek ID produk pada menu Daftar Produk.`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '📂 Daftar Produk', callback_data: 'tg_listproduk' }],
+                                        [{ text: '❌ Batal', callback_data: 'tg_digital_menu' }]
+                                    ]
+                                }
+                            }
+                        );
+                    }
+
+                    const stokLama = item.stok || 0;
+                    item.stok = stokBaru;
+                    if (db.saveMenu) db.saveMenu();
+                    else if (db.save) db.save();
+                    global.tgInputState = null;
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *Stok Produk Berhasil Diperbarui!*\n\n` +
+                        `• Produk: *${item.nama}* (ID ${item.id})\n` +
+                        `• Stok Lama: ${stokLama} unit\n` +
+                        `• Stok Baru: *${stokBaru} unit*`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '📂 Cek Daftar Produk', callback_data: 'tg_listproduk' }],
+                                    [{ text: '⬅️ Menu Digital', callback_data: 'tg_digital_menu' }]
                                 ]
                             }
                         }
