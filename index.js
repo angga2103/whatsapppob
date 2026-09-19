@@ -777,7 +777,8 @@ Terima kasih telah berbelanja.`
                 'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
                 'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
-                'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal'
+                'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
+                'snk', 'tos', 'syarat', 'aturan'
             ];
 
             if (isOwner && adminCommands.includes(cmd)) {
@@ -1694,6 +1695,9 @@ try {
                         { text: '📦 Auto-Backup & Restore', callback_data: 'tg_backup_menu' }
                     ],
                     [
+                        { text: '⚖️ S&K & Batasan Hukum', callback_data: 'tg_legal_snk' }
+                    ],
+                    [
                         { text: '🚀 Cek Pembaruan / Update Bot', callback_data: 'tg_check_update' }
                     ],
                     [
@@ -1703,6 +1707,19 @@ try {
                 ]
             };
 
+            return { text, reply_markup };
+        };
+
+        const renderLegalMenu = () => {
+            const legal = require('./lib/legal');
+            const text = legal.getTermsTelegram();
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
             return { text, reply_markup };
         };
 
@@ -3001,6 +3018,12 @@ try {
                         inline_keyboard: [[{ text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }]]
                     }
                 });
+            }
+
+            if (action === 'tg_legal_snk') {
+                global.botTg.answerCallbackQuery(query.id);
+                const content = renderLegalMenu();
+                return updateOrSend(chatId, messageId, content);
             }
 
             if (action === 'tg_health') {

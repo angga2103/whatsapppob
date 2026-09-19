@@ -2,6 +2,7 @@ const db = require('../database/db');
 const { formatRupiah, detectOperator } = require('../lib/utils');
 const api = require('../lib/api');
 const config = require('../config');
+const legal = require('../lib/legal');
 
 // System Session (State Machine)
 const S = {
@@ -234,6 +235,10 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     const cmdFirst = parts[0].toUpperCase();
 
     // 0. QUICK USER COMMANDS
+    if (['.SNK', '!SNK', 'SNK', '.TOS', '!TOS', 'TOS', '.ATURAN', '!ATURAN', 'ATURAN', '.SYARAT', '!SYARAT', 'SYARAT'].includes(txt)) {
+        return sock.sendMessage(sender, { text: legal.getTermsAndConditionsWA() });
+    }
+
     if (['.HELP', '!HELP', 'HELP', '.BANTUAN', '!BANTUAN', 'BANTUAN'].includes(txt)) {
         let t = `📖 *PANDUAN TRANSAKSI INSTAN*\n\n`;
         t += `• *MENU* : Buka menu belanja interaktif\n`;
@@ -244,6 +249,7 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         t += `• *.riwayat* : Cek 5 transaksi terakhir\n`;
         t += `• *.status [Invoice]* : Cek status transaksi / token\n`;
         t += `• *.transfer [NoHP] [Nominal]* : Kirim saldo ke member\n`;
+        t += `• *.snk* : Syarat & Ketentuan Layanan (TOS & Batasan Tanggung Jawab)\n`;
         t += `• *B* : Batalkan transaksi yang sedang berjalan\n\n`;
         t += `🏪 *${db.store.namaToko || 'DIGITAL STORE'}* - Aman, Cepat, dan Otomatis.`;
         return sock.sendMessage(sender, { text: t });
@@ -555,7 +561,9 @@ if (session.step === S.INPUT_DEPOSIT) {
 2. Buka m-Banking (BCA, Mandiri, BRI, BNI) atau E-Wallet (DANA, GoPay, OVO, ShopeePay).
 3. Pilih menu *Scan QRIS* lalu unggah foto dari galeri HP Anda.
 
-_Saldo akun akan bertambah otomatis dalam beberapa detik setelah pembayaran lunas!_`
+_Saldo akun akan bertambah otomatis dalam beberapa detik setelah pembayaran lunas!_
+
+⚖️ _Membayar berarti menyetujui S&K Layanan. Dilarang menggunakan dana ilegal / hasil kejahatan. Info: ketik .snk_`
     });
 
     const checker = setInterval(async () => {
@@ -1015,7 +1023,8 @@ if (txt === 'PROFIL') {
             invoiceText += `💰 *TOTAL BAYAR: ${formatRupiah(totalAmount)}*\n\n`;
             invoiceText += `💵 Saldo Dompet Anda: ${formatRupiah(userSaldo)}\n`;
             invoiceText += userSaldo >= totalAmount ? `_Saldo Anda mencukupi (Potong Otomatis)._\n\n` : `_Pembayaran via QRIS Otomatis._\n\n`;
-            invoiceText += `Balas *1* untuk BAYAR SEKARANG\nBalas *2* untuk BATAL`;
+            invoiceText += `Balas *1* untuk BAYAR SEKARANG\nBalas *2* untuk BATAL\n\n`;
+            invoiceText += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
 
             return sock.sendMessage(sender, { text: invoiceText });
         } catch (err) {
@@ -1285,7 +1294,8 @@ async function showInvoice(sock, sender, session) {
     } else {
         t += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
     }
-    t += `👉 Balas *1* untuk BAYAR SEKARANG\n👉 Balas *2* untuk BATAL`;
+    t += `👉 Balas *1* untuk BAYAR SEKARANG\n👉 Balas *2* untuk BATAL\n\n`;
+    t += `⚖️ _Membayar berarti menyetujui S&K Layanan (salah no tujuan tanggung jawab pembeli). Info: ketik .snk_`;
     
     await sock.sendMessage(sender, { text: t });
 }

@@ -45,7 +45,8 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.laba* [tanggal] (Cek Laba Hari Tertentu, cth: .laba 19-09-2026 / .laba kemarin)\n`;
         t += `• *.topproduk* (Ranking 10 Produk Paling Laris Dibeli)\n`;
         t += `• *.produkgagal* (Laporan Produk Sering Gagal Digiflazz)\n`;
-        t += `• *.toptrx* (Peringkat Member Transaksi Terbanyak)`;
+        t += `• *.toptrx* (Peringkat Member Transaksi Terbanyak)\n`;
+        t += `• *.snk* / *.tos* (Syarat & Ketentuan Layanan / Disclaimer Hukum)`;
         return sock.sendMessage(sender, { text: t });
     }
     
@@ -1047,6 +1048,11 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
         report += `• PASCABAYAR: ${pascaRes !== false ? pascaRes + ' produk' : '❌ Gagal'}\n`;
         report += `\n✅ Sinkronisasi katalog selesai dan telah tersimpan ke database.`;
         return sock.sendMessage(sender, { text: report });
+    }
+
+    if (cmd === 'snk' || cmd === 'tos' || cmd === 'syarat' || cmd === 'aturan') {
+        const legal = require('../lib/legal');
+        return sock.sendMessage(sender, { text: legal.getTermsAndConditionsWA() });
     }
 }
 
