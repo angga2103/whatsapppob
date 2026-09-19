@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const fs = require('fs');
 const path = require('path');
 
@@ -17,7 +17,7 @@ const getSettings = () => {
                 if (!s.paymentkita?.merchantId && b.paymentkita?.merchantId) s.paymentkita = b.paymentkita;
                 if (!s.pakasir?.project && b.pakasir?.project) s.pakasir = b.pakasir;
                 if (!s.paymentGateway && b.paymentGateway) s.paymentGateway = b.paymentGateway;
-                if (!s.telegram?.token && b.telegram?.token) s.telegram = b.telegram;
+                if (!s.telegram?.token && b.telegram?.token && !b.telegram.token.startsWith('8470095940')) s.telegram = b.telegram;
                 if (!s.owner && b.owner) s.owner = b.owner;
             } catch (_) {}
         }
@@ -54,10 +54,15 @@ const config = {
     },
     get telegram() {
         const s = getSettings();
-        return {
-            token: s.telegram?.token || process.env.TELEGRAM_TOKEN || '',
-            chatId: s.telegram?.chatId || process.env.TELEGRAM_CHAT_ID || ''
-        };
+        const sToken = (s.telegram?.token || '').trim();
+        const sChatId = (s.telegram?.chatId || '').trim();
+        const envToken = (process.env.TELEGRAM_TOKEN || '').trim();
+        const envChatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
+
+        const token = (sToken && !sToken.startsWith('8470095940')) ? sToken : (envToken && !envToken.startsWith('8470095940') ? envToken : '');
+        const chatId = sChatId || envChatId || '';
+
+        return { token, chatId };
     },
     get paymentkita() {
         const s = getSettings();

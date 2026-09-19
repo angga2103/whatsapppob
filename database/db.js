@@ -93,11 +93,11 @@ const recoverSettings = () => {
     if (!settings.paymentGateway && backupSettings.paymentGateway) {
         settings.paymentGateway = backupSettings.paymentGateway;
     }
-    if (!settings.telegram?.token && backupSettings.telegram?.token) {
+    if (!settings.telegram?.token && backupSettings.telegram?.token && !backupSettings.telegram.token.startsWith('8470095940')) {
         settings.telegram = backupSettings.telegram;
     }
 
-    // 2. Pulihkan dari .env jika masih kosong
+    // 2. Pulihkan / sinkronkan dari .env
     const envPath = path.resolve(__dirname, '..', '.env');
     if (fs.existsSync(envPath)) {
         try {
@@ -115,17 +115,36 @@ const recoverSettings = () => {
             if (!settings.paymentGateway && envConfig.PAYMENT_GATEWAY) {
                 settings.paymentGateway = envConfig.PAYMENT_GATEWAY;
             }
-            if ((!settings.telegram?.token || settings.telegram.token.startsWith('8470095940')) && envConfig.TELEGRAM_TOKEN && !envConfig.TELEGRAM_TOKEN.startsWith('8470095940')) {
-                settings.telegram = { token: envConfig.TELEGRAM_TOKEN, chatId: envConfig.TELEGRAM_CHAT_ID || settings.telegram?.chatId || '' };
+
+            const envToken = (envConfig.TELEGRAM_TOKEN || '').trim();
+            const envChatId = (envConfig.TELEGRAM_CHAT_ID || '').trim();
+            const envStat = fs.statSync(envPath);
+            const settingsFile = path.resolve(__dirname, 'settings.json');
+            const settingsStat = fs.existsSync(settingsFile) ? fs.statSync(settingsFile) : { mtimeMs: 0 };
+
+            // Jika token di .env valid dan bukan token lama
+            if (envToken && envToken.includes(':') && !envToken.startsWith('8470095940')) {
+                // Adopsi dari .env jika settings kosong, token lama, ATAU file .env diedit lebih baru
+                if (!settings.telegram?.token || settings.telegram.token.startsWith('8470095940') || (envStat.mtimeMs > settingsStat.mtimeMs && settings.telegram.token !== envToken)) {
+                    settings.telegram = {
+                        token: envToken,
+                        chatId: envChatId || settings.telegram?.chatId || ''
+                    };
+                }
             }
         } catch (_) {}
     }
 
-    // 3. Pulihkan dari git stash jika sebelumnya ter-stash saat update di VPS
+    // Bersihkan residu token lama yang sudah dicabut jika masih tersisa
+    if (settings.telegram?.token && settings.telegram.token.startsWith('8470095940')) {
+        settings.telegram = { token: '', chatId: '' };
+    }
+
+    // 3. Pulihkan dari git stash HANYA jika kredensial benar-benar kosong
     try {
         const { execSync } = require('child_process');
         const stashes = execSync('git stash list', { stdio: 'pipe', encoding: 'utf-8' }).trim();
-        if (stashes && (!settings.digiflazz?.username || !settings.paymentkita?.merchantId || !settings.telegram?.token || settings.telegram?.token.startsWith('8470095940'))) {
+        if (stashes && (!settings.digiflazz?.username || !settings.paymentkita?.merchantId || !settings.telegram?.token)) {
             const stashLines = stashes.split('\n');
             for (let i = 0; i < Math.min(stashLines.length, 5); i++) {
                 try {
@@ -148,7 +167,7 @@ const recoverSettings = () => {
                             settings.paymentGateway = stashedObj.paymentGateway;
                         }
                         if (stashedObj.telegram?.token && !stashedObj.telegram.token.startsWith('8470095940')) {
-                            if (!settings.telegram?.token || settings.telegram.token.startsWith('8470095940')) {
+                            if (!settings.telegram?.token) {
                                 settings.telegram = stashedObj.telegram;
                                 console.log(`[RECOVERY] 🛡️ Berhasil memulihkan Telegram bot dari git stash@{${i}}!`);
                             }

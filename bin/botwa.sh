@@ -16,6 +16,7 @@ if [ ! -f "$APP_DIR/index.js" ]; then
 fi
 
 cd "$APP_DIR" || exit 1
+export DOTENV_CONFIG_QUIET=true
 
 # Warna Terminal
 CYAN='\033[0;36m'
@@ -143,8 +144,10 @@ get_whatsapp_status() {
         }
     " 2>/dev/null)
 
-    local code=$(echo "$res" | cut -d'|' -f1)
-    local desc=$(echo "$res" | cut -d'|' -f2-)
+    local line=$(echo "$res" | grep -F "|" | tail -n 1)
+    local code=$(echo "$line" | cut -d'|' -f1 | tr -d '\r\n')
+    local desc=$(echo "$line" | cut -d'|' -f2- | tr -d '\r\n')
+
     if [ "$code" == "ONLINE" ]; then
         echo -e "${GREEN}● ONLINE ($desc)${NC}"
     elif [ "$code" == "CONNECTING" ]; then
@@ -167,10 +170,21 @@ get_telegram_status() {
             if (fs.existsSync('./system/bot-status.json')) {
                 try { st = JSON.parse(fs.readFileSync('./system/bot-status.json', 'utf8')); } catch(_) {}
             }
-            const cfg = require('./config');
+            let token = '';
+            if (fs.existsSync('./database/settings.json')) {
+                try {
+                    const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
+                    token = s.telegram?.token || '';
+                } catch(_) {}
+            }
+            if (!token && fs.existsSync('./.env')) {
+                try {
+                    const m = fs.readFileSync('./.env', 'utf8').match(/^TELEGRAM_TOKEN=(.*)$/m);
+                    if (m) token = m[1].trim();
+                } catch(_) {}
+            }
             const tg = st.telegram || {};
-            const token = cfg.telegram?.token || '';
-            const hasToken = Boolean(token && token.includes(':'));
+            const hasToken = Boolean(token && token.includes(':') && !token.startsWith('8470095940'));
 
             if (!hasToken) {
                 console.log('DISABLED|Token belum diatur');
@@ -193,8 +207,10 @@ get_telegram_status() {
         }
     " 2>/dev/null)
 
-    local code=$(echo "$res" | cut -d'|' -f1)
-    local desc=$(echo "$res" | cut -d'|' -f2-)
+    local line=$(echo "$res" | grep -F "|" | tail -n 1)
+    local code=$(echo "$line" | cut -d'|' -f1 | tr -d '\r\n')
+    local desc=$(echo "$line" | cut -d'|' -f2- | tr -d '\r\n')
+
     if [ "$code" == "ONLINE" ]; then
         echo -e "${GREEN}● ONLINE ($desc)${NC}"
     elif [ "$code" == "RESTARTING" ]; then
@@ -206,7 +222,7 @@ get_telegram_status() {
     elif [ "$code" == "DISABLED" ]; then
         echo -e "${YELLOW}● NONAKTIF ($desc)${NC}"
     else
-        echo -e "${RED}● OFFLINE ($desc)${NC}"
+        echo -e "${RED}● OFFLINE (${desc:-Tidak Aktif})${NC}"
     fi
 }
 
@@ -310,9 +326,18 @@ cmd_restart() {
     # 3. Reset webhook & drop pending updates Telegram agar koneksi fresh
     node -e "
         const https = require('https');
-        const cfg = require('./config');
-        if (cfg.telegram?.token) {
-            https.get('https://api.telegram.org/bot' + cfg.telegram.token + '/deleteWebhook?drop_pending_updates=true', res => {
+        const fs = require('fs');
+        let token = '';
+        try {
+            const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
+            token = s.telegram?.token || '';
+        } catch(_) {}
+        if (!token && fs.existsSync('./.env')) {
+            const m = fs.readFileSync('./.env', 'utf8').match(/^TELEGRAM_TOKEN=(.*)$/m);
+            if (m) token = m[1].trim();
+        }
+        if (token && token.includes(':') && !token.startsWith('8470095940')) {
+            https.get('https://api.telegram.org/bot' + token + '/deleteWebhook?drop_pending_updates=true', res => {
                 res.on('data', () => {});
             }).on('error', () => {});
         }
@@ -348,9 +373,18 @@ cmd_restart_tg() {
     echo -e "${CYAN}====================================================================${NC}\n"
     node -e "
         const https = require('https');
-        const cfg = require('./config');
-        if (cfg.telegram?.token) {
-            https.get('https://api.telegram.org/bot' + cfg.telegram.token + '/deleteWebhook?drop_pending_updates=false', res => {
+        const fs = require('fs');
+        let token = '';
+        try {
+            const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
+            token = s.telegram?.token || '';
+        } catch(_) {}
+        if (!token && fs.existsSync('./.env')) {
+            const m = fs.readFileSync('./.env', 'utf8').match(/^TELEGRAM_TOKEN=(.*)$/m);
+            if (m) token = m[1].trim();
+        }
+        if (token && token.includes(':') && !token.startsWith('8470095940')) {
+            https.get('https://api.telegram.org/bot' + token + '/deleteWebhook?drop_pending_updates=false', res => {
                 res.on('data', () => {});
             }).on('error', () => {});
         }
@@ -372,12 +406,22 @@ cmd_test_tg() {
     node -e "
         const https = require('https');
         const fs = require('fs');
-        const cfg = require('./config');
-        const token = cfg.telegram?.token || '';
-        const chatId = cfg.telegram?.chatId || '';
+        let token = '', chatId = '';
+        try {
+            const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
+            token = s.telegram?.token || '';
+            chatId = s.telegram?.chatId || '';
+        } catch(_) {}
+        if (!token && fs.existsSync('./.env')) {
+            const env = fs.readFileSync('./.env', 'utf8');
+            const mT = env.match(/^TELEGRAM_TOKEN=(.*)$/m);
+            const mC = env.match(/^TELEGRAM_CHAT_ID=(.*)$/m);
+            if (mT) token = mT[1].trim();
+            if (mC) chatId = mC[1].trim();
+        }
 
-        if (!token || !token.includes(':')) {
-            console.log('❌ Token Telegram belum diatur di file .env / config.js!');
+        if (!token || !token.includes(':') || token.startsWith('8470095940')) {
+            console.log('❌ Token Telegram belum diatur atau tidak valid di settings.json / .env!');
             process.exit(0);
         }
 
@@ -558,34 +602,83 @@ cmd_restore() {
     pause_menu
 }
 
-# 8. Ganti Token Telegram & Chat ID Admin (Solusi jika bot tersuspend Telegram)
+# 13. Ganti Token Telegram & Chat ID Admin (Solusi jika bot tersuspend Telegram)
 cmd_change_telegram() {
     echo -e "\n${CYAN}====================================================================${NC}"
     echo -e "${BOLD}   🔑 GANTI TOKEN BOT TELEGRAM & CHAT ID ADMIN${NC}"
-    echo -e "   (Sangat berguna jika bot lama disuspend/banned oleh Telegram)"
+    echo -e "   (Menghapus kredensial bot lama & beralih 100% ke bot baru)"
     echo -e "${CYAN}====================================================================${NC}\n"
 
-    # Tampilkan token saat ini
-    node -e "
-        const cfg = require('./config');
-        const token = cfg.telegram?.token || '';
-        const masked = token.length > 10 ? token.slice(0, 6) + '****' + token.slice(-4) : '(belum ada)';
-        console.log('Token Saat Ini   :', masked);
-        console.log('Chat ID Saat Ini :', cfg.telegram?.chatId || '(belum ada)');
-    "
+    # Tampilkan token saat ini secara bersih
+    local cur_token=""
+    local cur_chat=""
+    local cur_info=$(node -e "
+        try {
+            const fs = require('fs');
+            let token = '', chatId = '';
+            if (fs.existsSync('./database/settings.json')) {
+                try {
+                    const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
+                    token = s.telegram?.token || '';
+                    chatId = s.telegram?.chatId || '';
+                } catch(_) {}
+            }
+            if (!token && fs.existsSync('./.env')) {
+                const env = fs.readFileSync('./.env', 'utf8');
+                const mT = env.match(/^TELEGRAM_TOKEN=(.*)$/m);
+                const mC = env.match(/^TELEGRAM_CHAT_ID=(.*)$/m);
+                if (mT) token = mT[1].trim();
+                if (mC) chatId = mC[1].trim();
+            }
+            const masked = token.length > 10 ? token.slice(0, 6) + '••••' + token.slice(-4) : '(belum ada)';
+            console.log(token + '|' + masked + '|' + chatId);
+        } catch(_) {
+            console.log('||');
+        }
+    " 2>/dev/null)
 
+    local line=$(echo "$cur_info" | grep -F "|" | tail -n 1)
+    cur_token=$(echo "$line" | cut -d'|' -f1 | tr -d '\r\n')
+    local masked_token=$(echo "$line" | cut -d'|' -f2 | tr -d '\r\n')
+    cur_chat=$(echo "$line" | cut -d'|' -f3 | tr -d '\r\n')
+
+    echo -e " Token Aktif Saat Ini : ${BOLD}${masked_token:-Belum diatur}${NC}"
+    echo -e " Chat ID Saat Ini     : ${BOLD}${cur_chat:-Belum diatur}${NC}"
     echo ""
     echo -e "${YELLOW}Silakan masukkan kredensial Bot Telegram yang baru:${NC}"
     read -p "Masukkan Token Bot Baru (dari @BotFather): " NEW_TOKEN
     read -p "Masukkan Chat ID Admin Baru (dari @userinfobot): " NEW_CHAT_ID
 
+    NEW_TOKEN=$(echo "$NEW_TOKEN" | tr -d '[:space:]')
+    NEW_CHAT_ID=$(echo "$NEW_CHAT_ID" | tr -d '[:space:]')
+
     if [ -z "$NEW_TOKEN" ] || [ -z "$NEW_CHAT_ID" ]; then
         echo -e "${RED}❌ Token dan Chat ID tidak boleh kosong! Batal menyimpan.${NC}"
-        read -p "Tekan [ENTER] untuk kembali..."
+        pause_menu
         return
     fi
 
-    echo -e "\n${CYAN}Menyimpan ke konfigurasi dan .env...${NC}"
+    if [[ ! "$NEW_TOKEN" =~ : ]]; then
+        echo -e "${RED}❌ Format Token tidak valid! Token harus mengandung tanda titik dua ':' (contoh: 123456789:ABCDefgh...)${NC}"
+        pause_menu
+        return
+    fi
+
+    # 1. Putuskan koneksi dan antrean pesan di bot lama jika token berbeda
+    if [ -n "$cur_token" ] && [ "$cur_token" != "$NEW_TOKEN" ] && [[ "$cur_token" =~ : ]]; then
+        echo -e "\n${YELLOW}Memutus webhook & antrean pesan bot lama...${NC}"
+        node -e "
+            const https = require('https');
+            const oldToken = process.argv[1];
+            try {
+                https.get('https://api.telegram.org/bot' + oldToken + '/deleteWebhook?drop_pending_updates=true', res => {
+                    res.on('data', () => {});
+                }).on('error', () => {});
+            } catch(_) {}
+        " "$cur_token" 2>/dev/null
+    fi
+
+    echo -e "${CYAN}1. Memperbarui database/settings.json, settings.backup.json, dan .env...${NC}"
     node -e "
         const fs = require('fs');
         const newToken = (process.argv[1] || '').trim();
@@ -623,29 +716,76 @@ cmd_change_telegram() {
             env += '\nTELEGRAM_CHAT_ID=' + newChatId;
         }
         fs.writeFileSync(envPath, env.trim() + '\n', 'utf8');
-        console.log('✓ File settings.json, settings.backup.json, dan .env berhasil diperbarui!');
+
+        // 4. Reset cache bot-status.json agar info bot lama tidak tersisa
+        const stPath = './system/bot-status.json';
+        if (fs.existsSync(stPath)) {
+            try {
+                let st = JSON.parse(fs.readFileSync(stPath, 'utf8'));
+                if (st.telegram) {
+                    st.telegram.status = 'restarting';
+                    st.telegram.username = '';
+                    st.telegram.botName = '';
+                    st.telegram.adminId = newChatId;
+                    st.telegram.tokenMasked = newToken.length > 10 ? newToken.slice(0, 6) + '••••' + newToken.slice(-4) : '';
+                    st.telegram.lastError = null;
+                }
+                fs.writeFileSync(stPath, JSON.stringify(st, null, 2), 'utf8');
+            } catch(_) {}
+        }
+        console.log('✓ Token lama dihapus dan seluruh konfigurasi tersinkronisasi ke bot baru!');
     " "$NEW_TOKEN" "$NEW_CHAT_ID"
 
-    echo -e "${YELLOW}Menguji koneksi ke Bot Telegram baru...${NC}"
+    # 2. Hapus git stash lama agar tidak menimpa pengaturan baru
+    git stash clear 2>/dev/null || true
+
+    # 3. Uji Kirim Pesan ke Bot Telegram Baru
+    echo -e "${YELLOW}2. Menguji koneksi ke Bot Telegram baru...${NC}"
     node -e "
-        const axios = require('axios');
+        const https = require('https');
         const token = process.argv[1];
         const chatId = process.argv[2];
-        axios.post('https://api.telegram.org/bot' + token + '/sendMessage', {
+
+        const payload = JSON.stringify({
             chat_id: chatId,
-            text: '🚀 *TEST KONEKSI TELEGRAM BERHASIL*\n\nBot PPOB WhatsApp Anda berhasil dihubungkan ke bot Telegram ini melalui CLI Server (botwa)!',
+            text: '🚀 *TEST KONEKSI BOT TELEGRAM BARU*\n\n✅ Berhasil! Bot PPOB WhatsApp Anda kini terhubung ke bot Telegram ini melalui CLI Server (botwa)!\n\nWaktu: ' + new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
             parse_mode: 'Markdown'
-        }).then(() => {
-            console.log('✅ Pesan tes berhasil diterima di Telegram!');
-        }).catch(err => {
-            console.log('⚠️ Gagal kirim tes: ' + err.message);
         });
+
+        const req = https.request({
+            hostname: 'api.telegram.org',
+            path: '/bot' + token + '/sendMessage',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload)
+            }
+        }, res => {
+            let d = '';
+            res.on('data', c => d += c);
+            res.on('end', () => {
+                try {
+                    const j = JSON.parse(d);
+                    if (j.ok) {
+                        console.log('✅ Pesan uji coba BERHASIL masuk ke Telegram Anda!');
+                    } else {
+                        console.log('⚠️ Telegram API merespon: ' + (j.description || d));
+                    }
+                } catch(_) {
+                    console.log('⚠️ Respon Telegram:', d);
+                }
+            });
+        });
+        req.on('error', e => console.log('❌ Gagal menghubungi Telegram: ' + e.message));
+        req.write(payload);
+        req.end();
     " "$NEW_TOKEN" "$NEW_CHAT_ID"
 
     local PNAME=$(get_pm2_process_name)
-    echo -e "${GREEN}Merestart bot ($PNAME) untuk mengaktifkan Telegram baru...${NC}"
-    pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
-    echo -e "${GREEN}✅ Selesai! Bot Telegram baru Anda kini aktif sepenuhnya.${NC}"
+    echo -e "\n${CYAN}3. Merestart bot ($PNAME) agar bot baru segera aktif...${NC}"
+    pm2 restart "$PNAME" 2>/dev/null || pm2 start index.js --name bot-ppob
+    pm2 save 2>/dev/null || true
+    echo -e "${GREEN}✅ SELESAI! Token bot lama telah dihapus dan digantikan 100% oleh bot baru.${NC}"
     pause_menu
 }
 
