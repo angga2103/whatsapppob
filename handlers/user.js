@@ -686,13 +686,14 @@ if (txt === 'PROFIL') {
         } else if (txt === '5') {
             session.step = S.PILIH_KATEGORI_PASCA;
             let t = `📑 *PILIH KATEGORI TAGIHAN PASCABAYAR*\n\n`;
-            t += `*1.* ⚡ PLN Pascabayar (Tagihan Listrik Bulanan)\n`;
-            t += `*2.* 🏥 BPJS Kesehatan\n`;
-            t += `*3.* 💧 PDAM (Air Minum Daerah)\n`;
-            t += `*4.* 🏢 PBB (Pajak Bumi & Bangunan)\n`;
-            t += `*5.* ⚡ PLN Non-Taglis\n`;
-            t += `*6.* 📱 HP Pascabayar & Internet Kabel\n\n`;
-            t += `Balas *Angka (1 - 6)* kategori tagihan Anda.\nKetik *0* atau *B* untuk batal.`;
+            t += `*1.* ⚡ PLN Pascabayar (Listrik Bulanan)\n`;
+            t += `*2.* 🏥 BPJS (Kesehatan & Ketenagakerjaan)\n`;
+            t += `*3.* 💧 PDAM (Air Bersih Daerah)\n`;
+            t += `*4.* 📱 HP Pascabayar (Halo, Matrix, XL, Three, Smartfren)\n`;
+            t += `*5.* 🌐 Internet & TV Kabel (Indihome, Biznet, MyRepublic, dll)\n`;
+            t += `*6.* 🏢 Angsuran Kredit / Multifinance (Adira, OTO, Home Credit, WOM)\n`;
+            t += `*7.* 🏛️ PBB (Pajak Bumi & Bangunan)\n\n`;
+            t += `Balas *Angka (1 - 7)* kategori tagihan Anda.\nKetik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: t });
         } else if (txt === '6') {
             session.step = S.PILIH_PRODUK_DIGITAL;
@@ -760,7 +761,7 @@ if (txt === 'PROFIL') {
         }
     }
 
-    // 2B. ALUR PASCABAYAR: PILIH KATEGORI (1-6)
+    // 2B. ALUR PASCABAYAR: PILIH KATEGORI (1-7)
     if (session.step === S.PILIH_KATEGORI_PASCA) {
         if (txt === 'B' || txt === '0') {
             session.step = S.IDLE;
@@ -769,50 +770,85 @@ if (txt === 'PROFIL') {
         const pascaProducts = db.postpaid || [];
         let selectedCategory = '';
         let targetLabel = 'ID Pelanggan';
+        let matched = [];
 
         if (txt === '1') {
             selectedCategory = 'PLN PASCABAYAR';
             targetLabel = 'ID Pelanggan PLN (12 Digit)';
+            matched = pascaProducts.filter(p => p.brand && p.brand.toUpperCase().includes('PLN PASCABAYAR'));
         } else if (txt === '2') {
-            selectedCategory = 'BPJS KESEHATAN';
+            selectedCategory = 'BPJS';
             targetLabel = 'Nomor Virtual Account / Kartu BPJS';
+            matched = pascaProducts.filter(p => p.brand && p.brand.toUpperCase().includes('BPJS'));
         } else if (txt === '3') {
             selectedCategory = 'PDAM';
             targetLabel = 'Nomor Pelanggan PDAM';
+            matched = pascaProducts.filter(p => p.brand && p.brand.toUpperCase().includes('PDAM'));
         } else if (txt === '4') {
-            selectedCategory = 'PBB';
-            targetLabel = 'Nomor Objek Pajak (NOP)';
-        } else if (txt === '5') {
-            selectedCategory = 'PLN NONTAGLIS';
-            targetLabel = 'Nomor Registrasi PLN Non-Taglis';
-        } else if (txt === '6') {
             selectedCategory = 'HP PASCABAYAR';
             targetLabel = 'Nomor HP Pascabayar';
+            matched = pascaProducts.filter(p => p.brand && (
+                p.brand.toUpperCase().includes('HP PASCABAYAR') || 
+                p.brand.toUpperCase().includes('TELKOMSEL') || 
+                p.brand.toUpperCase().includes('INDOSAT') || 
+                p.brand.toUpperCase().includes('TRI') || 
+                p.brand.toUpperCase().includes('XL') || 
+                p.brand.toUpperCase().includes('BY.U')
+            ));
+        } else if (txt === '5') {
+            selectedCategory = 'INTERNET & TV KABEL';
+            targetLabel = 'Nomor Pelanggan / ID Internet';
+            matched = pascaProducts.filter(p => p.brand && (
+                p.brand.toUpperCase().includes('INTERNET') || 
+                p.brand.toUpperCase().includes('TV')
+            ));
+        } else if (txt === '6') {
+            selectedCategory = 'MULTIFINANCE';
+            targetLabel = 'Nomor Kontrak / Perjanjian Kredit';
+            matched = pascaProducts.filter(p => p.brand && p.brand.toUpperCase().includes('MULTIFINANCE'));
+        } else if (txt === '7') {
+            selectedCategory = 'PBB';
+            targetLabel = 'Nomor Objek Pajak (NOP)';
+            matched = pascaProducts.filter(p => p.brand && p.brand.toUpperCase().includes('PBB'));
         } else {
-            return sock.sendMessage(sender, { text: "❌ Pilihan salah. Balas dengan angka *1 - 6*, atau *0* untuk batal." });
+            return sock.sendMessage(sender, { text: "❌ Pilihan salah. Balas dengan angka *1 - 7*, atau *0* untuk batal." });
         }
 
-        let matched = pascaProducts.filter(p => p.brand && p.brand.toUpperCase().includes(selectedCategory));
         if (matched.length === 0) {
             matched = pascaProducts.filter(p => (p.name && p.name.toUpperCase().includes(selectedCategory)) || (p.category && p.category.toUpperCase().includes(selectedCategory)));
         }
 
+        const defaultSkuMap = {
+            'PLN PASCABAYAR': 'post685486',
+            'BPJS': 'post685476',
+            'PDAM': 'post685472',
+            'HP PASCABAYAR': 'post716439',
+            'INTERNET & TV KABEL': 'post716445',
+            'MULTIFINANCE': 'post716486',
+            'PBB': 'post685474'
+        };
+
         if (matched.length <= 1) {
-            const product = matched[0] || { sku: (selectedCategory === 'BPJS KESEHATAN' ? 'post685476' : selectedCategory === 'PLN PASCABAYAR' ? 'plnpost' : 'post685472'), brand: selectedCategory, name: selectedCategory };
+            const defaultSku = defaultSkuMap[selectedCategory] || 'post685486';
+            const product = matched[0] || { sku: defaultSku, brand: selectedCategory, name: selectedCategory };
             session.tempPostpaidProduct = product;
             session.tempPostpaidCategory = selectedCategory;
             session.step = S.INPUT_TARGET_PASCA;
             return sock.sendMessage(sender, {
-                text: `📑 *TAGIHAN ${selectedCategory}*\n\nSilakan masukkan *${targetLabel}*:\n_Contoh: 512345678901_\n\nKetik *0* atau *B* untuk batal.`
+                text: `📑 *TAGIHAN ${product.name.toUpperCase()}*\n\nSilakan masukkan *${targetLabel}*:\n_Contoh: 512345678901_\n\nKetik *0* atau *B* untuk batal.`
             });
         } else {
-            session.tempPostpaidList = matched.slice(0, 15);
+            session.allMatchedPostpaid = matched;
+            session.tempPostpaidList = matched.slice(0, 25);
             session.step = S.PILIH_PRODUK_PASCA;
-            let t = `💧 *PILIH WILAYAH ${selectedCategory}*\n\n`;
+            let t = `📑 *PILIH LAYANAN ${selectedCategory}*\n\n`;
             session.tempPostpaidList.forEach((p, idx) => {
                 t += `*${idx + 1}.* ${p.name}\n`;
             });
-            t += `\nBalas angka (*1 - ${session.tempPostpaidList.length}*) pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
+            if (matched.length > 25) {
+                t += `\n_Menampilkan 25 dari ${matched.length} layanan._\n_Tips: Anda juga dapat mengetik nama daerah/layanan untuk mencari (contoh: *malang* atau *adira*)._\n`;
+            }
+            t += `\nBalas *Angka (1 - ${session.tempPostpaidList.length})* pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: t });
         }
     }
@@ -822,16 +858,42 @@ if (txt === 'PROFIL') {
             session.step = S.IDLE;
             return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali." });
         }
-        const idx = parseInt(txt) - 1;
-        if (isNaN(idx) || !session.tempPostpaidList || !session.tempPostpaidList[idx]) {
-            return sock.sendMessage(sender, { text: "❌ Pilihan tidak valid. Balas angka yang tertera di menu." });
+
+        const idx = parseInt(txt, 10) - 1;
+        if (!isNaN(idx) && session.tempPostpaidList && session.tempPostpaidList[idx]) {
+            const product = session.tempPostpaidList[idx];
+            session.tempPostpaidProduct = product;
+            session.step = S.INPUT_TARGET_PASCA;
+            return sock.sendMessage(sender, {
+                text: `📑 *TAGIHAN ${product.name.toUpperCase()}*\n\nSilakan masukkan *Nomor / ID Pelanggan*:\n_Contoh: 1234567890_\n\nKetik *0* atau *B* untuk batal.`
+            });
         }
-        const product = session.tempPostpaidList[idx];
-        session.tempPostpaidProduct = product;
-        session.step = S.INPUT_TARGET_PASCA;
-        return sock.sendMessage(sender, {
-            text: `📑 *${product.name.toUpperCase()}*\n\nSilakan masukkan *Nomor / ID Pelanggan*:\n_Contoh: 1234567890_\n\nKetik *0* atau *B* untuk batal.`
+
+        // Fitur Smart Search Nama Layanan / Wilayah (misal: "malang", "kediri", "adira")
+        const query = txt.toLowerCase().trim();
+        const searchPool = session.allMatchedPostpaid || session.tempPostpaidList || [];
+        const filtered = searchPool.filter(p => p.name && p.name.toLowerCase().includes(query));
+
+        if (filtered.length === 0) {
+            return sock.sendMessage(sender, { text: `❌ Layanan dengan kata kunci "*${txt}*" tidak ditemukan.\nSilakan balas angka pada daftar atau coba kata kunci lain.` });
+        }
+
+        if (filtered.length === 1) {
+            const product = filtered[0];
+            session.tempPostpaidProduct = product;
+            session.step = S.INPUT_TARGET_PASCA;
+            return sock.sendMessage(sender, {
+                text: `📑 *TAGIHAN ${product.name.toUpperCase()}*\n\nSilakan masukkan *Nomor / ID Pelanggan*:\n_Contoh: 1234567890_\n\nKetik *0* atau *B* untuk batal.`
+            });
+        }
+
+        session.tempPostpaidList = filtered.slice(0, 25);
+        let t = `🔍 *HASIL PENCARIAN:* "*${txt}*"\n\n`;
+        session.tempPostpaidList.forEach((p, i) => {
+            t += `*${i + 1}.* ${p.name}\n`;
         });
+        t += `\nBalas *Angka (1 - ${session.tempPostpaidList.length})* pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
+        return sock.sendMessage(sender, { text: t });
     }
 
     if (session.step === S.INPUT_TARGET_PASCA) {
@@ -843,7 +905,7 @@ if (txt === 'PROFIL') {
         if (!target || target.length < 5) {
             return sock.sendMessage(sender, { text: "❌ Nomor ID Pelanggan tidak valid. Silakan periksa kembali." });
         }
-        const product = session.tempPostpaidProduct || { sku: 'plnpost', name: 'PLN Pascabayar', brand: 'PLN' };
+        const product = session.tempPostpaidProduct || { sku: 'post685486', name: 'PLN Pascabayar', brand: 'PLN PASCABAYAR' };
         session.tempTarget = target;
 
         await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengecek rincian tagihan ke server..." });
@@ -863,6 +925,20 @@ if (txt === 'PROFIL') {
             const customerName = data.customer_name || '-';
             const adminFee = Number(data.admin) || 2500;
             const billAmount = Number(data.price || data.selling_price || 0);
+
+            // Validasi jika tagihan Rp 0 (sudah lunas)
+            if (billAmount <= 0) {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, {
+                    text: `ℹ️ *TAGIHAN SUDAH LUNAS / BELUM TERBIT*\n\n` +
+                          `📦 Layanan: *${product.name}*\n` +
+                          `👤 Pelanggan: *${customerName}* (\`${target}\`)\n` +
+                          `💵 Tagihan: *Rp 0*\n\n` +
+                          `Tagihan Anda untuk periode ini telah lunas atau belum terbit dari pihak biller.\n` +
+                          `Ketik *MENU* untuk kembali.`
+                });
+            }
+
             const pascaProfit = (config.profit && typeof config.profit.pasca === 'number') ? config.profit.pasca : 1500;
             const totalAmount = billAmount + pascaProfit;
             const period = data.period || '-';
@@ -873,7 +949,12 @@ if (txt === 'PROFIL') {
                 nama: `${product.name} (${customerName})`,
                 cleanName: product.name,
                 hargaJual: totalAmount,
-                isPasca: true
+                isPasca: true,
+                inquiryRef: refId,
+                customerName: customerName,
+                billAmount: billAmount,
+                adminFee: adminFee,
+                period: period
             };
             session.tempQty = 1;
             session.step = S.CONFIRM;

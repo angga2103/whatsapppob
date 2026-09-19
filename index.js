@@ -126,7 +126,23 @@ async function safeHitDigiflazz(sock, order) {
             let hit;
             if (order.isPasca) {
                 const postpaid = require('./lib/postpaid');
-                hit = await postpaid.pay(order.sku, order.target, order.id);
+                // KRUSIAL: Pada Digiflazz pay-pasca, ref_id WAJIB identik dengan ref_id saat inq-pasca!
+                let pascaRef = order.digiflazz_oid || order.inquiry_ref || order.ref_id;
+                if (!pascaRef) {
+                    console.log(`[DIGIFLAZZ PASCA] Tidak ada ref_id inquiry untuk order ${order.id}. Menjalankan auto-inquiry...`);
+                    const inqRes = await postpaid.inquiry(order.sku, order.target, `INQ-${order.id}`);
+                    if (inqRes && inqRes.data && (inqRes.data.status === 'Sukses' || inqRes.data.rc === '00')) {
+                        pascaRef = inqRes.data.ref_id || `INQ-${order.id}`;
+                        order.digiflazz_oid = pascaRef;
+                        order.inquiry_ref = pascaRef;
+                        db.saveOrders();
+                    } else {
+                        console.error(`[DIGIFLAZZ PASCA ERROR] Auto-inquiry gagal:`, inqRes?.data?.message || 'Gagal');
+                        return inqRes || { data: { status: 'Gagal', message: inqRes?.data?.message || 'Tagihan tidak ditemukan' } };
+                    }
+                }
+                console.log(`[DIGIFLAZZ PASCA] Menembak pembayaran SKU: ${order.sku}, Target: ${order.target}, Ref: ${pascaRef}`);
+                hit = await postpaid.pay(order.sku, order.target, pascaRef);
             } else {
                 hit = await api.hitDigiflazz(
                     order.sku,
@@ -839,24 +855,26 @@ async function processCheckout(sock, sender, session) {
 
     // --- INJEKSI INQUIRY PASCABAYAR ---
     if (item.isPasca) {
-        if (!item.hargaJual) {
+        if (!item.hargaJual || !(session.tempInquiryRef || item.inquiryRef)) {
             await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengambil rincian tagihan dari server..." });
             const postpaid = require('./lib/postpaid');
             try {
-                const inq = await postpaid.inquiry(item.sku, session.tempTarget, oid);
-                if (inq && inq.data && inq.data.ref_id) {
-                    order.digiflazz_oid = inq.data.ref_id;
-                }
-                if (!inq.data || inq.data.status === 'Gagal') {
+                const inqRef = `INQ-${oid}`;
+                const inq = await postpaid.inquiry(item.sku, session.tempTarget, inqRef);
+                const data = inq?.data;
+                const billVal = Number(data?.price || data?.selling_price || 0);
+                if (!data || data.status === 'Gagal' || billVal <= 0) {
                     activeTransactions.delete(trxKey);
-                    return sock.sendMessage(sender, { text: `❌ *INQUIRY GAGAL*\nPesan: ${inq.data ? inq.data.message : 'ID Pelanggan salah atau sudah lunas.'}` });
+                    return sock.sendMessage(sender, { text: `❌ *INQUIRY GAGAL*\nPesan: ${data ? (data.message || 'Tagihan Rp 0 atau sudah lunas.') : 'Gagal terhubung ke server Digiflazz.'}` });
                 }
                 const pascaProfit = (config.profit && config.profit.pasca !== undefined) ? Number(config.profit.pasca) : 1500;
-                baseAmount = Number(inq.data.selling_price || inq.data.price || 0) + pascaProfit;
+                baseAmount = billVal + pascaProfit;
                 item.hargaJual = baseAmount;
-                item.nama = inq.data.customer_name ? `${item.brand || item.name} (${inq.data.customer_name})` : (item.brand || item.name);
+                item.nama = data.customer_name ? `${item.brand || item.name} (${data.customer_name})` : (item.brand || item.name);
                 order.baseAmount = baseAmount;
                 order.item = item.nama;
+                order.digiflazz_oid = data.ref_id || inqRef;
+                order.inquiry_ref = data.ref_id || inqRef;
             } catch (e) {
                 activeTransactions.delete(trxKey);
                 return sock.sendMessage(sender, { text: "❌ *ERROR API:* Gagal terhubung ke Digiflazz." });
@@ -865,8 +883,10 @@ async function processCheckout(sock, sender, session) {
             baseAmount = item.hargaJual;
             order.baseAmount = baseAmount;
             order.item = item.nama;
-            if (session.tempInquiryRef) {
-                order.digiflazz_oid = session.tempInquiryRef;
+            const inqRef = session.tempInquiryRef || item.inquiryRef;
+            if (inqRef) {
+                order.digiflazz_oid = inqRef;
+                order.inquiry_ref = inqRef;
             }
         }
     }
@@ -1032,15 +1052,44 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
 
                 order.status = 'success'; 
                 order.sn = hit.data.sn || order.sn;
+                if (hit.data.ref_id) order.digiflazz_oid = hit.data.ref_id;
                 db.saveOrders();
 
                 activeTransactions.delete(
                     (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
                 );
-                await sock.sendMessage(targetJid, { text: `✅ *PPOB SUKSES*\n\nProduk: ${order.item}\nTujuan: ${order.target}\nSN/Ket: ${formatDigiflazzMessage(hit.data.sn || hit.data.message)}` });
+
+                if (order.isPasca) {
+                    let descText = '';
+                    if (hit.data.desc) {
+                        try {
+                            const d = typeof hit.data.desc === 'object' ? hit.data.desc : JSON.parse(hit.data.desc);
+                            if (d.tarif && d.daya) descText += `⚡ Daya/Tarif: *${d.tarif} / ${d.daya}VA*\n`;
+                            if (d.lembar_tagihan) descText += `📑 Lembar Tagihan: *${d.lembar_tagihan} bulan*\n`;
+                        } catch (_) {}
+                    }
+                    const snText = hit.data.sn ? `\n🧾 *No. Ref / SN:* \`${hit.data.sn}\`` : '';
+                    await sock.sendMessage(targetJid, {
+                        text: `✅ *PEMBAYARAN PASCABAYAR BERHASIL*\n\n` +
+                              `📦 Layanan: *${order.item}*\n` +
+                              `🎯 ID Pelanggan: *${order.target}*\n` +
+                              `${descText}` +
+                              `💰 Total Bayar: *${formatRupiah(order.baseAmount || order.total || 0)}*` +
+                              `${snText}\n\n` +
+                              `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
+                    });
+                } else {
+                    await sock.sendMessage(targetJid, { text: `✅ *PPOB SUKSES*\n\nProduk: ${order.item}\nTujuan: ${order.target}\nSN/Ket: ${formatDigiflazzMessage(hit.data.sn || hit.data.message)}` });
+                }
             } else if (hit.data.status === 'Pending') {
-                order.status = 'processing'; if(typeof hit !== 'undefined' && hit.data && hit.data.ref_id) { order.digiflazz_oid = hit.data.ref_id; } db.saveOrders();
-                await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU PROVIDER*\n\nPembayaran LUNAS. Transaksi sedang diproses oleh server pusat. Mohon ditunggu ya kak, produk akan segera masuk.` });
+                order.status = 'processing';
+                if (typeof hit !== 'undefined' && hit.data && hit.data.ref_id) { order.digiflazz_oid = hit.data.ref_id; }
+                db.saveOrders();
+                if (order.isPasca) {
+                    await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU KONFIRMASI BILLER*\n\nPembayaran tagihan Anda sedang diproses oleh server pusat/biller. Mohon ditunggu ya kak, notifikasi sukses akan dikirim otomatis.` });
+                } else {
+                    await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU PROVIDER*\n\nPembayaran LUNAS. Transaksi sedang diproses oleh server pusat. Mohon ditunggu ya kak, produk akan segera masuk.` });
+                }
             } else {
                 activeTransactions.delete(
                     (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
@@ -3885,13 +3934,15 @@ setInterval(async () => {
                 sign: sign
             };
 
-            if (order.sku && (order.sku.includes('PASCA') || order.sku.includes('PLNPOST'))) {
+            const isPostpaid = !!order.isPasca || (order.sku && (String(order.sku).toLowerCase().startsWith('post') || String(order.sku).toLowerCase().includes('pasca')));
+
+            if (isPostpaid) {
                 payload.commands = 'status-pasca';
             }
 
             // LOGGING INTELIJEN: Tampilkan apa yang sedang dicek
             const maskTrg = (t = '') => t.length > 6 ? t.slice(0, 4) + '****' + t.slice(-3) : t;
-            console.log(`[RADAR V4] 🔍 Mengecek OID: ${oid} | SKU: ${order.sku} | Trg: ${maskTrg(order.target)}`);
+            console.log(`[RADAR V4] 🔍 Mengecek OID: ${oid} | SKU: ${order.sku} | Pasca: ${isPostpaid} | Trg: ${maskTrg(order.target)}`);
 
             const req = await fetch('https://api.digiflazz.com/v1/transaction', {
                 method: 'POST',
@@ -3919,8 +3970,20 @@ setInterval(async () => {
                     (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
                 );
                 
-                let snText = sn ? `\nSN/Ket: ${sn}` : '';
-                await botSock.sendMessage(buyerJid, { text: `✅  *PPOB SUKSES*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}${snText}\n\nTerima kasih telah berbelanja di *${db.store.namaToko || 'Toko Kami'}*!` });
+                if (isPostpaid) {
+                    let snText = sn ? `\n🧾 *No. Ref / SN:* \`${sn}\`` : '';
+                    await botSock.sendMessage(realBuyerJid || buyerJid, {
+                        text: `✅ *PEMBAYARAN PASCABAYAR BERHASIL*\n\n` +
+                              `📦 Layanan: *${order.item || order.sku}*\n` +
+                              `🎯 ID Pelanggan: *${order.target}*\n` +
+                              `💰 Total Bayar: *${formatRupiah(order.baseAmount || order.total || 0)}*` +
+                              `${snText}\n\n` +
+                              `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
+                    });
+                } else {
+                    let snText = sn ? `\nSN/Ket: ${sn}` : '';
+                    await botSock.sendMessage(realBuyerJid || buyerJid, { text: `✅  *PPOB SUKSES*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}${snText}\n\nTerima kasih telah berbelanja di *${db.store.namaToko || 'Toko Kami'}*!` });
+                }
                 console.log("[RADAR V4] ✅ Sukses! Pesan terkirim.");
             } 
             else if (status === 'Gagal') {
