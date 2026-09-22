@@ -39,6 +39,7 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.member* | *.info* 628xxxx\n`;
         t += `• *.topsaldo* | *.toptrx*\n`;
         t += `• *.lunas* (Cek Antrian) | *.resend* INV-xxx\n`;
+        t += `• *.kirimakun* INV-xxx data | *.batalorder* INV-xxx\n`;
         t += `• *.health* | *.backup*\n\n`;
         t += `📊 *LAPORAN & LABA BERSIH*\n`;
         t += `• *.stats* / *.omzet* (Ringkasan Laba 1 Hari, 7 Hari, 30 Hari, All-Time)\n`;
@@ -338,9 +339,92 @@ if (cmd === 'namatoko') {
         return sock.sendMessage(sender, { text: `✅ Stok *${item.nama}* berhasil diubah menjadi ${stok}.` });
     }
 
-    if (cmd === 'refund' || cmd === 'batal') {
-        const orderId = args.trim().toUpperCase();
-        if (!orderId) return sock.sendMessage(sender, { text: "❌ Format: .refund [ID_INVOICE]\nContoh: .refund INV-1726000000" });
+    if (cmd === 'kirimakun' || cmd === 'kirim') {
+        const parts = args.trim().split(/\s+/);
+        const orderId = parts[0] ? parts[0].toUpperCase() : '';
+        const akunText = args.trim().slice(parts[0] ? parts[0].length : 0).trim();
+
+        if (!orderId || !akunText) {
+            return sock.sendMessage(sender, {
+                text: `❌ *Format Kirim Akun Salah!*\n\nFormat:\n*.kirimakun [ID_INVOICE] [DATA_AKUN]*\n\nContoh:\n*.kirimakun INV-1789974082366 user@gmail.com | Sandi123 | Profil 1*`
+            });
+        }
+
+        const order = (db.orders || []).find(o => o.id && o.id.toUpperCase() === orderId);
+        if (!order) {
+            return sock.sendMessage(sender, { text: `❌ Order \`${orderId}\` tidak ditemukan di database.` });
+        }
+        if (order.status === 'success') {
+            return sock.sendMessage(sender, { text: `⚠️ Order \`${orderId}\` sudah berstatus SUKSES sebelumnya.` });
+        }
+        if (order.refunded) {
+            return sock.sendMessage(sender, { text: `⚠️ Order \`${orderId}\` sudah di-refund sebelumnya.` });
+        }
+
+        const targetJid = db.normalizeJid ? db.normalizeJid(order.buyer || order.sender) : (order.buyer || order.sender);
+
+        let deliverMsg = `✅ *PESANAN PRODUK DIGITAL SUKSES*\n\n` +
+            `📦 Produk : *${order.item || order.sku}*\n` +
+            `📊 Jumlah : *${order.qty || 1}*\n` +
+            `🧾 No. Inv: \`${order.id}\`\n\n` +
+            `🔑 *DETAIL AKUN / KREDENSIAL:*\n` +
+            `${akunText}\n\n` +
+            `📌 *ATURAN PENGGUNAAN WAJIB & BATASAN HUKUM:*\n` +
+            `1. Wajib login HANYA di *1 Device* (Dilarang multi-device/sharing).\n` +
+            `2. Dilarang mengubah email, password, profile, atau billing/pembayaran.\n` +
+            `3. Akun bersumber dari promo seller luar, *TIDAK ADA garansi seumur hidup/permanen*.\n` +
+            `4. Garansi HANYA saat *First Login (maks 1x24 jam)* jika salah password saat pertama diterima.\n` +
+            `5. Jika akun tersuspend pihak provider resmi di kemudian hari, *TIDAK ADA REFUND / UANG KEMBALI*.\n\n` +
+            `_Ketik *.snkdigital* untuk membaca syarat & ketentuan lengkap._\n` +
+            `Terima kasih telah berbelanja di *${db.store.namaToko || 'STORE'}*! 🙏`;
+
+        await sock.sendMessage(targetJid, { text: deliverMsg }).catch(err => {
+            console.error('[DELIVER_WA_ERR]', err?.message);
+        });
+
+        const menuItem = db.menu.find(m => m.nama === order.item);
+        if (menuItem) {
+            menuItem.stok = Math.max(0, (menuItem.stok || 0) - (order.qty || 1));
+            db.saveMenu();
+        }
+
+        order.status = 'success';
+        order.sn = akunText;
+        order.dataAkun = [akunText];
+        order.doneAt = Date.now();
+        order.deliveredAt = Date.now();
+        db.saveOrders();
+
+        await sock.sendMessage(sender, {
+            text: `✅ *AKUN BERHASIL DIKIRIMKAN!*\n\n` +
+                  `🧾 Invoice : \`${order.id}\`\n` +
+                  `📦 Produk  : *${order.item || order.sku}*\n` +
+                  `👤 Pembeli : ${order.buyer}\n` +
+                  `🕒 Waktu   : ${new Date().toLocaleString('id-ID')}\n\n` +
+                  `Akun sukses terkirim ke pembeli beserta Syarat & Ketentuan Lisensi Digital resmi.`
+        });
+
+        // Lapor ke Telegram jika aktif
+        if (global.botTg && config.telegram && config.telegram.chatId) {
+            global.botTg.sendMessage(config.telegram.chatId,
+                `✅ *AKUN TERKIRIM (VIA WHATSAPP ADMIN)*\n\n` +
+                `🧾 Invoice: \`${order.id}\`\n` +
+                `📦 Produk: *${order.item || order.sku}*\n` +
+                `👤 Pembeli: \`${order.buyer}\`\n\n` +
+                `Status telah diubah menjadi SUKSES.`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+        }
+        return;
+    }
+
+    if (cmd === 'refund' || cmd === 'batal' || cmd === 'batalorder') {
+        const parts = args.trim().split(/\s+/);
+        const orderId = parts[0] ? parts[0].toUpperCase() : '';
+        const customReason = parts.slice(1).join(' ').trim();
+        const reasonText = customReason ? `Dibatalkan Admin: ${customReason}` : 'Dibatalkan Manual oleh Admin';
+
+        if (!orderId) return sock.sendMessage(sender, { text: "❌ Format: .batalorder [ID_INVOICE] [ALASAN_OPSIONAL]\nContoh: .batalorder INV-1726000000 Stok seller kosong" });
         const order = (db.orders || []).find(o => o.id && o.id.toUpperCase() === orderId);
         if (!order) return sock.sendMessage(sender, { text: `❌ Order ${orderId} tidak ditemukan.` });
         if (order.status === 'success') {
@@ -349,7 +433,7 @@ if (cmd === 'namatoko') {
         if (order.refunded) {
             return sock.sendMessage(sender, { text: `⚠️ Order ${orderId} sudah pernah di-refund sebelumnya.` });
         }
-        const refundRes = db.refundOrder(order, 'Dibatalkan Manual oleh Admin');
+        const refundRes = db.refundOrder(order, reasonText);
         if (refundRes.success) {
             await sock.sendMessage(sender, {
                 text: `✅ *ORDER DIBATALKAN & DIREFUND*\n\n🧾 Invoice: \`${order.id}\`\n📦 Produk: ${order.item || order.sku}\n💸 Refund: ${formatRupiah(refundRes.amount)}\n👤 Penerima: ${refundRes.buyerJid}\n💰 Saldo Baru Member: ${formatRupiah(refundRes.newSaldo)}`
@@ -357,6 +441,14 @@ if (cmd === 'namatoko') {
             await sock.sendMessage(refundRes.buyerJid, {
                 text: `❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda telah dibatalkan oleh Admin.\n\n📦 Produk: ${order.item || order.sku}\n🧾 Invoice: \`${order.id}\`\n💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.`
             }).catch(() => {});
+
+            // Lapor ke Telegram jika aktif
+            if (global.botTg && config.telegram && config.telegram.chatId) {
+                global.botTg.sendMessage(config.telegram.chatId,
+                    `❌ *ORDER DIBATALKAN (VIA WHATSAPP ADMIN)*\n\n🧾 Invoice: \`${order.id}\`\n📦 Produk: *${order.item || order.sku}*\n💸 Refund: ${formatRupiah(refundRes.amount)}\n👤 Pembeli: \`${refundRes.buyerJid}\``,
+                    { parse_mode: 'Markdown' }
+                ).catch(() => {});
+            }
         } else {
             return sock.sendMessage(sender, { text: `❌ Gagal refund: ${refundRes.reason}` });
         }
@@ -616,7 +708,7 @@ orders.forEach((o,i)=>{
     text += `🧾 ${o.id}\n`;
     text += `📦 ${o.item}\n`;
     text += `👤 ${o.buyer}\n`;
-    text += `💰 ${formatRupiah(o.baseAmount || 0)}\n`;
+    text += `💰 ${formatRupiah(o.total || o.baseAmount || 0)}\n`;
     text += `📌 ${String(o.status).toUpperCase()}\n`;
 
     if (o.timestamp) {
@@ -631,7 +723,10 @@ orders.forEach((o,i)=>{
 
 });
 
-text += `📊 Total Antrian: ${orders.length}`;
+text += `📊 Total Antrian: ${orders.length}\n\n`;
+text += `💡 *Cara Eksekusi Pesanan:*\n`;
+text += `• Kirim akun ke pembeli:\n  *.kirimakun [INV-ID] [DATA_AKUN]*\n`;
+text += `• Batalkan & refund saldo:\n  *.batalorder [INV-ID] [ALASAN]*`;
 
 return sock.sendMessage(sender,{text});
 

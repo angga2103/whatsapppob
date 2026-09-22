@@ -800,18 +800,25 @@ if (!global.heartbeatStarted) {
                         });
                     }
 
-                    // kirim akun ke pembeli
-                    await currentSock.sendMessage(order.buyer, {
-                        text:
-`✅ *PESANAN BERHASIL*
+                    // kirim akun ke pembeli dengan format rapi & S&K resmi
+                    const targetBuyer = db.normalizeJid ? db.normalizeJid(order.buyer) : order.buyer;
+                    let deliverMsg = `✅ *PESANAN PRODUK DIGITAL SUKSES*\n\n` +
+                        `📦 Produk : *${order.item}*\n` +
+                        `📊 Jumlah : *${order.qty || 1}*\n` +
+                        `🧾 No. Inv: \`${order.id}\`\n\n` +
+                        `🔑 *DETAIL AKUN / KREDENSIAL:*\n` +
+                        `${akunText}\n\n` +
+                        `📌 *ATURAN PENGGUNAAN WAJIB & BATASAN HUKUM:*\n` +
+                        `1. Wajib login HANYA di *1 Device* (Dilarang multi-device/sharing).\n` +
+                        `2. Dilarang mengubah email, password, profile, atau billing/pembayaran.\n` +
+                        `3. Akun bersumber dari promo seller luar, *TIDAK ADA garansi seumur hidup/permanen*.\n` +
+                        `4. Garansi HANYA saat *First Login (maks 1x24 jam)* jika salah password saat pertama diterima.\n` +
+                        `5. Jika akun tersuspend pihak provider resmi di kemudian hari, *TIDAK ADA REFUND / UANG KEMBALI*.\n\n` +
+                        `_Ketik *.snkdigital* untuk membaca syarat & ketentuan lengkap._\n` +
+                        `Terima kasih telah berbelanja di *${db.store.namaToko || 'STORE'}*! 🙏`;
 
-
-📦 Produk: ${order.item}
-
-📩 Detail Akun:
-${akunText}
-
-Terima kasih telah berbelanja.`
+                    await currentSock.sendMessage(targetBuyer, { text: deliverMsg }).catch(err => {
+                        console.error('[DELIVER_WA_REPLY_ERR]', err?.message);
                     });
 
                     // update status
@@ -822,13 +829,26 @@ Terima kasih telah berbelanja.`
                     }
 
                     order.status = 'success';
+                    order.sn = akunText;
+                    order.dataAkun = [akunText];
                     order.doneAt = Date.now();
-
+                    order.deliveredAt = Date.now();
                     db.saveOrders();
 
+                    // Tembusan ke Telegram jika aktif
+                    if (global.botTg && config.telegram && config.telegram.chatId) {
+                        global.botTg.sendMessage(config.telegram.chatId,
+                            `✅ *AKUN TERKIRIM (VIA REPLY WA)*\n\n` +
+                            `🧾 Invoice: \`${order.id}\`\n` +
+                            `📦 Produk: *${order.item}*\n` +
+                            `👤 Pembeli: \`${order.buyer}\`\n\n` +
+                            `Status pesanan telah diperbarui menjadi SUKSES.`,
+                            { parse_mode: 'Markdown' }
+                        ).catch(() => {});
+                    }
+
                     return sock.sendMessage(sender, {
-                        text:
-                            '✅ Akun berhasil dikirim ke pembeli.'
+                        text: `✅ *AKUN BERHASIL DIKIRIM KE PEMBELI!*\n\n🧾 Invoice: \`${order.id}\`\n📦 Produk: *${order.item}*\n👤 Pembeli: ${order.buyer}\nStatus pesanan: SUKSES.`
                     });
                 }
             }
@@ -843,6 +863,7 @@ Terima kasih telah berbelanja.`
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
                 'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
                 'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
+                'kirimakun', 'kirim', 'batalorder',
                 'snk', 'tos', 'syarat', 'aturan', 'snkdigital', 'digital', 'aturanakun'
             ];
 
@@ -965,6 +986,7 @@ async function processCheckout(sock, sender, session) {
     if (actualSaldo >= baseAmount) {
         const deduct = db.deductSaldo(cleanBuyer, baseAmount, oid, order.item);
         if (deduct.success) {
+            order.total = baseAmount;
             order.method = 'Saldo Akun';
             order.status = 'processing';
             db.orders.push(order);
@@ -1282,9 +1304,67 @@ STATUS: SUCCESS`,
 'transaksi.log'
 );
         } else {
-            order.status = 'processing'; if(typeof hit !== 'undefined' && hit.data && hit.data.ref_id) { order.digiflazz_oid = hit.data.ref_id; } db.saveOrders();
-            await sock.sendMessage(targetJid, { text: `✅ Pembayaran diterima. Menunggu admin memproses.` });
-            for (const owner of config.owner) await sock.sendMessage(owner, { text: `🔔 ORDER MASUK MANUAL\nID: ${order.id}\nProduk: ${order.item}\nReply untuk mengirim.` }).catch(()=>{});
+            order.status = 'processing';
+            if (typeof hit !== 'undefined' && hit.data && hit.data.ref_id) {
+                order.digiflazz_oid = hit.data.ref_id;
+            }
+            db.saveOrders();
+
+            // 1. Notifikasi Ramah dengan Estimasi 3-5 Menit ke Pembeli
+            const waitMsg = `✅ *PEMBAYARAN DITERIMA*\n\n` +
+                `Terima kasih kak! Pembayaran untuk pesanan *${order.item}* senilai *${formatRupiah(order.total || order.baseAmount || 0)}* telah berhasil kami terima.\n\n` +
+                `⏳ *Status:* Sedang Diproses Admin (Estimasi 3 - 5 Menit)\n` +
+                `🧾 *Invoice:* \`${order.id}\`\n\n` +
+                `💡 *Catatan Pengiriman:*\n` +
+                `Akun digital Anda sedang kami siapkan & lakukan pengecekan kualitas. Begitu selesai diproses, detail kredensial akun akan *langsung dikirimkan otomatis ke ruang obrolan WhatsApp ini*.\n\n` +
+                `Mohon ditunggu sebentar ya kak! Terima kasih banyak atas kesabarannya 🙏`;
+            await sock.sendMessage(targetJid, { text: waitMsg }).catch(() => {});
+
+            // 2. Alert ke WhatsApp Owner dengan Panduan Eksekusi
+            for (const owner of config.owner) {
+                await sock.sendMessage(owner, {
+                    text: `🔔 *PESANAN DIGITAL MASUK (PRE-ORDER)*\n\n` +
+                          `🧾 Invoice : \`${order.id}\`\n` +
+                          `📦 Produk  : *${order.item}*\n` +
+                          `📊 Qty     : *${order.qty || 1}*\n` +
+                          `💰 Total   : *${formatRupiah(order.total || order.baseAmount || 0)}*\n` +
+                          `👤 Pembeli : ${order.buyer}\n` +
+                          `🕒 Waktu   : ${new Date().toLocaleString('id-ID')}\n\n` +
+                          `💡 *Cara Kirim Akun:*\n` +
+                          `• Ketik: *.kirimakun ${order.id} <data_akun>*\n` +
+                          `• Atau balas/reply pesan ini dengan data akun.\n` +
+                          `• Batalkan: *.batalorder ${order.id} [alasan]*`
+                }).catch(() => {});
+            }
+
+            // 3. Alert Interaktif ke Telegram Admin dengan Tombol Eksekusi
+            if (global.botTg && config.telegram && config.telegram.chatId) {
+                const tgBuyer = (order.buyer || '').replace(/[^0-9]/g, '');
+                const tgAlertText = `🔔 *PESANAN DIGITAL BARU MASUK!*\n\n` +
+                    `🧾 Invoice : \`${order.id}\`\n` +
+                    `📦 Produk  : *${order.item}*\n` +
+                    `📊 Qty     : *${order.qty || 1}*\n` +
+                    `💰 Total   : *${formatRupiah(order.total || order.baseAmount || 0)}*\n` +
+                    `👤 Pembeli : \`+${tgBuyer}\`\n` +
+                    `⏳ Status  : *Sedang Diproses (Pre-Order)*\n` +
+                    `🕒 Waktu   : ${new Date().toLocaleString('id-ID')}\n\n` +
+                    `_Silakan siapkan/beli akun dari seller, lalu klik tombol di bawah untuk langsung mengirimkan akun ke WhatsApp pembeli:_`;
+
+                const tgKeyboard = {
+                    inline_keyboard: [
+                        [{ text: '🚀 Kirim Akun ke Pembeli', callback_data: `tg_sendacc_${order.id}` }],
+                        [
+                            { text: '❌ Batalkan & Refund', callback_data: `tg_cancelacc_${order.id}` },
+                            { text: '📋 Detail Order', callback_data: `tg_detailacc_${order.id}` }
+                        ]
+                    ]
+                };
+
+                await global.botTg.sendMessage(config.telegram.chatId, tgAlertText, {
+                    parse_mode: 'Markdown',
+                    reply_markup: tgKeyboard
+                }).catch(err => console.error('[TG_ALERT_ERR]', err?.message));
+            }
         }
     }
 }
@@ -3265,23 +3345,157 @@ function initTelegramBot() {
                 global.botTg.answerCallbackQuery(query.id);
                 const pending = (db.orders || []).filter(o => o.status === 'pending' || o.status === 'processing');
                 let text = `⏳ *ANTRIAN TRANSAKSI AKTIF*\n\n`;
+                const inline_keyboard = [];
+
                 if (pending.length === 0) {
-                    text += `_Tidak ada transaksi dalam antrian saat ini. Seluruh order telah tuntas._`;
+                    text += `_Tidak ada transaksi dalam antrian saat ini. Seluruh pesanan telah tuntas._`;
                 } else {
+                    text += `_Ditemukan *${pending.length}* pesanan aktif yang memerlukan tindakan:_\n\n`;
                     pending.slice(0, 10).forEach((o, i) => {
-                        text += `${i + 1}. \`${o.id}\` | ${o.item || o.sku} | ${formatRupiah(o.total || 0)} (${o.status})\n`;
+                        const amt = formatRupiah(o.total || o.baseAmount || 0);
+                        const statusBadge = o.status === 'processing' ? '⏳ PROCESSING' : '🟡 PENDING';
+                        text += `${i + 1}. \`${o.id}\`\n   📦 *${o.item || o.sku}*\n   💰 ${amt} | 📌 ${statusBadge}\n\n`;
+
+                        const shortItem = (o.item || o.sku || 'Order').slice(0, 15);
+                        inline_keyboard.push([
+                            { text: `⚡ Eksekusi: ${o.id.slice(-8)} (${shortItem})`, callback_data: `tg_detailacc_${o.id}` }
+                        ]);
                     });
-                    if (pending.length > 10) text += `\n_...dan ${pending.length - 10} order lainnya._`;
+                    if (pending.length > 10) text += `_...dan ${pending.length - 10} order lainnya._\n`;
                 }
+
+                inline_keyboard.push([{ text: '🔄 Refresh Antrian', callback_data: 'tg_lunas' }]);
+                inline_keyboard.push([{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]);
+
                 return updateOrSend(chatId, messageId, {
                     text,
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '🔄 Refresh Antrian', callback_data: 'tg_lunas' }],
-                            [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
-                        ]
-                    }
+                    reply_markup: { inline_keyboard }
                 });
+            }
+
+            if (action.startsWith('tg_detailacc_')) {
+                global.botTg.answerCallbackQuery(query.id);
+                const orderId = action.replace('tg_detailacc_', '');
+                const order = (db.orders || []).find(o => o.id === orderId);
+                if (!order) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '❌ Order tidak ditemukan.', show_alert: true });
+                }
+
+                const buyerPhone = (order.buyer || order.sender || '').replace(/[^0-9]/g, '');
+                const dateStr = order.timestamp ? new Date(order.timestamp).toLocaleString('id-ID') : '-';
+                const amountStr = formatRupiah(order.total || order.baseAmount || 0);
+
+                let detailText = `📦 *DETAIL ORDER PRE-ORDER / DIGITAL*\n\n` +
+                    `• Invoice   : \`${order.id}\`\n` +
+                    `• Produk    : *${order.item || order.sku}*\n` +
+                    `• Jumlah    : *${order.qty || 1}*\n` +
+                    `• Total     : *${amountStr}*\n` +
+                    `• Metode    : *${order.method || 'Saldo Akun'}*\n` +
+                    `• Pembeli   : \`+${buyerPhone || '-'}\`\n` +
+                    `• Status    : *${String(order.status).toUpperCase()}*\n` +
+                    `• Waktu     : ${dateStr}\n\n` +
+                    `💡 *Pilihan Tindakan Admin:*\n` +
+                    `• Klik *🚀 Kirim Akun* untuk memasukkan kredensial dari seller.\n` +
+                    `• Klik *❌ Batalkan & Refund* jika stok seller kosong/habis.`;
+
+                const buttons = [];
+                if (order.status !== 'success' && !order.refunded) {
+                    buttons.push([{ text: '🚀 Kirim Akun ke Pembeli', callback_data: `tg_sendacc_${order.id}` }]);
+                    buttons.push([{ text: '❌ Batalkan & Refund Saldo', callback_data: `tg_cancelacc_${order.id}` }]);
+                } else if (order.sn) {
+                    buttons.push([{ text: '📲 Kirim Ulang Akun/SN ke Pembeli', callback_data: `tg_resend_${order.id}` }]);
+                }
+                buttons.push([{ text: '🔙 Kembali ke Antrian', callback_data: 'tg_lunas' }]);
+
+                return updateOrSend(chatId, messageId, {
+                    text: detailText,
+                    reply_markup: { inline_keyboard: buttons }
+                });
+            }
+
+            if (action.startsWith('tg_sendacc_')) {
+                global.botTg.answerCallbackQuery(query.id);
+                const orderId = action.replace('tg_sendacc_', '');
+                const order = (db.orders || []).find(o => o.id === orderId);
+                if (!order) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '❌ Order tidak ditemukan.', show_alert: true });
+                }
+                if (order.status === 'success') {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '⚠️ Order ini sudah berstatus SUKSES!', show_alert: true });
+                }
+                if (order.refunded) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '⚠️ Order ini sudah pernah di-refund!', show_alert: true });
+                }
+
+                global.tgInputState = {
+                    type: 'awaiting_send_account',
+                    orderId: order.id,
+                    chatId
+                };
+
+                const buyerPhone = (order.buyer || order.sender || '').replace(/[^0-9]/g, '');
+                return global.botTg.sendMessage(chatId,
+                    `🚀 *KIRIM AKUN KE PEMBELI*\n\n` +
+                    `🧾 Invoice : \`${order.id}\`\n` +
+                    `📦 Produk  : *${order.item || order.sku}*\n` +
+                    `👤 Pembeli : \`+${buyerPhone}\`\n\n` +
+                    `Silakan balas dengan mengetik atau menempel (*paste*) data akun yang didapatkan dari seller luar.\n\n` +
+                    `_Contoh:_ \`Email: user@gmail.com | Sandi: pass123 | Profil: 1\`\n\n` +
+                    `Data ini akan langsung diformat rapi dan dikirimkan otomatis ke WhatsApp pembeli bersama S&K Lisensi Digital resmi.`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '❌ Batal Kirim', callback_data: `tg_detailacc_${order.id}` }]
+                            ]
+                        }
+                    }
+                );
+            }
+
+            if (action.startsWith('tg_cancelacc_')) {
+                const orderId = action.replace('tg_cancelacc_', '');
+                const order = (db.orders || []).find(o => o.id === orderId);
+                if (!order) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '❌ Order tidak ditemukan.', show_alert: true });
+                }
+                if (order.refunded) {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '⚠️ Order ini sudah pernah di-refund!', show_alert: true });
+                }
+                if (order.status === 'success') {
+                    return global.botTg.answerCallbackQuery(query.id, { text: '⚠️ Order berstatus SUKSES tidak dapat di-refund!', show_alert: true });
+                }
+                const refundRes = db.refundOrder(order, 'Dibatalkan oleh Admin via Telegram (Stok Seller Kosong)');
+                if (refundRes.success) {
+                    if (global.sock && typeof global.sock.sendMessage === 'function') {
+                        await global.sock.sendMessage(refundRes.buyerJid, {
+                            text: `❌ *ORDER DIBATALKAN ADMIN*\n\n` +
+                                  `Mohon maaf kak, pesanan *${order.item || order.sku}* dengan Invoice \`${order.id}\` dibatalkan oleh Admin karena stok di seller sedang kosong/gangguan.\n\n` +
+                                  `💰 *Saldo Anda telah dikembalikan 100% sebesar ${formatRupiah(refundRes.amount)}* ke dompet akun Anda.\n` +
+                                  `Ketik *SALDO* untuk cek saldo terbaru Anda.`
+                        }).catch(() => {});
+                    }
+                    global.botTg.answerCallbackQuery(query.id, { text: `✅ Order ${order.id} berhasil dibatalkan & saldo di-refund!`, show_alert: true });
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *ORDER DIBATALKAN & SALDO DIREFUND*\n\n` +
+                        `🧾 Invoice : \`${order.id}\`\n` +
+                        `📦 Produk  : ${order.item || order.sku}\n` +
+                        `💸 Refund  : *${formatRupiah(refundRes.amount)}*\n` +
+                        `👤 Pembeli : \`${refundRes.buyerJid}\`\n` +
+                        `💰 Saldo Baru Member: *${formatRupiah(refundRes.newSaldo)}*`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '⏳ Cek Antrian Lain', callback_data: 'tg_lunas' }],
+                                    [{ text: '🏠 Menu Utama', callback_data: 'tg_menu' }]
+                                ]
+                            }
+                        }
+                    );
+                } else {
+                    return global.botTg.answerCallbackQuery(query.id, { text: `❌ Gagal refund: ${refundRes.reason}`, show_alert: true });
+                }
             }
 
             if (action === 'tg_backup' || action === 'tg_backup_menu') {
@@ -4441,6 +4655,85 @@ function initTelegramBot() {
                     } else {
                         return global.botTg.sendMessage(chatId, `❌ Gagal refund: ${refundRes.reason}`);
                     }
+                }
+
+                // === AWAITING SEND ACCOUNT (DIGITAL / PRE-ORDER) ===
+                if (stateType === 'awaiting_send_account') {
+                    const orderId = global.tgInputState.orderId;
+                    const order = (db.orders || []).find(o => o.id === orderId);
+                    global.tgInputState = null;
+
+                    if (!order) {
+                        return global.botTg.sendMessage(chatId, `❌ Order \`${orderId}\` tidak ditemukan di database.`);
+                    }
+                    if (order.status === 'success') {
+                        return global.botTg.sendMessage(chatId, `⚠️ Order \`${orderId}\` sudah berstatus SUKSES sebelumnya.`);
+                    }
+                    if (order.refunded) {
+                        return global.botTg.sendMessage(chatId, `⚠️ Order \`${orderId}\` sudah di-refund sebelumnya.`);
+                    }
+
+                    const akunText = text.trim();
+                    if (!akunText) {
+                        return global.botTg.sendMessage(chatId, `❌ Data akun tidak boleh kosong.`);
+                    }
+
+                    const targetJid = db.normalizeJid ? db.normalizeJid(order.buyer || order.sender) : (order.buyer || order.sender);
+
+                    let deliverMsg = `✅ *PESANAN PRODUK DIGITAL SUKSES*\n\n` +
+                        `📦 Produk : *${order.item || order.sku}*\n` +
+                        `📊 Jumlah : *${order.qty || 1}*\n` +
+                        `🧾 No. Inv: \`${order.id}\`\n\n` +
+                        `🔑 *DETAIL AKUN / KREDENSIAL:*\n` +
+                        `${akunText}\n\n` +
+                        `📌 *ATURAN PENGGUNAAN WAJIB & BATASAN HUKUM:*\n` +
+                        `1. Wajib login HANYA di *1 Device* (Dilarang multi-device/sharing).\n` +
+                        `2. Dilarang mengubah email, password, profile, atau billing/pembayaran.\n` +
+                        `3. Akun bersumber dari promo seller luar, *TIDAK ADA garansi seumur hidup/permanen*.\n` +
+                        `4. Garansi HANYA saat *First Login (maks 1x24 jam)* jika salah password saat pertama diterima.\n` +
+                        `5. Jika akun tersuspend pihak provider resmi di kemudian hari, *TIDAK ADA REFUND / UANG KEMBALI*.\n\n` +
+                        `_Ketik *.snkdigital* untuk membaca syarat & ketentuan lengkap._\n` +
+                        `Terima kasih telah berbelanja di *${db.store.namaToko || 'STORE'}*! 🙏`;
+
+                    if (global.sock && typeof global.sock.sendMessage === 'function') {
+                        await global.sock.sendMessage(targetJid, { text: deliverMsg }).catch(err => {
+                            console.error('[DELIVER_WA_ERR]', err?.message);
+                        });
+                    }
+
+                    // Kurangi stok jika produk terdaftar di menu
+                    const menuItem = db.menu.find(m => m.nama === order.item);
+                    if (menuItem) {
+                        menuItem.stok = Math.max(0, (menuItem.stok || 0) - (order.qty || 1));
+                        db.saveMenu();
+                    }
+
+                    order.status = 'success';
+                    order.sn = akunText;
+                    order.dataAkun = [akunText];
+                    order.doneAt = Date.now();
+                    order.deliveredAt = Date.now();
+                    db.saveOrders();
+
+                    const buyerPhone = (order.buyer || order.sender || '').replace(/[^0-9]/g, '');
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *AKUN BERHASIL DIKIRIMKAN KE PEMBELI!*\n\n` +
+                        `🧾 Invoice : \`${order.id}\`\n` +
+                        `📦 Produk  : *${order.item || order.sku}*\n` +
+                        `👤 Pembeli : \`+${buyerPhone}\`\n` +
+                        `🕒 Waktu   : ${new Date().toLocaleString('id-ID')}\n\n` +
+                        `Akun telah sukses dikirimkan ke WhatsApp pembeli beserta Syarat & Ketentuan Lisensi Digital resmi.`,
+                        {
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '⏳ Cek Antrian Lain', callback_data: 'tg_lunas' }],
+                                    [{ text: '🏠 Menu Utama', callback_data: 'tg_menu' }]
+                                ]
+                            }
+                        }
+                    );
                 }
 
                 // === AWAITING BROADCAST WA ===
