@@ -38,6 +38,7 @@ checkFile('./database/deposits.json', '[]');
 checkFile('./database/settings.json', '{}');
 checkFile('./database/subscription_catalog.json', '[]');
 checkFile('./database/subscriptions.json', '[]');
+checkFile('./database/debts.json', '[]');
 
 const syncSettingsToEnv = (settings) => {
     if (!settings || typeof settings !== 'object') return;
@@ -197,6 +198,7 @@ const db = {
     settings: recoverSettings(),
     subscriptionCatalog: safeReadJson('./database/subscription_catalog.json', []),
     subscriptions: safeReadJson('./database/subscriptions.json', []),
+    debts: safeReadJson('./database/debts.json', []),
     
     saveMenu: () => atomicWriteJson('./database/menu.json', db.menu),
     savePpob: () => atomicWriteJson('./database/ppob.json', db.ppob),
@@ -207,6 +209,7 @@ const db = {
     saveDeposits: () => atomicWriteJson('./database/deposits.json', db.deposits),
     saveSubscriptionCatalog: () => atomicWriteJson('./database/subscription_catalog.json', db.subscriptionCatalog),
     saveSubscriptions: () => atomicWriteJson('./database/subscriptions.json', db.subscriptions),
+    saveDebts: () => atomicWriteJson('./database/debts.json', db.debts),
     saveSettings: () => {
         atomicWriteJson('./database/settings.json', db.settings);
         atomicWriteJson('./database/settings.backup.json', db.settings);
@@ -223,6 +226,7 @@ const db = {
         db.saveDeposits();
         db.saveSubscriptionCatalog();
         db.saveSubscriptions();
+        db.saveDebts();
         db.saveSettings();
     },
 

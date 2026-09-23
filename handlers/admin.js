@@ -852,6 +852,31 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
         return sock.sendMessage(sender, { text });
     }
 
+    if (cmd === 'laporanharian' || cmd === 'rekap') {
+        let digiBalance = 'Memeriksa...';
+        try {
+            const digiRes = await api.cekSaldoDigi();
+            if (digiRes && digiRes.data && digiRes.data.deposit !== undefined) {
+                digiBalance = Number(digiRes.data.deposit);
+            }
+        } catch (_) {}
+
+        let gatewayBalance = 'Memeriksa...';
+        try {
+            const gateRes = await api.cekSaldoGateway();
+            if (gateRes && gateRes.balance !== undefined) {
+                gatewayBalance = Number(gateRes.balance);
+            }
+        } catch (_) {}
+
+        const reportText = analytics.generateFinancialReportText('today', {
+            digiflazz: digiBalance,
+            gateway: gatewayBalance
+        });
+
+        return sock.sendMessage(sender, { text: reportText });
+    }
+
     if (cmd === 'topproduk' || cmd === 'terlaris') {
         const days = parseInt(args.trim(), 10) || 0;
         const data = analytics.getTopProducts(10, days);

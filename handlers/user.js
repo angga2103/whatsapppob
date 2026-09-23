@@ -4,6 +4,10 @@ const api = require('../lib/api');
 const config = require('../config');
 const legal = require('../lib/legal');
 const subLib = require('../lib/subscription');
+const receiptLib = require('../lib/receipt');
+const debtLib = require('../lib/debt');
+const quickOrder = require('../lib/quick_order');
+const mutex = require('../lib/mutex');
 
 // System Session (State Machine)
 const S = {
@@ -466,6 +470,244 @@ async function handleUser(sock, sender, text, session, processCheckout) {
             });
         } else {
             return sock.sendMessage(sender, { text: `❌ Gagal membatalkan langganan: ${cancelRes.reason || cancelRes.message}` });
+        }
+    }
+
+    // STRUK COMMAND (.struk atau .struk [INV])
+    if (['.STRUK', '!STRUK', 'STRUK'].includes(cmdFirst)) {
+        const query = (parts[1] || '').trim();
+        const orders = db.orders || [];
+        const cleanSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
+
+        let targetOrder = null;
+        if (query) {
+            targetOrder = orders.find(o => 
+                (o.id && o.id.toUpperCase() === query.toUpperCase()) ||
+                (o.oid && o.oid.toUpperCase() === query.toUpperCase()) ||
+                (o.digiflazz_oid && o.digiflazz_oid.toUpperCase() === query.toUpperCase())
+            );
+        } else {
+            // Ambil order sukses terakhir milik user ini
+            targetOrder = [...orders].reverse().find(o => 
+                (o.buyer === sender || o.buyer === cleanSender || o.sender === sender) && 
+                o.status === 'success'
+            );
+        }
+
+        if (!targetOrder) {
+            return sock.sendMessage(sender, {
+                text: `❌ *STRUK TIDAK DITEMUKAN*\n\nBelum ada transaksi sukses yang dapat dicetak struk.\nKetik *.struk [NO_INVOICE]* jika ingin mencetak invoice tertentu.\nContoh: \`.struk INV-123456\``
+            });
+        }
+
+        const u = db.getUser(sender);
+        const warungProfile = u.warung || {};
+        const textReceipt = receiptLib.generateTextReceipt(targetOrder, warungProfile, 32);
+
+        const host = process.env.PUBLIC_URL || `http://localhost:${config.port || 3000}`;
+        const webReceiptUrl = `${host}/struk/${targetOrder.id || targetOrder.oid}`;
+
+        let reply = `🧾 *STRUK PEMBAYARAN THERMAL (58mm)*\n\n`;
+        reply += `\`\`\`\n${textReceipt}\n\`\`\`\n\n`;
+        reply += `🌐 *Link Struk Cetak / PDF:*\n${webReceiptUrl}\n\n`;
+        reply += `💡 *Kustomisasi Toko Warung:*\n`;
+        reply += `• Ganti Nama Toko : Ketik *.setnamatoko [Nama Warung]*\n`;
+        reply += `• Atur Harga Jual : Ketik *.strukharga [Harga]* (cth: *.strukharga 12000*)`;
+
+        return sock.sendMessage(sender, { text: reply });
+    }
+
+    // SET NAMA TOKO WARUNG UNTUK STRUK (.setnamatoko [Nama Warung])
+    if (['.SETNAMATOKO', '!SETNAMATOKO', 'SETNAMATOKO'].includes(cmdFirst)) {
+        const newStoreName = parts.slice(1).join(' ').trim();
+        if (!newStoreName) {
+            return sock.sendMessage(sender, {
+                text: `🏪 *FORMAT GANTI NAMA TOKO STRUK:*\n.setnamatoko [Nama Warung Anda]\n\nContoh:\n.setnamatoko Warung Berkah Barokah`
+            });
+        }
+
+        const u = db.getUser(sender);
+        if (!u.warung) u.warung = {};
+        u.warung.storeName = newStoreName;
+        db.saveUsers();
+
+        return sock.sendMessage(sender, {
+            text: `✅ *NAMA TOKO STRUK DIPERBARUI!*\n\nNama Toko di struk Anda telah diatur menjadi:\n🏪 *${newStoreName}*\n\nSetiap kali Anda mengetik *.struk*, nama toko inilah yang akan tercantum di bagian atas struk.`
+        });
+    }
+
+    // SET HARGA JUAL STRUK (.strukharga [Harga])
+    if (['.STRUKHARGA', '!STRUKHARGA', 'STRUKHARGA'].includes(cmdFirst)) {
+        const newPrice = parseInt((parts[1] || '').replace(/[^0-9]/g, ''), 10);
+        if (isNaN(newPrice) || newPrice <= 0) {
+            return sock.sendMessage(sender, {
+                text: `💰 *FORMAT UBAH HARGA STRUK:*\n.strukharga [Nominal]\n\nContoh:\n.strukharga 12000\n\n_Digunakan jika Anda ingin menjual kembali produk ke pembeli dengan margin warung Anda._`
+            });
+        }
+
+        const orders = db.orders || [];
+        const cleanSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
+        const lastOrder = [...orders].reverse().find(o => 
+            (o.buyer === sender || o.buyer === cleanSender || o.sender === sender) && 
+            o.status === 'success'
+        );
+
+        if (!lastOrder) {
+            return sock.sendMessage(sender, { text: `❌ Anda belum memiliki transaksi sukses terakhir untuk diubah harganya.` });
+        }
+
+        lastOrder.customPrice = newPrice;
+        db.saveOrders();
+
+        return sock.sendMessage(sender, {
+            text: `✅ *HARGA STRUK BERHASIL DIATUR!*\n\nHarga pada struk terakhir (\`${lastOrder.id}\`) telah diubah menjadi: *${formatRupiah(newPrice)}*.\n\nKetik *.struk* untuk melihat struk dengan harga baru siap cetak!`
+        });
+    }
+
+    // BUKU KASBON WARUNG (.kasbon)
+    if (['.KASBON', '!KASBON', 'KASBON', '.BON', '!BON', 'BON'].includes(cmdFirst)) {
+        const sub = (parts[1] || '').toLowerCase().trim();
+
+        if (sub === 'tambah' || sub === 'add') {
+            const debtorName = parts[2] || '';
+            const amountRaw = parts[3] || '';
+            const note = parts.slice(4).join(' ') || 'Pulsa / Token Listrik';
+
+            if (!debtorName || !amountRaw) {
+                return sock.sendMessage(sender, {
+                    text: `📝 *FORMAT TAMBAH KASBON:*\n.kasbon tambah [Nama Pelanggan] [Nominal] [Keterangan]\n\nContoh:\n.kasbon tambah Pak Budi 25000 Token PLN 20rb`
+                });
+            }
+
+            const res = debtLib.addDebt(sender, debtorName, amountRaw, note);
+            if (!res.success) {
+                return sock.sendMessage(sender, { text: `❌ Gagal mencatat kasbon: ${res.message}` });
+            }
+
+            return sock.sendMessage(sender, {
+                text: `✅ *CATATAN KASBON TERSIMPAN*\n\n` +
+                      `• ID Kasbon    : \`${res.debt.id}\`\n` +
+                      `• Pelanggan    : *${res.debt.name}*\n` +
+                      `• Nominal      : *${formatRupiah(res.debt.amount)}*\n` +
+                      `• Keterangan   : ${res.debt.note}\n\n` +
+                      `Ketik *.kasbon list* untuk melihat semua catatan kasbon Anda.`
+            });
+        }
+
+        if (sub === 'list' || sub === 'daftar' || sub === 'cek') {
+            const debts = debtLib.getUserDebts(sender, 'unpaid');
+            if (debts.count === 0) {
+                return sock.sendMessage(sender, {
+                    text: `📑 *BUKU KASBON WARUNG*\n\nAlhamdulillah, saat ini tidak ada catatan kasbon/hutang yang belum lunas. Semuanya lunas!`
+                });
+            }
+
+            let t = `📑 *BUKU KASBON WARUNG (BELUM LUNAS)*\n\n`;
+            t += `Total Piutang: *${formatRupiah(debts.totalAmount)}* (${debts.count} orang)\n`;
+            t += `────────────────────────\n`;
+            debts.items.forEach((d, idx) => {
+                const dateStr = new Date(d.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
+                t += `*${idx + 1}.* *${d.name}* (${formatRupiah(d.amount)})\n`;
+                t += `   • ID  : \`${d.id}\`\n`;
+                t += `   • Ket : ${d.note} (${dateStr})\n\n`;
+            });
+
+            t += `💡 *Tindakan Cepat:*\n`;
+            t += `• Tandai Lunas : \`.kasbon lunas [ID]\`\n`;
+            t += `• Buat Pesan Tagihan : \`.kasbon ingatkan [ID]\``;
+
+            return sock.sendMessage(sender, { text: t });
+        }
+
+        if (sub === 'lunas' || sub === 'bayar') {
+            const debtId = (parts[2] || '').trim();
+            if (!debtId) {
+                return sock.sendMessage(sender, { text: `❌ Masukkan ID Kasbon yang ingin dilunasi.\nContoh: \`.kasbon lunas BON-XXXXX\`` });
+            }
+
+            const res = debtLib.markDebtPaid(debtId, sender);
+            if (!res.success) {
+                return sock.sendMessage(sender, { text: `❌ ${res.message}` });
+            }
+
+            return sock.sendMessage(sender, {
+                text: `🎉 *KASBON DITANDAI LUNAS!*\n\nKasbon atas nama *${res.debt.name}* sebesar *${formatRupiah(res.debt.amount)}* telah berstatus Lunas.`
+            });
+        }
+
+        if (sub === 'ingatkan' || sub === 'tagih') {
+            const debtId = (parts[2] || '').trim();
+            if (!debtId) {
+                return sock.sendMessage(sender, { text: `❌ Masukkan ID Kasbon yang ingin diingatkan.\nContoh: \`.kasbon ingatkan BON-XXXXX\`` });
+            }
+
+            const u = db.getUser(sender);
+            const storeName = u.warung?.storeName || db.store.namaToko || 'Warung Kami';
+            const reminderText = debtLib.generateReminderMessage(debtId, sender, storeName);
+
+            if (!reminderText) {
+                return sock.sendMessage(sender, { text: `❌ Catatan kasbon dengan ID tersebut tidak ditemukan.` });
+            }
+
+            return sock.sendMessage(sender, {
+                text: `📲 *DRAF PESAN PENGINGAT SANTUN:*\n_Salin teks di bawah ini lalu teruskan ke WhatsApp pelanggan Anda:_\n\n────────────────\n${reminderText}\n────────────────`
+            });
+        }
+
+        if (sub === 'hapus' || sub === 'del') {
+            const debtId = (parts[2] || '').trim();
+            if (!debtId) {
+                return sock.sendMessage(sender, { text: `❌ Masukkan ID Kasbon yang ingin dihapus.\nContoh: \`.kasbon hapus BON-XXXXX\`` });
+            }
+
+            const res = debtLib.deleteDebt(debtId, sender);
+            if (!res.success) {
+                return sock.sendMessage(sender, { text: `❌ ${res.message}` });
+            }
+
+            return sock.sendMessage(sender, {
+                text: `🗑️ Catatan kasbon atas nama *${res.debt.name}* telah dihapus dari buku kasbon Anda.`
+            });
+        }
+
+        // Tampilan Panduan Kasbon
+        let t = `📖 *BUKU KASBON & CATAT HUTANG WARUNG*\n\n`;
+        t += `Gunakan fitur ini untuk mencatat bon pulsa/token pelanggan di warung Anda:\n\n`;
+        t += `*1. Tambah Kasbon:*\n\`.kasbon tambah [Nama] [Nominal] [Ket]\`\n_Cth: .kasbon tambah Mas Agus 15000 Pulsa Tri_\n\n`;
+        t += `*2. Cek Daftar Kasbon:*\n\`.kasbon list\`\n\n`;
+        t += `*3. Tandai Sudah Lunas:*\n\`.kasbon lunas [ID_BON]\`\n\n`;
+        t += `*4. Buat Pesan Pengingat Ramah:*\n\`.kasbon ingatkan [ID_BON]\`\n\n`;
+        t += `*5. Hapus Catatan:*\n\`.kasbon hapus [ID_BON]\``;
+
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    // ========================================
+    // ⚡ SMART NATURAL LANGUAGE QUICK-ORDER
+    // ========================================
+    if (session.step === S.IDLE && !['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT'].includes(txt)) {
+        const quick = quickOrder.parseQuickOrder(text, db.ppob || []);
+        if (quick && quick.matched) {
+            const user = db.getUser(sender);
+            const userSaldo = Number(user.saldo) || 0;
+            session.tempItem = quick.product;
+            session.tempTarget = quick.target;
+            session.tempQty = 1;
+            session.step = S.CONFIRM;
+
+            let card = `⚡ *QUICK ORDER TERDETEKSI*\n\n`;
+            card += `📦 Produk : *${quick.product.nama}*\n`;
+            card += `🎯 Tujuan : *${quick.target}*\n`;
+            card += `💰 Total  : *${formatRupiah(quick.product.hargaJual)}*\n`;
+            card += `💵 Saldo  : ${formatRupiah(userSaldo)}\n\n`;
+            if (userSaldo >= quick.product.hargaJual) {
+                card += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+            } else {
+                card += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+            }
+            card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
+            card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
+            return sock.sendMessage(sender, { text: card });
         }
     }
 
@@ -1330,15 +1572,15 @@ if (txt === 'PROFIL') {
 
     // 7. CHECKOUT (CONFIRM)
     if (session.step === S.CONFIRM) {
-        if (txt === '1' || txt === 'Y') {
+        if (txt === '1' || txt === 'Y' || txt === 'YA' || txt === 'BAYAR' || txt === 'OK') {
             session.step = S.IDLE;
             await processCheckout(sock, sender, session);
             return;
-        } else if (txt === '2' || txt === 'B' || txt === '0') {
+        } else if (txt === '2' || txt === 'B' || txt === '0' || txt === 'BATAL') {
             session.step = S.IDLE;
             return sock.sendMessage(sender, { text: "🚫 Pesanan dibatalkan. Ketik *MENU* untuk kembali belanja." });
         } else {
-            return sock.sendMessage(sender, { text: "⚠️ Balas *1* untuk BAYAR SEKARANG, atau *2* untuk BATAL." });
+            return sock.sendMessage(sender, { text: "⚠️ Balas *1* atau *YA* untuk BAYAR SEKARANG, atau *2* / *B* untuk BATAL." });
         }
     }
 

@@ -19,8 +19,119 @@ const { formatRupiah, getTanggal, getTanggalLengkap, formatPlnToken } = require(
 const { handleAdmin } = require('./handlers/admin');
 const { handleUser, S } = require('./handlers/user');
 const subLib = require('./lib/subscription');
+const express = require('express');
+const receiptLib = require('./lib/receipt');
+const mutex = require('./lib/mutex');
 
+// ========================================
+// 🌐 EXPRESS WEB SERVER (STRUK DIGITAL & HEALTH)
+// ========================================
+const app = express();
+app.use(express.json());
 
+app.get('/struk/:orderId', (req, res) => {
+    try {
+        const orderId = String(req.params.orderId || '').trim();
+        const orders = db.orders || [];
+        const order = orders.find(o => 
+            (o.id && o.id.toUpperCase() === orderId.toUpperCase()) || 
+            (o.oid && o.oid.toUpperCase() === orderId.toUpperCase()) ||
+            (o.digiflazz_oid && o.digiflazz_oid.toUpperCase() === orderId.toUpperCase())
+        );
+
+        if (!order) {
+            return res.status(404).send(`
+                <!DOCTYPE html><html><head><meta charset="utf-8"><title>Struk Tidak Ditemukan</title></head>
+                <body style="font-family:sans-serif;text-align:center;padding:50px;background:#f8fafc;color:#334155;">
+                    <h2>⚠️ Struk Tidak Ditemukan</h2>
+                    <p>Transaksi dengan nomor referensi <b>${orderId}</b> tidak ditemukan.</p>
+                </body></html>
+            `);
+        }
+
+        const buyerJid = order.buyer || order.sender || '';
+        const user = db.getUser ? db.getUser(buyerJid) : null;
+        const warungProfile = user?.warung || {};
+        const html = receiptLib.generateHtmlReceipt(order, warungProfile);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
+    } catch (e) {
+        return res.status(500).send(`Terjadi kesalahan server: ${e.message}`);
+    }
+});
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', uptime: process.uptime(), time: new Date().toISOString() });
+});
+
+const webPort = config.port || 3000;
+try {
+    const server = app.listen(webPort, () => {
+        console.log(`[WEB SERVER] 🌐 Layanan Struk Web & HTTP berjalan di port ${webPort}`);
+    });
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.warn(`[WEB SERVER] ⚠️ Port ${webPort} sudah dipakai, web struk lokal fallback aktif.`);
+        } else {
+            console.warn(`[WEB SERVER] ⚠️ Gagal menjalankan server web: ${err.message}`);
+        }
+    });
+} catch (e) {
+    console.warn(`[WEB SERVER] ⚠️ Inisialisasi web server dilewati: ${e.message}`);
+}
+
+// ========================================
+// 📊 AUTO-LAPORAN LABA RUGI (P&L) KE TELEGRAM
+// ========================================
+async function sendDailyFinancialReportToTelegram(targetChatId = null) {
+    if (!global.botTg) return;
+    const chatId = targetChatId || config.telegram?.chatId;
+    if (!chatId) return;
+
+    let digiBalance = 'Memeriksa...';
+    try {
+        const digiRes = await api.cekSaldoDigi();
+        if (digiRes && digiRes.data && digiRes.data.deposit !== undefined) {
+            digiBalance = Number(digiRes.data.deposit);
+        }
+    } catch (_) {}
+
+    let gatewayBalance = 'Memeriksa...';
+    try {
+        const gateRes = await api.cekSaldoGateway();
+        if (gateRes && gateRes.balance !== undefined) {
+            gatewayBalance = Number(gateRes.balance);
+        }
+    } catch (_) {}
+
+    const reportMsg = analytics.generateFinancialReportText('today', {
+        digiflazz: digiBalance,
+        gateway: gatewayBalance
+    });
+
+    return global.botTg.sendMessage(chatId, reportMsg, { parse_mode: 'Markdown' });
+}
+global.sendDailyFinancialReportToTelegram = sendDailyFinancialReportToTelegram;
+
+let lastDailyReportDateKey = '';
+setInterval(async () => {
+    try {
+        const now = new Date();
+        const jakartaStr = now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" });
+        const jakartaTime = new Date(jakartaStr);
+        const hours = jakartaTime.getHours();
+        const minutes = jakartaTime.getMinutes();
+        const dateKey = `${jakartaTime.getFullYear()}-${jakartaTime.getMonth() + 1}-${jakartaTime.getDate()}`;
+
+        if (hours === 23 && minutes === 59 && lastDailyReportDateKey !== dateKey) {
+            lastDailyReportDateKey = dateKey;
+            console.log(`[DAILY REPORT] 📊 Menjalankan auto-laporan laba rugi 23:59 WIB (${dateKey})...`);
+            await sendDailyFinancialReportToTelegram();
+        }
+    } catch (e) {
+        console.error('[DAILY REPORT SCHEDULER ERROR]', e.message);
+    }
+}, 30000);
 
 const ALERT_FILE = './system/alert-state.json';
 
@@ -1200,7 +1311,8 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                         plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
                                   `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
                                   `🕒 Waktu           : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_`;
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`;
                         await sock.sendMessage(targetJid, { text: plnMsg });
                     } else {
                         await sock.sendMessage(targetJid, {
@@ -1210,7 +1322,8 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                                   `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
                                   `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
                                   `🕒 Waktu    : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_`
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`
                         });
                     }
                 }
@@ -1881,6 +1994,9 @@ function initTelegramBot() {
                     [
                         { text: '📊 Status & Health', callback_data: 'tg_health' },
                         { text: '📊 Laba & Statistik', callback_data: 'tg_stats' }
+                    ],
+                    [
+                        { text: '📈 Laporan Laba Rugi (P&L)', callback_data: 'tg_report_daily' }
                     ],
                     [
                         { text: '⚙️ Margin & Owner', callback_data: 'tg_settings_menu' },
@@ -2691,6 +2807,11 @@ function initTelegramBot() {
                 global.tgInputState = null;
                 global.botTg.answerCallbackQuery(query.id);
                 return updateOrSend(chatId, messageId, renderTelegramDashboard());
+            }
+
+            if (action === 'tg_report_daily') {
+                global.botTg.answerCallbackQuery(query.id, { text: '📊 Memuat laporan keuangan harian...' });
+                return sendDailyFinancialReportToTelegram(chatId);
             }
 
             // === TOKO ===
@@ -5411,6 +5532,11 @@ function initTelegramBot() {
                 return updateOrSend(chatId, null, renderBackupMenu());
             }
 
+            // Perintah /laporan, /profit, /rekap, /pl
+            if (/^\/?(laporan|profit|rekap|pl)(@\w+)?$/i.test(text)) {
+                return sendDailyFinancialReportToTelegram(chatId);
+            }
+
             // 8. Default: Render Dashboard Interaktif Inline Keyboard
             return updateOrSend(chatId, null, renderTelegramDashboard());
         });
@@ -5581,7 +5707,8 @@ setInterval(async () => {
                         plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
                                   `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
                                   `🕒 Waktu           : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_`;
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`;
                         await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg });
                     } else {
                         await botSock.sendMessage(realBuyerJid || buyerJid, {
@@ -5591,7 +5718,8 @@ setInterval(async () => {
                                   `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
                                   `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
                                   `🕒 Waktu    : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_`
+                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`
                         });
                     }
                 }

@@ -18,5 +18,6 @@ database/*.backup.json
 database/users.json
 database/orders.json
 database/deposits.json
+database/debts.json
 system/.update_backup/
 pasca.json
