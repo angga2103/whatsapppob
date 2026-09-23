@@ -36,6 +36,8 @@ checkFile('./database/orders.json', '[]');
 checkFile('./database/store.json', '{"buka": true, "namaToko": "DIGITAL STORE"}');
 checkFile('./database/deposits.json', '[]');
 checkFile('./database/settings.json', '{}');
+checkFile('./database/subscription_catalog.json', '[]');
+checkFile('./database/subscriptions.json', '[]');
 
 const syncSettingsToEnv = (settings) => {
     if (!settings || typeof settings !== 'object') return;
@@ -193,6 +195,8 @@ const db = {
     store: safeReadJson('./database/store.json', { buka: true, namaToko: "DIGITAL STORE" }),
     deposits: safeReadJson('./database/deposits.json', []),
     settings: recoverSettings(),
+    subscriptionCatalog: safeReadJson('./database/subscription_catalog.json', []),
+    subscriptions: safeReadJson('./database/subscriptions.json', []),
     
     saveMenu: () => atomicWriteJson('./database/menu.json', db.menu),
     savePpob: () => atomicWriteJson('./database/ppob.json', db.ppob),
@@ -201,6 +205,8 @@ const db = {
     savePostpaid: () => atomicWriteJson('./database/postpaid.json', db.postpaid),
     saveStore: () => atomicWriteJson('./database/store.json', db.store),
     saveDeposits: () => atomicWriteJson('./database/deposits.json', db.deposits),
+    saveSubscriptionCatalog: () => atomicWriteJson('./database/subscription_catalog.json', db.subscriptionCatalog),
+    saveSubscriptions: () => atomicWriteJson('./database/subscriptions.json', db.subscriptions),
     saveSettings: () => {
         atomicWriteJson('./database/settings.json', db.settings);
         atomicWriteJson('./database/settings.backup.json', db.settings);
@@ -215,6 +221,8 @@ const db = {
         db.savePpob();
         db.savePostpaid();
         db.saveDeposits();
+        db.saveSubscriptionCatalog();
+        db.saveSubscriptions();
         db.saveSettings();
     },
 

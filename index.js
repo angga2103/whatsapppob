@@ -18,6 +18,7 @@ const analytics = require('./lib/analytics');
 const { formatRupiah, getTanggal, getTanggalLengkap, formatPlnToken } = require('./lib/utils');
 const { handleAdmin } = require('./handlers/admin');
 const { handleUser, S } = require('./handlers/user');
+const subLib = require('./lib/subscription');
 
 
 
@@ -1368,8 +1369,17 @@ STATUS: SUCCESS`,
         }
     }
 }
+global.handleSuccessPayment = handleSuccessPayment;
 
 startBot();
+
+// Inisialisasi Engine Pemantau Langganan Otomatis (Auto-Order Worker)
+subLib.startSubscriptionWorker(
+    () => currentSock,
+    () => global.botTg,
+    () => config,
+    (sock, order, isSaldo) => handleSuccessPayment(sock, order, isSaldo)
+);
 
 // ================================
 // PROCESSING WATCHER
@@ -1877,6 +1887,7 @@ function initTelegramBot() {
                         { text: '📦 Auto-Backup & Restore', callback_data: 'tg_backup_menu' }
                     ],
                     [
+                        { text: '🔄 Produk Langganan (Auto-Order)', callback_data: 'tg_subs_menu' },
                         { text: '⚖️ S&K & Batasan Hukum', callback_data: 'tg_legal_snk' }
                     ],
                     [
@@ -2450,6 +2461,142 @@ function initTelegramBot() {
                 ]
             };
             return { text, reply_markup };
+        };
+
+        const renderSubsMenu = () => {
+            const catalog = db.subscriptionCatalog || [];
+            const activeCatalog = catalog.filter(c => c.enabled !== false);
+            const subs = db.subscriptions || [];
+            const activeSubs = subs.filter(s => s.status === 'active');
+            const pausedSubs = subs.filter(s => s.status === 'paused');
+
+            const todayEnd = new Date().setHours(23, 59, 59, 999);
+            const dueToday = activeSubs.filter(s => s.nextRunAt && s.nextRunAt <= todayEnd).length;
+
+            let text = `🔄 *MANAJEMEN PRODUK BERLANGGANAN (AUTO-ORDER)*\n\n`;
+            text += `Fitur ini memungkinkan pelanggan berlangganan produk (PPOB / Digital) dengan auto-debit berkala dari saldo akun mereka.\n\n`;
+            text += `📊 *Ringkasan Sistem:*\n`;
+            text += `• Produk di Katalog Langganan : *${catalog.length} produk* (*${activeCatalog.length} aktif tayang di WA*)\n`;
+            text += `• Pelanggan Berlangganan Aktif : *${activeSubs.length} kontrak* (${pausedSubs.length} dijeda saldo kurang)\n`;
+            text += `• Eksekusi Jatuh Tempo Hari Ini : *${dueToday} pesanan*\n\n`;
+            text += `_Pilih opsi manajemen di bawah:_`;
+
+            const reply_markup = {
+                inline_keyboard: [
+                    [
+                        { text: `📂 Katalog Produk (${activeCatalog.length} Aktif)`, callback_data: 'tg_subs_catalog' }
+                    ],
+                    [
+                        { text: '➕ Tambah dari Digital', callback_data: 'tg_subs_add_digital' },
+                        { text: '➕ Tambah dari PPOB', callback_data: 'tg_subs_add_ppob' }
+                    ],
+                    [
+                        { text: `👥 Pelanggan Aktif (${activeSubs.length})`, callback_data: 'tg_subs_users' }
+                    ],
+                    [
+                        { text: '⬅️ Menu Utama', callback_data: 'tg_menu' }
+                    ]
+                ]
+            };
+
+            return { text, reply_markup };
+        };
+
+        const renderSubsCatalog = () => {
+            const catalog = db.subscriptionCatalog || [];
+            let text = `📂 *KATALOG PRODUK BERLANGGANAN (TAYANG DI WA)*\n\n`;
+            const inline_keyboard = [];
+
+            if (catalog.length === 0) {
+                text += `_Belum ada produk yang dimasukkan ke katalog langganan._\n\n`;
+                text += `Silakan klik tombol *➕ Tambah* di bawah untuk memasukkan produk PPOB atau Produk Digital yang boleh dibeli secara langganan di WhatsApp.`;
+            } else {
+                text += `_Ditemukan *${catalog.length}* produk dalam katalog:_\n\n`;
+                catalog.forEach((item, idx) => {
+                    const statusIcon = item.enabled !== false ? '🟢 TAYANG DI WA' : '🔴 DISEMBUNYIKAN';
+                    const typeLabel = item.type === 'digital' ? 'Akun Digital' : 'PPOB';
+                    text += `*${idx + 1}.* *${item.nama}*\n`;
+                    text += `   • SKU / ID : \`${item.sku}\` (${typeLabel})\n`;
+                    text += `   • Harga    : *${formatRupiah(item.hargaJual)}*\n`;
+                    text += `   • Status   : *${statusIcon}*\n\n`;
+
+                    const toggleLabel = item.enabled !== false ? `🔴 Sembunyikan` : `🟢 Tayangkan`;
+                    inline_keyboard.push([
+                        { text: `${toggleLabel} #${idx + 1}`, callback_data: `tg_subs_toggle_${item.id}` },
+                        { text: `🗑️ Hapus #${idx + 1}`, callback_data: `tg_subs_del_${item.id}` }
+                    ]);
+                });
+            }
+
+            inline_keyboard.push([
+                { text: '➕ Tambah Digital', callback_data: 'tg_subs_add_digital' },
+                { text: '➕ Tambah PPOB', callback_data: 'tg_subs_add_ppob' }
+            ]);
+            inline_keyboard.push([
+                { text: '⬅️ Menu Langganan', callback_data: 'tg_subs_menu' }
+            ]);
+
+            return { text, reply_markup: { inline_keyboard } };
+        };
+
+        const renderSubsUsers = () => {
+            const subs = (db.subscriptions || []).filter(s => s.status === 'active' || s.status === 'paused');
+            let text = `👥 *DAFTAR PELANGGAN BERLANGGANAN AKTIF*\n\n`;
+            const inline_keyboard = [];
+
+            if (subs.length === 0) {
+                text += `_Belum ada pelanggan yang memiliki kontrak langganan aktif saat ini._`;
+            } else {
+                text += `_Ditemukan *${subs.length}* kontrak langganan aktif/dijeda:_\n\n`;
+                subs.forEach((s, idx) => {
+                    const statusLabel = s.status === 'active' ? '🟢 AKTIF' : '⏸️ DIJEDA (Saldo Kurang)';
+                    const nextDate = s.nextRunAt ? new Date(s.nextRunAt).toLocaleDateString('id-ID') : '-';
+                    const cycleStr = subLib.formatCycles(s.maxCycles, s.currentCycle);
+
+                    text += `*${idx + 1}.* \`${s.id}\`\n`;
+                    text += `   • Pembeli  : \`+${s.buyerPhone || '-'}\`\n`;
+                    text += `   • Produk   : *${s.productName}*\n`;
+                    text += `   • Target   : \`${s.target}\`\n`;
+                    text += `   • Siklus   : *${cycleStr}* (${subLib.formatInterval(s.intervalDays)})\n`;
+                    text += `   • Next Run : *${nextDate}* | 📌 *${statusLabel}*\n\n`;
+
+                    inline_keyboard.push([
+                        { text: `⏹️ Hentikan: +${s.buyerPhone} (${s.productName.slice(0, 10)})`, callback_data: `tg_subs_stop_${s.id}` }
+                    ]);
+                });
+            }
+
+            inline_keyboard.push([
+                { text: '🔄 Refresh Data', callback_data: 'tg_subs_users' },
+                { text: '⬅️ Menu Langganan', callback_data: 'tg_subs_menu' }
+            ]);
+
+            return { text, reply_markup: { inline_keyboard } };
+        };
+
+        const renderSubsAddDigital = () => {
+            const items = db.menu || [];
+            let text = `➕ *TAMBAH PRODUK DIGITAL KE LANGGANAN*\n\n`;
+            text += `Pilih salah satu produk digital di bawah untuk diaktifkan sebagai produk berlangganan di WhatsApp:\n\n`;
+            const inline_keyboard = [];
+
+            if (items.length === 0) {
+                text += `_Belum ada produk digital terdaftar di database._`;
+            } else {
+                items.forEach((m) => {
+                    const isAlready = (db.subscriptionCatalog || []).some(c => c.sku === String(m.id) || c.nama === m.nama);
+                    const tag = isAlready ? '✅ Ada' : '➕ Tambah';
+                    inline_keyboard.push([
+                        { text: `${tag}: ${m.nama} (${formatRupiah(m.hargaJual)})`, callback_data: `tg_subs_add_dig_${m.id}` }
+                    ]);
+                });
+            }
+
+            inline_keyboard.push([
+                { text: '⬅️ Kembali ke Menu Langganan', callback_data: 'tg_subs_menu' }
+            ]);
+
+            return { text, reply_markup: { inline_keyboard } };
         };
 
         const updateOrSend = async (chatId, messageId, content) => {
@@ -3675,6 +3822,118 @@ function initTelegramBot() {
                 });
             }
 
+            // === PRODUK BERLANGGANAN (AUTO-ORDER) ===
+            if (action === 'tg_subs_menu') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderSubsMenu());
+            }
+
+            if (action === 'tg_subs_catalog') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderSubsCatalog());
+            }
+
+            if (action.startsWith('tg_subs_toggle_')) {
+                const itemId = action.replace('tg_subs_toggle_', '');
+                const res = subLib.toggleCatalogItem(itemId);
+                global.botTg.answerCallbackQuery(query.id, {
+                    text: res.success ? (res.item.enabled ? '🟢 Produk kini TAYANG di WhatsApp' : '🔴 Produk kini DISEMBUNYIKAN') : (res.reason || 'Gagal mengubah status')
+                });
+                return updateOrSend(chatId, messageId, renderSubsCatalog());
+            }
+
+            if (action.startsWith('tg_subs_del_')) {
+                const itemId = action.replace('tg_subs_del_', '');
+                const res = subLib.deleteCatalogItem(itemId);
+                global.botTg.answerCallbackQuery(query.id, {
+                    text: res.success ? '🗑️ Produk berhasil dihapus dari katalog langganan' : (res.reason || 'Gagal menghapus produk')
+                });
+                return updateOrSend(chatId, messageId, renderSubsCatalog());
+            }
+
+            if (action === 'tg_subs_users') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderSubsUsers());
+            }
+
+            if (action.startsWith('tg_subs_stop_')) {
+                const subId = action.replace('tg_subs_stop_', '');
+                const res = subLib.cancelSubscription(subId, 'Dihentikan oleh Admin via Telegram', 'admin');
+                global.botTg.answerCallbackQuery(query.id, {
+                    text: res.success ? '⏹️ Kontrak langganan berhasil dihentikan' : (res.reason || 'Gagal menghentikan langganan')
+                });
+                return updateOrSend(chatId, messageId, renderSubsUsers());
+            }
+
+            if (action === 'tg_subs_add_digital') {
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderSubsAddDigital());
+            }
+
+            if (action.startsWith('tg_subs_add_dig_')) {
+                const menuId = parseInt(action.replace('tg_subs_add_dig_', ''), 10);
+                const prod = (db.menu || []).find(m => m.id === menuId);
+                if (prod) {
+                    subLib.addCatalogItem({
+                        sku: String(prod.id),
+                        type: 'digital',
+                        nama: prod.nama,
+                        kategori: 'Digital',
+                        hargaJual: prod.hargaJual || prod.harga || 0,
+                        allowedIntervals: [7, 14, 30],
+                        defaultInterval: 30,
+                        allowedCycles: [3, 6, 12, 0],
+                        description: `Langganan akun digital ${prod.nama}`
+                    });
+                    global.botTg.answerCallbackQuery(query.id, { text: '✅ Produk digital berhasil ditambahkan ke katalog langganan!' });
+                } else {
+                    global.botTg.answerCallbackQuery(query.id, { text: '❌ Produk digital tidak ditemukan' });
+                }
+                return updateOrSend(chatId, messageId, renderSubsCatalog());
+            }
+
+            if (action === 'tg_subs_add_ppob') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'awaiting_subs_ppob', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🔍 *TAMBAH PRODUK PPOB KE LANGGANAN*\n\n` +
+                    `Ketik kata kunci produk PPOB atau kode SKU:\n` +
+                    `_Contoh: \`TELKOMSEL 10\` atau \`PLN 20\` atau \`DANA 50\`_\n\n` +
+                    `Ketik teks pencarian atau klik Batal di bawah:`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_subs_catalog' }]] }
+                    }
+                );
+            }
+
+            if (action.startsWith('tg_subs_add_sku_')) {
+                const skuCode = action.replace('tg_subs_add_sku_', '');
+                const prod = (db.ppob || []).find(p => p.sku === skuCode || p.buyer_sku_code === skuCode);
+                if (prod) {
+                    const price = prod.hargaJual || (prod.price ? prod.price + 1000 : 0);
+                    subLib.addCatalogItem({
+                        sku: prod.sku || prod.buyer_sku_code,
+                        type: 'ppob',
+                        nama: prod.nama || prod.product_name,
+                        kategori: prod.kategori || prod.brand || 'PPOB',
+                        hargaJual: price,
+                        allowedIntervals: [7, 14, 30],
+                        defaultInterval: 30,
+                        allowedCycles: [3, 6, 12, 0],
+                        description: `Langganan PPOB ${prod.nama || prod.product_name}`
+                    });
+                    global.botTg.answerCallbackQuery(query.id, { text: '✅ Produk PPOB berhasil ditambahkan ke katalog langganan!' });
+                } else {
+                    global.botTg.answerCallbackQuery(query.id, { text: '❌ Produk PPOB tidak ditemukan di database' });
+                }
+                return updateOrSend(chatId, messageId, renderSubsCatalog());
+            }
+
             if (action === 'tg_input_addowner') {
                 global.botTg.answerCallbackQuery(query.id);
                 global.tgInputState = { type: 'add_owner', chatId };
@@ -3809,6 +4068,8 @@ function initTelegramBot() {
                         'database/menu.json',
                         'database/ppob.json',
                         'database/postpaid.json',
+                        'database/subscription_catalog.json',
+                        'database/subscriptions.json',
                         'database/users.json',
                         'database/orders.json',
                         'database/deposits.json',
@@ -3825,7 +4086,7 @@ function initTelegramBot() {
 
                     // 2. Discard local edits on tracked database files so git pull merges cleanly
                     try {
-                        execSync('git checkout -- database/settings.json database/store.json database/menu.json database/ppob.json database/postpaid.json 2>/dev/null || true', { stdio: 'ignore' });
+                        execSync('git checkout -- database/settings.json database/store.json database/menu.json database/ppob.json database/postpaid.json database/subscription_catalog.json database/subscriptions.json 2>/dev/null || true', { stdio: 'ignore' });
                     } catch (_) {}
 
                     // Simpan file non-database jika ada perubahan tak terlacak
@@ -3948,6 +4209,43 @@ function initTelegramBot() {
 
                 if (stateType === 'awaiting_phone') {
                     return triggerPairing(chatId, text);
+                }
+
+                // === AWAITING CARI PRODUK PPOB UNTUK LANGGANAN ===
+                if (stateType === 'awaiting_subs_ppob') {
+                    const q = text.toLowerCase().trim();
+                    const matches = (db.ppob || []).filter(p => 
+                        (p.sku && p.sku.toLowerCase().includes(q)) ||
+                        (p.buyer_sku_code && p.buyer_sku_code.toLowerCase().includes(q)) ||
+                        (p.nama && p.nama.toLowerCase().includes(q)) ||
+                        (p.product_name && p.product_name.toLowerCase().includes(q))
+                    ).slice(0, 8);
+
+                    if (matches.length === 0) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ Produk PPOB dengan kata kunci "*${cleanMd(text)}*" tidak ditemukan di database PPOB.\n\n` +
+                            `Silakan ketik kata kunci lain atau klik Batal di bawah:`,
+                            {
+                                parse_mode: 'Markdown',
+                                reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_subs_catalog' }]] }
+                            }
+                        );
+                    }
+
+                    global.tgInputState = null;
+                    let respText = `🔍 *HASIL PENCARIAN PPOB (${matches.length} ditemukan)*\n\n` +
+                                   `Klik tombol di bawah untuk menambahkan produk ke katalog langganan di WhatsApp:`;
+                    const inline_keyboard = matches.map(m => {
+                        const sku = m.sku || m.buyer_sku_code;
+                        const name = m.nama || m.product_name;
+                        const price = m.hargaJual || (m.price ? m.price + 1000 : 0);
+                        return [{
+                            text: `➕ ${name.slice(0, 26)} (${formatRupiah(price)})`,
+                            callback_data: `tg_subs_add_sku_${sku}`
+                        }];
+                    });
+                    inline_keyboard.push([{ text: '❌ Batal', callback_data: 'tg_subs_catalog' }]);
+                    return global.botTg.sendMessage(chatId, respText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
                 }
 
                 // === AWAITING CEK USER ===

@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selebaran Panduan Transaksi WhatsApp Bot - Siap Cetak & Fotokopi</title>
+    <style>
+        /* Desain Khusus Siap Cetak & Fotokopi (High-Contrast Black & White) */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #000;
+        }
+
+        body {
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            background: #ffffff;
+            padding: 12mm 14mm;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* HEADER BANNER */
+        .header {
+            border: 4px solid #000;
+            padding: 12px 10px;
+            text-align: center;
+            border-radius: 8px;
+            background: #000;
+            color: #fff;
+        }
+
+        .header h1 {
+            font-size: 26pt;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            line-height: 1.15;
+            color: #fff;
+            text-transform: uppercase;
+        }
+
+        .header .sub {
+            font-size: 13pt;
+            font-weight: bold;
+            margin-top: 6px;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+
+        /* NOMOR WA BANNER */
+        .wa-box {
+            border: 3px dashed #000;
+            margin: 12px 0;
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .wa-box .label {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .wa-box .number {
+            font-size: 24pt;
+            font-weight: 900;
+            letter-spacing: 2px;
+            margin: 3px 0;
+        }
+
+        .wa-box .desc {
+            font-size: 10.5pt;
+            font-style: italic;
+        }
+
+        /* 4 LANGKAH MUDAH GRID */
+        .grid-steps {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .step-card {
+            border: 3px solid #000;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+
+        .step-badge {
+            background: #000;
+            color: #fff;
+            font-size: 16pt;
+            font-weight: 900;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .step-title {
+            font-size: 12pt;
+            font-weight: 900;
+            text-transform: uppercase;
+            line-height: 1.15;
+        }
+
+        .step-body {
+            font-size: 10pt;
+            line-height: 1.35;
+        }
+
+        .step-body p {
+            margin-bottom: 5px;
+        }
+
+        .highlight-box {
+            background: #f4f4f4;
+            border: 1.5px solid #000;
+            padding: 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 4px;
+            font-size: 9.5pt;
+        }
+
+        .menu-list {
+            list-style: none;
+            margin: 4px 0;
+            padding: 0;
+            font-size: 9pt;
+        }
+
+        .menu-list li {
+            padding: 2px 0;
+            font-weight: bold;
+        }
+
+        /* CONTOH CHAT WA VISUAL */
+        .chat-example {
+            border: 2px solid #000;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 10px;
+            background: #fff;
+        }
+
+        .chat-example-title {
+            font-size: 11pt;
+            font-weight: 900;
+            text-transform: uppercase;
+            text-align: center;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+        }
+
+        .chat-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+            font-size: 8.5pt;
+        }
+
+        .chat-bubble {
+            border: 1.5px solid #000;
+            padding: 6px 8px;
+            border-radius: 6px;
+            flex: 1;
+            text-align: center;
+            background: #fff;
+        }
+
+        .chat-bubble.user {
+            background: #000;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .chat-arrow {
+            font-size: 14pt;
+            font-weight: 900;
+        }
+
+        /* KEUNGGULAN / FOOTER */
+        .footer-banner {
+            border: 3px solid #000;
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: center;
+            background: #fff;
+        }
+
+        .footer-banner h3 {
+            font-size: 11pt;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .footer-badges {
+            display: flex;
+            justify-content: space-around;
+            font-size: 9pt;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+
+        .footer-notice {
+            margin-top: 6px;
+            font-size: 8pt;
+            font-style: italic;
+            border-top: 1px dashed #000;
+            padding-top: 4px;
+        }
+
+        /* PRINT STYLESHEET (OTOMATIS 1 HALAMAN PAS SAAT CETAK) */
+        @media print {
+            body {
+                background: none;
+                padding: 0;
+            }
+            .page {
+                box-shadow: none;
+                border: none;
+                width: 100%;
+                height: 100%;
+                padding: 5mm 8mm;
+                page-break-after: avoid;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        .print-btn-bar {
+            position: fixed;
+            top: 15px;
+            right: 20px;
+            background: #000;
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border: 2px solid #fff;
+            z-index: 9999;
+        }
+        .print-btn-bar:hover {
+            background: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Tombol Cetak Langsung di Pojok Layar -->
+    <button class="print-btn-bar no-print" onclick="window.print()">🖨️ CETAK / SIMPAN PDF</button>
+
+    <div class="page">
+
+        <!-- 1. HEADER UTAMA -->
+        <div class="header">
+            <h1>LOKET PULSA &amp; PEMBAYARAN</h1>
+            <div class="sub">BISA BELI SENDIRI LEWAT WHATSAPP • MUDAH, CEPAT &amp; BUKA 24 JAM</div>
+        </div>
+
+        <!-- 2. KOTAK NOMOR WHATSAPP -->
+        <div class="wa-box">
+            <div class="label">📲 SIMPAN &amp; CHAT KE NOMOR WHATSAPP KAMI:</div>
+            <div class="number">0813 - 3764 - 3883</div>
+            <div class="desc">(Ketik kata "MENU" untuk memulai transaksi kapan saja)</div>
+        </div>
+
+        <!-- 3. 4 LANGKAH TRANSAKSI MUDAH -->
+        <div class="grid-steps">
+            
+            <!-- LANGKAH 1 -->
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-badge">1</div>
+                    <div class="step-title">Kirim Pesan Ke WhatsApp</div>
+                </div>
+                <div class="step-body">
+                    <p>Buka aplikasi WhatsApp di HP Anda, lalu kirim pesan singkat:</p>
+                    <div class="highlight-box">Ketik: MENU atau HALO</div>
+                    <p style="margin-top:6px; font-size: 8.5pt;">_Bot akan langsung membalas otomatis daftar pilihan layanan yang tersedia._</p>
+                </div>
+            </div>
+
+            <!-- LANGKAH 2 -->
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-badge">2</div>
+                    <div class="step-title">Pilih Menu Yang Mau Dibeli</div>
+                </div>
+                <div class="step-body">
+                    <p>Balas dengan mengetik <b>ANGKA NOMORNYA</b> saja:</p>
+                    <ul class="menu-list">
+                        <li><b>1</b> = Pulsa HP Reguler (Semua Kartu)</li>
+                        <li><b>2</b> = Paket Kuota Internet</li>
+                        <li><b>3</b> = Isi Saldo DANA, OVO, GoPay, Shopee</li>
+                        <li><b>4</b> = Token Listrik PLN Prabayar</li>
+                        <li><b>5</b> = Bayar Tagihan (BPJS, PDAM, Listrik)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- LANGKAH 3 -->
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-badge">3</div>
+                    <div class="step-title">Ketik Nomor Tujuan &amp; Paket</div>
+                </div>
+                <div class="step-body">
+                    <p>Ketik <b>Nomor HP Anda</b> atau <b>Nomor Meteran PLN</b>:</p>
+                    <div class="highlight-box">Contoh: 081234567890<br>atau: 142356789012 (Token)</div>
+                    <p style="margin-top:6px;">Lalu balas angka nominal pulsa/token yang Anda inginkan (misal: pilih Rp 10.000, 20.000, 50.000, dst).</p>
+                </div>
+            </div>
+
+            <!-- LANGKAH 4 -->
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-badge">4</div>
+                    <div class="step-title">Bayar Pakai QRIS &amp; Beres!</div>
+                </div>
+                <div class="step-body">
+                    <p>Bot akan mengirimkan gambar <b>Barcode QRIS</b> resmi:</p>
+                    <div class="highlight-box">
+                        1. Screenshot / Simpan Barcode QRIS<br>
+                        2. Buka DANA / BCA / BRI / GoPay / Shopee<br>
+                        3. Pilih Bayar/Scan QRIS dari galeri HP
+                    </div>
+                    <p style="margin-top:6px; font-weight:bold;">⚡ Pulsa / Kuota / Token Listrik langsung masuk seketika!</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 4. CONTOH NYATA PERCAKAPAN SINGKAT (ALUR DUMMY) -->
+        <div class="chat-example">
+            <div class="chat-example-title">💬 CONTOH CARA CHAT (SANGAT MUDAH &amp; PRAKTIS)</div>
+            <div class="chat-flow">
+                <div class="chat-bubble user">
+                    <b>Anda Kirim:</b><br>
+                    "MENU"
+                </div>
+                <div class="chat-arrow">&gt;</div>
+                <div class="chat-bubble">
+                    <b>Bot Balas:</b><br>
+                    1. Pulsa | 2. Data<br>
+                    3. E-Wallet | 4. Listrik
+                </div>
+                <div class="chat-arrow">&gt;</div>
+                <div class="chat-bubble user">
+                    <b>Anda Balas:</b><br>
+                    "1"<br>
+                    <i>(Pilih Pulsa)</i>
+                </div>
+                <div class="chat-arrow">&gt;</div>
+                <div class="chat-bubble user">
+                    <b>Ketik No HP:</b><br>
+                    "081234567890"
+                </div>
+                <div class="chat-arrow">&gt;</div>
+                <div class="chat-bubble user">
+                    <b>Pilih Paket:</b><br>
+                    "1"<br>
+                    <i>(Pulsa 10.000)</i>
+                </div>
+                <div class="chat-arrow">&gt;</div>
+                <div class="chat-bubble">
+                    <b>Bot Kirim QRIS:</b><br>
+                    Bayar &amp; Pulsa<br>
+                    <b>Langsung Masuk!</b>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. FOOTER & KEUNGGULAN -->
+        <div class="footer-banner">
+            <h3>KENAPA LEBIH ENAK BELI LEWAT BOT WHATSAPP INI?</h3>
+            <div class="footer-badges">
+                <div>✔️ Buka 24 Jam Nonstop</div>
+                <div>✔️ Harga Murah &amp; Terjangkau</div>
+                <div>✔️ Proses Otomatis Hitungan Detik</div>
+                <div>✔️ Aman &amp; Resmi Terpercaya</div>
+            </div>
+            <div class="footer-notice">
+                💡 <b>Catatan untuk Orang Tua / Warga Sekitar:</b> Jika bingung atau baru pertama kali mencoba, jangan sungkan bertanya langsung ke pemilik warung / kasir. Kami siap membantu membimbing sampai pulsa masuk!
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

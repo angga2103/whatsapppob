@@ -3,6 +3,7 @@ const { formatRupiah, detectOperator } = require('../lib/utils');
 const api = require('../lib/api');
 const config = require('../config');
 const legal = require('../lib/legal');
+const subLib = require('../lib/subscription');
 
 // System Session (State Machine)
 const S = {
@@ -19,7 +20,13 @@ const S = {
     INPUT_DEPOSIT: 10,
     PILIH_KATEGORI_PASCA: 11,
     INPUT_TARGET_PASCA: 12,
-    PILIH_PRODUK_PASCA: 13
+    PILIH_PRODUK_PASCA: 13,
+    PILIH_SUB_MENU: 14,
+    PILIH_PRODUK_SUBS: 15,
+    INPUT_TARGET_SUBS: 16,
+    PILIH_INTERVAL_SUBS: 17,
+    PILIH_CYCLES_SUBS: 18,
+    CONFIRM_SUBS: 19
 };
 
 // --- ENGINE CERDAS UNTUK SORTING & GROUPING OTOMATIS ---
@@ -248,6 +255,8 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         t += `• *MENU* : Buka menu belanja interaktif\n`;
         t += `• *.beli [Kode_Produk] [NoHP]* : Transaksi cepat instan\n`;
         t += `• *.harga [Operator]* : Cek daftar harga & kode produk\n`;
+        t += `• *.langganan* : Beli produk auto-order / langganan berkala\n`;
+        t += `• *.batallangganan [ID]* : Berhenti berlangganan otomatis\n`;
         t += `• *.deposit* : Isi saldo akun via QRIS otomatis\n`;
         t += `• *.profil* : Cek saldo dompet Anda\n`;
         t += `• *.riwayat* : Cek 5 transaksi terakhir\n`;
@@ -419,6 +428,47 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         return;
     }
 
+    // SUBSCRIPTION COMMANDS
+    if (['.LANGGANAN', '!LANGGANAN', 'LANGGANAN', '.SUBS', '!SUBS', 'SUBS'].includes(cmdFirst)) {
+        session.step = S.PILIH_SUB_MENU;
+        let t = `🔄 *LAYANAN PRODUK BERLANGGANAN (AUTO-ORDER)*\n\n`;
+        t += `Beli produk secara rutin tanpa repot order manual berkala. Saldo akun Anda akan terpotong otomatis setiap jatuh tempo.\n\n`;
+        t += `*PILIH MENU LANGGANAN:*\n`;
+        t += `*1.* 📋 Beli Produk Berlangganan Baru\n`;
+        t += `*2.* 📑 Cek / Kelola Langganan Aktif Saya\n`;
+        t += `*3.* ⏹️ Batalkan Langganan\n\n`;
+        t += `Balas *Angka (1 - 3)* untuk memilih.\nKetik *0* atau *B* untuk batal.`;
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    if (['.BATALLANGGANAN', '!BATALLANGGANAN', 'BATALLANGGANAN', '.STOPSUB', '!STOPSUB', 'STOPSUB'].includes(cmdFirst)) {
+        const subId = (parts[1] || '').trim();
+        if (!subId) {
+            return sock.sendMessage(sender, {
+                text: `⏹️ *FORMAT BATAL LANGGANAN:*\n.batallangganan [ID_LANGGANAN]\n\nContoh:\n.batallangganan SUB-123456\n\n_Ketik *.langganan* untuk melihat daftar ID langganan aktif Anda._`
+            });
+        }
+        const userSubs = subLib.getUserSubscriptions(sender);
+        const targetSub = userSubs.find(s => s.id && s.id.toUpperCase() === subId.toUpperCase());
+        if (!targetSub) {
+            return sock.sendMessage(sender, {
+                text: `❌ Kontrak langganan dengan ID *${subId}* tidak ditemukan atau bukan milik akun Anda.\nKetik *.langganan* untuk melihat daftar langganan aktif Anda.`
+            });
+        }
+        const cancelRes = subLib.cancelSubscription(targetSub.id, 'Dibatalkan oleh pembeli via WhatsApp', 'user');
+        if (cancelRes.success) {
+            return sock.sendMessage(sender, {
+                text: `✅ *LANGGANAN BERHASIL DIBATALKAN*\n\n` +
+                      `• ID Langganan : \`${targetSub.id}\`\n` +
+                      `• Produk       : *${targetSub.productName}*\n` +
+                      `• Target       : \`${targetSub.target}\`\n\n` +
+                      `Sistem tidak akan lagi memotong saldo Anda untuk produk ini.`
+            });
+        } else {
+            return sock.sendMessage(sender, { text: `❌ Gagal membatalkan langganan: ${cancelRes.reason || cancelRes.message}` });
+        }
+    }
+
     // 1. MAIN MENU
     if (['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT'].includes(txt)) {
         session.step = S.PILIH_KATEGORI;
@@ -429,12 +479,13 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         t += `├ *4.* ⚡ Token Listrik PLN (Prabayar)\n`;
         t += `├ *5.* 📑 Tagihan PPOB Pascabayar\n`;
         t += `├ *6.* 📂 Produk Digital (Akun / Aplikasi)\n`;
-        t += `├ *7.* 💰 Isi Saldo (Deposit QRIS)\n`;
-        t += `├ *8.* 👤 Profil & Cek Saldo\n`;
-        t += `├ *9.* 🧾 Riwayat Transaksi\n`;
-        t += `├ *10.* 📖 Bantuan & Panduan\n│\n`;
+        t += `├ *7.* 🔄 Produk Berlangganan (Auto-Order)\n`;
+        t += `├ *8.* 💰 Isi Saldo (Deposit QRIS)\n`;
+        t += `├ *9.* 👤 Profil & Cek Saldo\n`;
+        t += `├ *10.* 🧾 Riwayat Transaksi\n`;
+        t += `├ *11.* 📖 Bantuan & Panduan\n│\n`;
         t += `╰───────────────────────────\n\n`;
-        t += `👇 Balas dengan *ANGKA (1 - 10)* untuk memilih menu.`;
+        t += `👇 Balas dengan *ANGKA (1 - 11)* untuk memilih menu.`;
         return sock.sendMessage(sender, { text: t });
     }
 
@@ -665,8 +716,8 @@ if (txt === 'PROFIL') {
         return sock.sendMessage(sender, { text: "🚫 Aksi dibatalkan. Ketik *MENU* untuk kembali belanja." });
     }
 
-    // 2. PILIH KATEGORI (1-10)
-    if (session.step === S.PILIH_KATEGORI || (session.step === S.IDLE && /^(10|[1-9])$/.test(txt))) {
+    // 2. PILIH KATEGORI (1-11)
+    if (session.step === S.PILIH_KATEGORI || (session.step === S.IDLE && /^(1[0-1]|[1-9])$/.test(txt))) {
         if (txt === '1' || txt === '2') {
             session.tempTipe = txt === '1' ? 'Pulsa' : 'Data';
             session.step = S.INPUT_TARGET_PULSA;
@@ -733,11 +784,21 @@ if (txt === 'PROFIL') {
             t += `Balas *Angka (1 - ${db.menu.length})* produk pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: t });
         } else if (txt === '7') {
+            session.step = S.PILIH_SUB_MENU;
+            let t = `🔄 *LAYANAN PRODUK BERLANGGANAN (AUTO-ORDER)*\n\n`;
+            t += `Beli produk secara rutin tanpa repot order manual berkala. Saldo akun Anda akan terpotong otomatis setiap jatuh tempo.\n\n`;
+            t += `*PILIH MENU LANGGANAN:*\n`;
+            t += `*1.* 📋 Beli Produk Berlangganan Baru\n`;
+            t += `*2.* 📑 Cek / Kelola Langganan Aktif Saya\n`;
+            t += `*3.* ⏹️ Batalkan Langganan\n\n`;
+            t += `Balas *Angka (1 - 3)* untuk memilih.\nKetik *0* atau *B* untuk batal.`;
+            return sock.sendMessage(sender, { text: t });
+        } else if (txt === '8') {
             session.step = S.INPUT_DEPOSIT;
             return sock.sendMessage(sender, {
                 text: `💰 *DEPOSIT SALDO OTOMATIS (QRIS)*\n\nMasukkan nominal deposit yang diinginkan:\n📌 Minimal: Rp1.000\n📌 Maksimal: Rp500.000\n\n_Contoh: 10000_\nKetik *0* atau *B* untuk batal.`
             });
-        } else if (txt === '8') {
+        } else if (txt === '9') {
             session.step = S.IDLE;
             const u = db.getUser(sender);
             let displayNo = u.phone || '';
@@ -745,9 +806,9 @@ if (txt === 'PROFIL') {
             if (!displayNo && !sender.includes('@lid')) displayNo = sender.split('@')[0].split(':')[0];
             const namePart = u.name ? `\n👤 Nama: *${u.name}*` : '';
             return sock.sendMessage(sender, {
-                text: `👤 *PROFIL PENGGUNA*${namePart}\n📱 Nomor HP: *${displayNo || '-'}*\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau balas *7* untuk isi saldo._`
+                text: `👤 *PROFIL PENGGUNA*${namePart}\n📱 Nomor HP: *${displayNo || '-'}*\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau balas *8* untuk isi saldo._`
             });
-        } else if (txt === '9') {
+        } else if (txt === '10') {
             session.step = S.IDLE;
             const canonical = db.normalizeJid(sender);
             const userOrders = (db.orders || [])
@@ -770,18 +831,20 @@ if (txt === 'PROFIL') {
                 t += `   Waktu: ${dateStr}\n\n`;
             });
             return sock.sendMessage(sender, { text: t });
-        } else if (txt === '10') {
+        } else if (txt === '11') {
             session.step = S.IDLE;
             let t = `📖 *PANDUAN LENGKAP TRANSAKSI*\n\n`;
             t += `*Cara Berbelanja via Menu Angka:*\n`;
             t += `1. Ketik *MENU* untuk membuka katalog layanan.\n`;
-            t += `2. Balas angka layanan yang diinginkan (1 - 6).\n`;
+            t += `2. Balas angka layanan yang diinginkan (1 - 7).\n`;
             t += `3. Masukkan nomor HP / ID Pelanggan tujuan.\n`;
             t += `4. Pilih produk / nominal dengan membalas angka.\n`;
             t += `5. Konfirmasi: Balas *1* untuk Bayar, *2* untuk Batal.\n\n`;
             t += `*Shortcut Cepat (Opsional):*\n`;
             t += `• *.beli [SKU] [NoHP]* : Beli instan\n`;
             t += `• *.harga [Operator]* : Cek daftar harga & SKU\n`;
+            t += `• *.langganan* : Menu produk berlangganan otomatis\n`;
+            t += `• *.batallangganan [ID]* : Berhenti berlangganan\n`;
             t += `• *.transfer [NoHP] [Nominal]* : Kirim saldo ke sesama member\n`;
             t += `• *.status [Invoice]* : Cek status / token transaksi\n`;
             t += `• *B* atau *0* : Batalkan transaksi kapan saja\n\n`;
@@ -1278,6 +1341,379 @@ if (txt === 'PROFIL') {
             return sock.sendMessage(sender, { text: "⚠️ Balas *1* untuk BAYAR SEKARANG, atau *2* untuk BATAL." });
         }
     }
+
+    // ========================================
+    // 🔄 ALUR PRODUK BERLANGGANAN (AUTO-ORDER)
+    // ========================================
+
+    // 1. SUB-MENU LANGGANAN
+    if (session.step === S.PILIH_SUB_MENU) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
+        }
+
+        if (txt === '1') {
+            // Katalog Berlangganan Aktif
+            const catalog = subLib.getCatalog(true);
+            if (catalog.length === 0) {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, {
+                    text: `❌ *PRODUK LANGGANAN BELUM TERSEDIA*\n\nSaat ini belum ada produk berlangganan yang diaktifkan oleh Admin.\nSilakan hubungi Admin atau ketik *MENU* untuk berbelanja produk reguler.`
+                });
+            }
+
+            session.tempSubsCatalog = catalog;
+            session.step = S.PILIH_PRODUK_SUBS;
+
+            let t = `🔄 *KATALOG PRODUK BERLANGGANAN*\n\n`;
+            t += `Pilih produk yang ingin Anda beli secara otomatis dan berkala:\n\n`;
+            catalog.forEach((item, idx) => {
+                const typeLabel = item.type === 'digital' ? 'Akun Digital' : 'PPOB';
+                t += `*${idx + 1}.* *${item.nama}*\n`;
+                t += `   • Jenis : ${typeLabel}\n`;
+                t += `   • Harga : *${formatRupiah(item.hargaJual)}* / order\n\n`;
+            });
+            t += `👉 Balas *Angka (1 - ${catalog.length})* produk pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
+            return sock.sendMessage(sender, { text: t });
+
+        } else if (txt === '2') {
+            // Cek Langganan Saya
+            session.step = S.IDLE;
+            const mySubs = subLib.getUserSubscriptions(sender);
+            const activeSubs = mySubs.filter(s => s.status === 'active' || s.status === 'paused');
+
+            if (activeSubs.length === 0) {
+                return sock.sendMessage(sender, {
+                    text: `📑 *STATUS LANGGANAN ANDA*\n\nAnda belum memiliki kontrak langganan aktif saat ini.\nKetik *.langganan* untuk mulai berlangganan produk secara berkala.`
+                });
+            }
+
+            let t = `📑 *DAFTAR LANGGANAN AKTIF ANDA (${activeSubs.length})*\n\n`;
+            activeSubs.forEach((s, idx) => {
+                const statusStr = s.status === 'active' ? '🟢 AKTIF' : '⏸️ DIJEDA (Saldo Kurang)';
+                const cycleStr = subLib.formatCycles(s.maxCycles, s.currentCycle);
+                const nextStr = s.nextRunAt ? new Date(s.nextRunAt).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+
+                t += `*${idx + 1}.* \`${s.id}\`\n`;
+                t += `   • Produk       : *${s.productName}*\n`;
+                t += `   • Tujuan       : \`${s.target}\`\n`;
+                t += `   • Biaya/Order  : *${formatRupiah(s.price)}*\n`;
+                t += `   • Interval     : *${subLib.formatInterval(s.intervalDays)}*\n`;
+                t += `   • Siklus       : *${cycleStr}*\n`;
+                t += `   • Jadwal Nanti : *${nextStr}*\n`;
+                t += `   • Status       : *${statusStr}*\n\n`;
+            });
+
+            t += `💡 *Tips:* Ketik \`.batallangganan [ID_LANGGANAN]\` jika ingin membatalkan.\nContoh: \`.batallangganan ${activeSubs[0].id}\``;
+            return sock.sendMessage(sender, { text: t });
+
+        } else if (txt === '3') {
+            // Batalkan Langganan
+            const mySubs = subLib.getUserSubscriptions(sender).filter(s => s.status === 'active' || s.status === 'paused');
+            if (mySubs.length === 0) {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, {
+                    text: `📑 Anda belum memiliki kontrak langganan aktif untuk dibatalkan.`
+                });
+            }
+
+            session.step = S.IDLE;
+            let t = `⏹️ *PEMBATALAN LANGGANAN*\n\n`;
+            t += `Ketik perintah di bawah untuk membatalkan langganan yang Anda inginkan:\n\n`;
+            mySubs.forEach((s, idx) => {
+                t += `*${idx + 1}.* *${s.productName}* (\`${s.target}\`)\n`;
+                t += `   👉 Ketik: \`.batallangganan ${s.id}\`\n\n`;
+            });
+            return sock.sendMessage(sender, { text: t });
+
+        } else {
+            return sock.sendMessage(sender, {
+                text: `⚠️ Balas dengan *1* untuk Beli Langganan Baru, *2* untuk Cek Langganan Saya, atau *3* untuk Batalkan.\nKetik *0* atau *B* untuk batal.`
+            });
+        }
+    }
+
+    // 2. PILIH PRODUK LANGGANAN DARI KATALOG
+    if (session.step === S.PILIH_PRODUK_SUBS) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
+        }
+
+        const idx = parseInt(txt, 10);
+        const catalog = session.tempSubsCatalog || [];
+
+        if (isNaN(idx) || idx < 1 || idx > catalog.length) {
+            return sock.sendMessage(sender, {
+                text: `⚠️ Pilihan tidak valid. Silakan balas angka (*1 - ${catalog.length}*) sesuai nomor produk di atas.\nKetik *0* atau *B* untuk batal.`
+            });
+        }
+
+        const selected = catalog[idx - 1];
+        session.tempSubProduct = selected;
+        session.step = S.INPUT_TARGET_SUBS;
+
+        let prompt = `🎯 *INPUT TUJUAN / PENERIMA*\n\n`;
+        prompt += `Produk Dipilih: *${selected.nama}*\n`;
+        prompt += `Harga per Order: *${formatRupiah(selected.hargaJual)}*\n\n`;
+
+        if (selected.type === 'digital') {
+            prompt += `Silakan masukkan *Nomor WhatsApp* atau *Email* Anda untuk pengiriman detail kredensial akun:\n`;
+            prompt += `_Contoh: 08123456789 atau nama@email.com_\n\n`;
+        } else {
+            prompt += `Silakan masukkan *Nomor HP / No. Meter PLN / ID Pelanggan* tujuan:\n`;
+            prompt += `_Contoh: 08123456789 atau 123456789012_\n\n`;
+        }
+        prompt += `Ketik *0* atau *B* untuk batal.`;
+        return sock.sendMessage(sender, { text: prompt });
+    }
+
+    // 3. INPUT TARGET TUJUAN
+    if (session.step === S.INPUT_TARGET_SUBS) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
+        }
+
+        const target = rawTrim;
+        if (!target || target.length < 4) {
+            return sock.sendMessage(sender, {
+                text: `⚠️ Nomor tujuan atau email tidak valid (terlalu pendek). Silakan masukkan tujuan yang benar:\nKetik *0* atau *B* untuk batal.`
+            });
+        }
+
+        session.tempSubTarget = target;
+        session.step = S.PILIH_INTERVAL_SUBS;
+
+        let t = `⏱️ *PILIH INTERVAL PEMBELIAN OTOMATIS*\n\n`;
+        t += `Seberapa sering Anda ingin pesanan *${session.tempSubProduct.nama}* diproses otomatis?\n\n`;
+        t += `*1.* Setiap *7 Hari* (1 Minggu sekali)\n`;
+        t += `*2.* Setiap *14 Hari* (2 Minggu sekali)\n`;
+        t += `*3.* Setiap *30 Hari* (1 Bulan sekali)\n`;
+        t += `*4.* Kustom Jumlah Hari (Ketik angka hari, contoh: *10*)\n\n`;
+        t += `👉 Balas *1, 2, 3*, atau ketik langsung *angka hari* (misal: *10* atau *60*).\nKetik *0* atau *B* untuk batal.`;
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    // 4. PILIH INTERVAL HARI
+    if (session.step === S.PILIH_INTERVAL_SUBS) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
+        }
+
+        let days = 0;
+        if (txt === '1') days = 7;
+        else if (txt === '2') days = 14;
+        else if (txt === '3') days = 30;
+        else if (/^\d+$/.test(txt)) {
+            days = parseInt(txt, 10);
+        }
+
+        if (days < 1 || days > 365) {
+            return sock.sendMessage(sender, {
+                text: `⚠️ Interval hari tidak valid. Masukkan minimal 1 hari dan maksimal 365 hari.\n_Contoh balas: 1 (untuk 7 hari), 3 (untuk 30 hari), atau ketik 15_\nKetik *0* atau *B* untuk batal.`
+            });
+        }
+
+        session.tempSubInterval = days;
+        session.step = S.PILIH_CYCLES_SUBS;
+
+        let t = `🔢 *PILIH FREKUENSI / JUMLAH PEMBELIAN (SIKLUS)*\n\n`;
+        t += `Berapa kali pesanan ini akan dibeli secara otomatis?\n\n`;
+        t += `*1.* *3x Pembelian*\n`;
+        t += `*2.* *6x Pembelian*\n`;
+        t += `*3.* *12x Pembelian* (1 Tahun jika bulanan)\n`;
+        t += `*4.* *Tanpa Batas* (Terus berlanjut sampai Anda batalkan sendiri)\n\n`;
+        t += `👉 Balas *1, 2, 3, 4*, atau ketik langsung *angka kustom* (misal: *5*).\nKetik *0* atau *B* untuk batal.`;
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    // 5. PILIH FREKUENSI / CYCLES
+    if (session.step === S.PILIH_CYCLES_SUBS) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
+        }
+
+        let cycles = null;
+        if (txt === '1') cycles = 3;
+        else if (txt === '2') cycles = 6;
+        else if (txt === '3') cycles = 12;
+        else if (txt === '4') cycles = 0; // 0 = unlimited
+        else if (/^\d+$/.test(txt)) {
+            cycles = parseInt(txt, 10);
+        }
+
+        if (cycles === null || cycles < 0 || cycles > 100) {
+            return sock.sendMessage(sender, {
+                text: `⚠️ Frekuensi siklus tidak valid. Balas *1, 2, 3, 4* atau ketik angka siklus antara 1 sampai 100.\nKetik *0* atau *B* untuk batal.`
+            });
+        }
+
+        session.tempSubCycles = cycles;
+        session.step = S.CONFIRM_SUBS;
+
+        const u = db.getUser ? db.getUser(sender) : (db.users[sender] || { saldo: 0 });
+        const userSaldo = Number(u.saldo) || 0;
+        const harga = Number(session.tempSubProduct.hargaJual) || 0;
+        const intervalStr = subLib.formatInterval(session.tempSubInterval);
+        const cycleStr = subLib.formatCycles(cycles, 1);
+
+        let t = `📋 *KONFIRMASI LANGGANAN (AUTO-ORDER)*\n\n`;
+        t += `Mohon tinjau rincian langganan otomatis Anda di bawah ini:\n\n`;
+        t += `• *Produk*          : *${session.tempSubProduct.nama}*\n`;
+        t += `• *Tujuan*          : \`${session.tempSubTarget}\`\n`;
+        t += `• *Harga / Order*   : *${formatRupiah(harga)}*\n`;
+        t += `• *Interval Waktu*  : Setiap *${intervalStr}*\n`;
+        t += `• *Total Pembelian* : *${cycleStr}*\n`;
+        t += `• *Saldo Akun Anda* : *${formatRupiah(userSaldo)}*\n\n`;
+        t += `💳 *Metode Pembayaran:* Auto-Debit Saldo Akun\n\n`;
+        t += `⚠️ *Ketentuan Layanan Auto-Order:*\n`;
+        t += `1. Pembayaran siklus pertama sebesar *${formatRupiah(harga)}* akan dipotong langsung dari saldo akun Anda sekarang.\n`;
+        t += `2. Siklus berikutnya akan dipotong otomatis setiap *${session.tempSubInterval} hari* selama saldo Anda mencukupi.\n`;
+        t += `3. Anda bebas berhenti berlangganan kapan saja melalui perintah *.batallangganan* tanpa denda.\n\n`;
+        t += `👉 Balas *1* untuk *SETUJU & AKTIFKAN SEKARANG*\n`;
+        t += `👉 Balas *2* atau *B* untuk *BATAL*`;
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    // 6. KONFIRMASI & EKSEKUSI PEMBUATAN LANGGANAN
+    if (session.step === S.CONFIRM_SUBS) {
+        if (txt === '2' || txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Pendaftaran langganan dibatalkan. Ketik *MENU* untuk kembali berbelanja." });
+        }
+
+        if (txt === '1') {
+            const cleanBuyer = db.normalizeJid ? db.normalizeJid(sender) : sender;
+            const buyerUser = db.getUser(cleanBuyer);
+            const actualSaldo = Number(buyerUser?.saldo) || 0;
+            const harga = Number(session.tempSubProduct.hargaJual) || 0;
+
+            if (actualSaldo < harga) {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, {
+                    text: `❌ *SALDO AKUN TIDAK MENCUKUPI*\n\n` +
+                          `• Saldo Anda saat ini : *${formatRupiah(actualSaldo)}*\n` +
+                          `• Biaya Siklus 1      : *${formatRupiah(harga)}*\n\n` +
+                          `Silakan lakukan deposit saldo terlebih dahulu via menu *8* (Deposit QRIS) atau ketik *.deposit*, kemudian ulangi aktivasi langganan.`
+                });
+            }
+
+            const oid = `INV-${Date.now()}`;
+            const deduct = db.deductSaldo(cleanBuyer, harga, oid, `[LANGGANAN #1] ${session.tempSubProduct.nama}`);
+            if (!deduct || !deduct.success) {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, {
+                    text: `❌ *GAGAL MEMPROSES TRANSAKSI*\nAlasan: ${deduct?.reason || 'Pemotongan saldo gagal'}`
+                });
+            }
+
+            let buyerPhone = buyerUser.phone || '';
+            if (!buyerPhone && !sender.includes('@lid')) {
+                buyerPhone = sender.split('@')[0].split(':')[0];
+            }
+            if (buyerPhone.startsWith('0')) buyerPhone = '62' + buyerPhone.slice(1);
+
+            const newSub = subLib.createSubscription({
+                buyer: cleanBuyer,
+                buyerPhone: buyerPhone,
+                catalogId: session.tempSubProduct.id,
+                sku: session.tempSubProduct.sku,
+                productType: session.tempSubProduct.type,
+                productName: session.tempSubProduct.nama,
+                target: session.tempSubTarget,
+                price: harga,
+                intervalDays: session.tempSubInterval,
+                maxCycles: session.tempSubCycles,
+                firstOrderId: oid
+            });
+
+            const order = {
+                id: oid,
+                buyer: cleanBuyer,
+                sender: cleanBuyer,
+                item: session.tempSubProduct.nama,
+                sku: session.tempSubProduct.sku,
+                target: session.tempSubTarget,
+                qty: 1,
+                price: harga,
+                baseAmount: harga,
+                total: harga,
+                method: 'Saldo Akun (Auto-Debit Langganan)',
+                status: 'processing',
+                isPpob: session.tempSubProduct.type === 'ppob',
+                isSubscription: true,
+                subscriptionId: newSub.id,
+                cycle: 1,
+                timestamp: Date.now()
+            };
+
+            if (!db.orders) db.orders = [];
+            db.orders.push(order);
+            db.saveOrders();
+
+            session.step = S.IDLE;
+
+            const nextDateStr = newSub.nextRunAt 
+                ? new Date(newSub.nextRunAt).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) 
+                : '-';
+            const cycleStr = subLib.formatCycles(newSub.maxCycles, 1);
+
+            let successMsg = `🎉 *LANGGANAN BERHASIL DIAKTIFKAN!*\n\n` +
+                `Selamat, pesanan otomatis Anda telah terdaftar di sistem kami:\n\n` +
+                `• *ID Langganan* : \`${newSub.id}\`\n` +
+                `• *Produk*       : *${newSub.productName}*\n` +
+                `• *Tujuan*       : \`${newSub.target}\`\n` +
+                `• *Interval*     : Setiap *${subLib.formatInterval(newSub.intervalDays)}*\n` +
+                `• *Siklus*       : *${cycleStr}*\n` +
+                `• *Inv Siklus 1* : \`${oid}\`\n`;
+
+            if (newSub.nextRunAt) {
+                successMsg += `• *Perpanjangan 2*: *${nextDateStr}*\n`;
+            }
+
+            successMsg += `• *Sisa Saldo*   : *${formatRupiah(deduct.remainingSaldo)}*\n\n` +
+                `⏳ *Status:* Siklus ke-1 sedang kami proses dan segera dikirimkan.\n` +
+                `💡 *Penghentian:* Anda dapat membatalkan langganan kapan saja dengan mengetik:\n\`.batallangganan ${newSub.id}\``;
+
+            await sock.sendMessage(sender, { text: successMsg });
+
+            // Eksekusi pesanan siklus pertama via handleSuccessPayment
+            const paymentHandler = global.handleSuccessPayment;
+            if (typeof paymentHandler === 'function') {
+                try {
+                    await paymentHandler(sock, order, true);
+                } catch (e) {
+                    console.error('[SUBS INITIAL EXECUTION ERROR]', e.message);
+                }
+            }
+
+            // Notifikasi ke Telegram Admin
+            if (global.botTg && config.telegram?.chatId) {
+                global.botTg.sendMessage(config.telegram.chatId,
+                    `🔄 *[KONTRAK LANGGANAN BARU DIAKTIFKAN]*\n\n` +
+                    `• ID Langganan : \`${newSub.id}\`\n` +
+                    `• Invoice 1    : \`${oid}\`\n` +
+                    `• Produk       : *${newSub.productName}*\n` +
+                    `• Target       : \`${newSub.target}\`\n` +
+                    `• Biaya/Siklus : *${formatRupiah(harga)}*\n` +
+                    `• Interval     : *${subLib.formatInterval(newSub.intervalDays)}*\n` +
+                    `• Siklus       : *${cycleStr}*\n` +
+                    `• Pembeli      : \`+${buyerPhone}\``,
+                    { parse_mode: 'Markdown' }
+                ).catch(() => {});
+            }
+
+            return;
+        } else {
+            return sock.sendMessage(sender, {
+                text: `⚠️ Balas *1* untuk SETUJU & AKTIFKAN, atau *2* untuk BATAL.`
+            });
+        }
+    }
 }
 
 async function showInvoice(sock, sender, session) {
@@ -1326,7 +1762,13 @@ exports.S = {
     INPUT_DEPOSIT: 10,
     PILIH_KATEGORI_PASCA: 11,
     INPUT_TARGET_PASCA: 12,
-    PILIH_PRODUK_PASCA: 13
+    PILIH_PRODUK_PASCA: 13,
+    PILIH_SUB_MENU: 14,
+    PILIH_PRODUK_SUBS: 15,
+    INPUT_TARGET_SUBS: 16,
+    PILIH_INTERVAL_SUBS: 17,
+    PILIH_CYCLES_SUBS: 18,
+    CONFIRM_SUBS: 19
 };
 
 module.exports = {
