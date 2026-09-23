@@ -711,7 +711,7 @@ if (txt === 'PROFIL') {
         });
     }
 
-    if (txt === 'B' || txt === '0') {
+    if (txt === 'B' || (txt === '0' && session.step !== S.PILIH_CYCLES_SUBS)) {
         session.step = S.IDLE;
         return sock.sendMessage(sender, { text: "🚫 Aksi dibatalkan. Ketik *MENU* untuk kembali belanja." });
     }
@@ -1486,69 +1486,67 @@ if (txt === 'PROFIL') {
         session.tempSubTarget = target;
         session.step = S.PILIH_INTERVAL_SUBS;
 
-        let t = `⏱️ *PILIH INTERVAL PEMBELIAN OTOMATIS*\n\n`;
-        t += `Seberapa sering Anda ingin pesanan *${session.tempSubProduct.nama}* diproses otomatis?\n\n`;
-        t += `*1.* Setiap *7 Hari* (1 Minggu sekali)\n`;
-        t += `*2.* Setiap *14 Hari* (2 Minggu sekali)\n`;
-        t += `*3.* Setiap *30 Hari* (1 Bulan sekali)\n`;
-        t += `*4.* Kustom Jumlah Hari (Ketik angka hari, contoh: *10*)\n\n`;
-        t += `👉 Balas *1, 2, 3*, atau ketik langsung *angka hari* (misal: *10* atau *60*).\nKetik *0* atau *B* untuk batal.`;
+        let t = `⏱️ *MASUKKAN INTERVAL PEMBELIAN (JUMLAH HARI)*\n\n`;
+        t += `Berapa hari sekali pesanan *${session.tempSubProduct.nama}* ingin dibeli secara otomatis?\n\n`;
+        t += `Silakan ketik angka jumlah hari secara langsung:\n`;
+        t += `• Ketik *1* untuk *Setiap Hari* (1 hari sekali / harian)\n`;
+        t += `• Ketik *3* untuk *Setiap 3 Hari*\n`;
+        t += `• Ketik *7* untuk *Setiap Minggu* (7 hari sekali)\n`;
+        t += `• Ketik *14* untuk *Setiap 2 Minggu* (14 hari sekali)\n`;
+        t += `• Ketik *30* untuk *Setiap Bulan* (30 hari sekali)\n`;
+        t += `• Atau ketik angka hari lainnya bebas sesuai kebutuhan Anda (1 - 365).\n\n`;
+        t += `👉 Ketik *angka hari* (contoh: *1* atau *7* atau *30*).\nKetik *B* untuk batal.`;
         return sock.sendMessage(sender, { text: t });
     }
 
-    // 4. PILIH INTERVAL HARI
+    // 4. MASUKKAN INTERVAL HARI
     if (session.step === S.PILIH_INTERVAL_SUBS) {
-        if (txt === 'B' || txt === '0') {
+        if (txt === 'B' || txt === 'BATAL') {
             session.step = S.IDLE;
             return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
         }
 
-        let days = 0;
-        if (txt === '1') days = 7;
-        else if (txt === '2') days = 14;
-        else if (txt === '3') days = 30;
-        else if (/^\d+$/.test(txt)) {
-            days = parseInt(txt, 10);
-        }
+        const cleanNum = txt.replace(/[^0-9]/g, '');
+        const days = parseInt(cleanNum, 10);
 
-        if (days < 1 || days > 365) {
+        if (isNaN(days) || days < 1 || days > 365) {
             return sock.sendMessage(sender, {
-                text: `⚠️ Interval hari tidak valid. Masukkan minimal 1 hari dan maksimal 365 hari.\n_Contoh balas: 1 (untuk 7 hari), 3 (untuk 30 hari), atau ketik 15_\nKetik *0* atau *B* untuk batal.`
+                text: `⚠️ Jumlah hari tidak valid. Silakan ketik angka hari antara 1 sampai 365 hari.\n\nContoh:\n• Ketik *1* untuk beli setiap 1 hari sekali (tiap hari)\n• Ketik *7* untuk seminggu sekali\n• Ketik *30* untuk sebulan sekali\n\nKetik *B* untuk batal.`
             });
         }
 
         session.tempSubInterval = days;
         session.step = S.PILIH_CYCLES_SUBS;
 
-        let t = `🔢 *PILIH FREKUENSI / JUMLAH PEMBELIAN (SIKLUS)*\n\n`;
+        let t = `🔢 *MASUKKAN JUMLAH PEMBELIAN (SIKLUS)*\n\n`;
         t += `Berapa kali pesanan ini akan dibeli secara otomatis?\n\n`;
-        t += `*1.* *3x Pembelian*\n`;
-        t += `*2.* *6x Pembelian*\n`;
-        t += `*3.* *12x Pembelian* (1 Tahun jika bulanan)\n`;
-        t += `*4.* *Tanpa Batas* (Terus berlanjut sampai Anda batalkan sendiri)\n\n`;
-        t += `👉 Balas *1, 2, 3, 4*, atau ketik langsung *angka kustom* (misal: *5*).\nKetik *0* atau *B* untuk batal.`;
+        t += `Silakan ketik angka jumlah pembelian yang Anda inginkan:\n`;
+        t += `• Ketik angka (contoh: *3*, *5*, *10*, *12*, dst)\n`;
+        t += `• Atau ketik *0* jika ingin *Tanpa Batas* (terus berjalan otomatis sampai Anda batalkan sendiri).\n\n`;
+        t += `👉 Ketik *angka jumlah siklus* (contoh: *5* atau ketik *0* untuk tanpa batas).\nKetik *B* untuk batal.`;
         return sock.sendMessage(sender, { text: t });
     }
 
-    // 5. PILIH FREKUENSI / CYCLES
+    // 5. MASUKKAN JUMLAH PEMBELIAN (SIKLUS)
     if (session.step === S.PILIH_CYCLES_SUBS) {
-        if (txt === 'B' || txt === '0') {
+        if (txt === 'B' || txt === 'BATAL') {
             session.step = S.IDLE;
             return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
         }
 
         let cycles = null;
-        if (txt === '1') cycles = 3;
-        else if (txt === '2') cycles = 6;
-        else if (txt === '3') cycles = 12;
-        else if (txt === '4') cycles = 0; // 0 = unlimited
-        else if (/^\d+$/.test(txt)) {
-            cycles = parseInt(txt, 10);
+        if (txt === '0' || txt === 'BEBAS' || txt === 'UNLIMITED') {
+            cycles = 0; // 0 = unlimited / berkelanjutan
+        } else {
+            const cleanNum = txt.replace(/[^0-9]/g, '');
+            if (cleanNum !== '') {
+                cycles = parseInt(cleanNum, 10);
+            }
         }
 
-        if (cycles === null || cycles < 0 || cycles > 100) {
+        if (cycles === null || isNaN(cycles) || cycles < 0 || cycles > 365) {
             return sock.sendMessage(sender, {
-                text: `⚠️ Frekuensi siklus tidak valid. Balas *1, 2, 3, 4* atau ketik angka siklus antara 1 sampai 100.\nKetik *0* atau *B* untuk batal.`
+                text: `⚠️ Jumlah pembelian tidak valid. Silakan ketik angka (misal: *3*, *5*, *10*) atau ketik *0* untuk tanpa batas.\n\nKetik *B* untuk batal.`
             });
         }
 
@@ -1559,7 +1557,7 @@ if (txt === 'PROFIL') {
         const userSaldo = Number(u.saldo) || 0;
         const harga = Number(session.tempSubProduct.hargaJual) || 0;
         const intervalStr = subLib.formatInterval(session.tempSubInterval);
-        const cycleStr = subLib.formatCycles(cycles, 1);
+        const cycleStr = subLib.formatCycles(cycles);
 
         let t = `📋 *KONFIRMASI LANGGANAN (AUTO-ORDER)*\n\n`;
         t += `Mohon tinjau rincian langganan otomatis Anda di bawah ini:\n\n`;
