@@ -2204,6 +2204,8 @@ if (txt === 'PROFIL') {
                 isPpob: session.tempSubProduct.type === 'ppob',
                 isSubscription: true,
                 subscriptionId: newSub.id,
+                intervalDays: session.tempSubInterval,
+                maxCycles: session.tempSubCycles,
                 cycle: 1,
                 timestamp: Date.now()
             };

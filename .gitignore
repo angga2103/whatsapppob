@@ -19,5 +19,9 @@ database/users.json
 database/orders.json
 database/deposits.json
 database/debts.json
+database/subscriptions.json
+database/subscriptions.backup.json
+database/subscription_catalog.json
+database/subscription_catalog.backup.json
 system/.update_backup/
 pasca.json

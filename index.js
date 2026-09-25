@@ -1775,6 +1775,23 @@ function initTelegramBot() {
             const dPhone = formatDisplayPhone(found.phone);
             const safeName = found.user.name ? cleanMd(found.user.name) : '-';
 
+            const normP = (p) => {
+                if (!p) return '';
+                let d = String(p).replace(/[^0-9]/g, '');
+                if (d.startsWith('62')) d = '0' + d.slice(2);
+                return d;
+            };
+            const memberPhoneNorm = normP(found.phone);
+            const memberSubs = (db.subscriptions || []).filter(s => {
+                const sNorm = normP(s.buyerPhone || s.buyer);
+                return sNorm === memberPhoneNorm;
+            });
+            const activeMemberSubs = memberSubs.filter(s => s.status === 'active' || s.status === 'paused');
+            let subsStr = '';
+            if (activeMemberSubs.length > 0) {
+                subsStr = `\n🔄 *Langganan Aktif:* 🟢 *${activeMemberSubs.length} kontrak* (${activeMemberSubs.map(s => cleanMd(s.productName)).join(', ')})`;
+            }
+
             let report = `👤 *PROFIL LENGKAP MEMBER*\n\n` +
                 `📱 *Nomor HP:* \`${dPhone}\` _(+${found.phone})_\n` +
                 `👤 *Nama Member:* *${safeName}*\n` +
@@ -1782,7 +1799,7 @@ function initTelegramBot() {
                 `📅 *Terdaftar Sejak:* ${dateJoin}\n` +
                 `📦 *Total Transaksi:* ${orders.length} order (${successCount} sukses, ${failedCount} gagal)\n` +
                 `💵 *Total Belanja Sukses:* ${formatRupiah(totalBelanja)}\n` +
-                `🕒 *Trx Terakhir:* ${lastDate}${histStr}`;
+                `🕒 *Trx Terakhir:* ${lastDate}${subsStr}${histStr}`;
 
             const reply_markup = {
                 inline_keyboard: [
@@ -1791,7 +1808,8 @@ function initTelegramBot() {
                         { text: '➖ Tarik Saldo', callback_data: `tg_salmin_${found.phone}` }
                     ],
                     [
-                        { text: '✏️ Ubah Nama Member', callback_data: `tg_setname_${found.phone}` }
+                        { text: `🔄 Kelola Langganan (${activeMemberSubs.length} Aktif)`, callback_data: `tg_usersubs_${found.phone}` },
+                        { text: '✏️ Ubah Nama', callback_data: `tg_setname_${found.phone}` }
                     ],
                     [
                         { text: '🔄 Refresh Profil', callback_data: `tg_viewuser_${found.phone}` },
@@ -1804,6 +1822,70 @@ function initTelegramBot() {
             };
 
             return { text: report, reply_markup };
+        };
+
+        const renderMemberSubscriptions = (phone) => {
+            const found = findMemberByQuery(phone);
+            if (!found) {
+                return {
+                    text: `❌ Member dengan nomor \`${phone}\` tidak ditemukan.`,
+                    reply_markup: { inline_keyboard: [[{ text: '⬅️ Kembali ke Daftar Member', callback_data: 'tg_member_menu' }]] }
+                };
+            }
+
+            const normP = (p) => {
+                if (!p) return '';
+                let d = String(p).replace(/[^0-9]/g, '');
+                if (d.startsWith('62')) d = '0' + d.slice(2);
+                return d;
+            };
+            const memberPhoneNorm = normP(found.phone);
+            const memberSubs = (db.subscriptions || []).filter(s => {
+                const sNorm = normP(s.buyerPhone || s.buyer);
+                return sNorm === memberPhoneNorm;
+            });
+
+            const safeName = found.user.name ? cleanMd(found.user.name) : '-';
+            const dPhone = formatDisplayPhone(found.phone);
+
+            let text = `🔄 *KONTRAK LANGGANAN MEMBER*\n\n` +
+                       `👤 *Member:* *${safeName}*\n` +
+                       `📱 *Nomor HP:* \`${dPhone}\` _(+${found.phone})_\n` +
+                       `💰 *Saldo Akun:* *${formatRupiah(found.user.saldo || 0)}*\n\n`;
+
+            const inline_keyboard = [];
+
+            if (memberSubs.length === 0) {
+                text += `_Member ini belum memiliki kontrak langganan di sistem._\n\n` +
+                        `Pelanggan dapat membeli langganan produk berkala via WhatsApp di menu *7. Produk Berlangganan* atau perintah *.langganan*.`;
+            } else {
+                text += `_Daftar kontrak langganan (${memberSubs.length} kontrak):_\n\n`;
+                memberSubs.forEach((s, idx) => {
+                    const statusLabel = s.status === 'active' ? '🟢 AKTIF' : (s.status === 'paused' ? '⏸️ DIJEDA (Saldo Kurang)' : '⏹️ DIBATALKAN');
+                    const nextDate = s.nextRunAt ? new Date(s.nextRunAt).toLocaleDateString('id-ID') : '-';
+                    const cycleStr = subLib.formatCycles(s.maxCycles, s.currentCycle);
+
+                    text += `*${idx + 1}.* \`${s.id}\`\n`;
+                    text += `   • Produk   : *${cleanMd(s.productName)}*\n`;
+                    text += `   • Target   : \`${s.target}\`\n`;
+                    text += `   • Biaya    : *${formatRupiah(s.price)}* / *${subLib.formatInterval(s.intervalDays)}*\n`;
+                    text += `   • Siklus   : *${cycleStr}*\n`;
+                    text += `   • Next Run : *${nextDate}* | 📌 *${statusLabel}*\n\n`;
+
+                    if (s.status === 'active' || s.status === 'paused') {
+                        inline_keyboard.push([
+                            { text: `⏹️ Hentikan Kontrak #${idx + 1}`, callback_data: `tg_subs_stop_${s.id}` }
+                        ]);
+                    }
+                });
+            }
+
+            inline_keyboard.push([
+                { text: '🔄 Refresh Data', callback_data: `tg_usersubs_${found.phone}` },
+                { text: '👤 Kembali ke Profil Member', callback_data: `tg_viewuser_${found.phone}` }
+            ]);
+
+            return { text, reply_markup: { inline_keyboard } };
         };
 
         const renderMemberPicker = (page = 0) => {
@@ -2984,6 +3066,13 @@ function initTelegramBot() {
                 return updateOrSend(chatId, messageId, renderMemberProfile(phone));
             }
 
+            if (action.startsWith('tg_usersubs_')) {
+                const phone = action.replace('tg_usersubs_', '');
+                global.tgInputState = null;
+                global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderMemberSubscriptions(phone));
+            }
+
             if (action === 'tg_input_editsaldo') {
                 global.botTg.answerCallbackQuery(query.id);
                 global.tgInputState = { type: 'awaiting_editsaldo', chatId };
@@ -3994,10 +4083,15 @@ function initTelegramBot() {
 
             if (action.startsWith('tg_subs_stop_')) {
                 const subId = action.replace('tg_subs_stop_', '');
+                const subObj = (db.subscriptions || []).find(s => s.id === subId);
+                const buyerPhone = subObj ? (subObj.buyerPhone || subObj.buyer || '') : '';
                 const res = subLib.cancelSubscription(subId, 'Dihentikan oleh Admin via Telegram', 'admin');
                 global.botTg.answerCallbackQuery(query.id, {
                     text: res.success ? '⏹️ Kontrak langganan berhasil dihentikan' : (res.reason || 'Gagal menghentikan langganan')
                 });
+                if (buyerPhone) {
+                    return updateOrSend(chatId, messageId, renderMemberSubscriptions(buyerPhone));
+                }
                 return updateOrSend(chatId, messageId, renderSubsUsers());
             }
 
@@ -4219,7 +4313,7 @@ function initTelegramBot() {
 
                     // 2. Discard local edits on tracked database files so git pull merges cleanly
                     try {
-                        execSync('git checkout -- database/settings.json database/store.json database/menu.json database/ppob.json database/postpaid.json database/subscription_catalog.json database/subscriptions.json 2>/dev/null || true', { stdio: 'ignore' });
+                        execSync('git checkout -- database/settings.json database/store.json database/menu.json database/ppob.json database/postpaid.json 2>/dev/null || true', { stdio: 'ignore' });
                     } catch (_) {}
 
                     // Simpan file non-database jika ada perubahan tak terlacak

@@ -187,6 +187,285 @@ const recoverSettings = () => {
     return settings;
 };
 
+const recoverSubscriptionCatalog = () => {
+    let catalog = safeReadJson('./database/subscription_catalog.json', []);
+    if (!Array.isArray(catalog) || catalog.length === 0) {
+        const backupPaths = [
+            './database/subscription_catalog.backup.json',
+            './system/.update_backup/subscription_catalog.json'
+        ];
+        for (const bp of backupPaths) {
+            try {
+                if (fs.existsSync(bp)) {
+                    const bData = safeReadJson(bp, []);
+                    if (Array.isArray(bData) && bData.length > 0) {
+                        catalog = bData;
+                        console.log(`[CATALOG-RECOVERY] ♻️ Katalog langganan berhasil dipulihkan dari backup: ${bp} (${catalog.length} item)`);
+                        break;
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+    if (!Array.isArray(catalog)) catalog = [];
+    atomicWriteJson('./database/subscription_catalog.json', catalog);
+    atomicWriteJson('./database/subscription_catalog.backup.json', catalog);
+    return catalog;
+};
+
+const recoverSubscriptions = () => {
+    let subs = safeReadJson('./database/subscriptions.json', []);
+
+    // 1. Cek file backup jika kosong
+    if (!Array.isArray(subs) || subs.length === 0) {
+        const backupPaths = [
+            './database/subscriptions.backup.json',
+            './system/.update_backup/subscriptions.json'
+        ];
+        for (const bp of backupPaths) {
+            try {
+                if (fs.existsSync(bp)) {
+                    const bData = safeReadJson(bp, []);
+                    if (Array.isArray(bData) && bData.length > 0) {
+                        subs = bData;
+                        console.log(`[SUBSCRIPTION-RECOVERY] ♻️ Kontrak langganan berhasil dipulihkan dari backup: ${bp} (${subs.length} kontrak)`);
+                        break;
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+
+    // 2. Pulihkan dari git stash jika ada
+    if (!Array.isArray(subs) || subs.length === 0) {
+        try {
+            const { execSync } = require('child_process');
+            const stashes = execSync('git stash list', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+            if (stashes) {
+                const stashLines = stashes.split('\n');
+                for (let i = 0; i < Math.min(stashLines.length, 5); i++) {
+                    try {
+                        const stashedStr = execSync(`git show stash@{${i}}:database/subscriptions.json`, { stdio: 'pipe', encoding: 'utf-8' }).trim();
+                        if (stashedStr) {
+                            const stashedObj = JSON.parse(stashedStr);
+                            if (Array.isArray(stashedObj) && stashedObj.length > 0) {
+                                subs = stashedObj;
+                                console.log(`[SUBSCRIPTION-RECOVERY] 🛡️ Berhasil memulihkan kontrak langganan dari git stash@{${i}}!`);
+                                break;
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
+        } catch (_) {}
+    }
+
+    if (!Array.isArray(subs)) subs = [];
+
+    // Helper phone normalizer
+    const normPhone = (p) => {
+        if (!p) return '';
+        let d = String(p).replace(/[^0-9]/g, '');
+        if (d.startsWith('62')) d = '0' + d.slice(2);
+        return d;
+    };
+
+    // 3. Scan & Rekonstruksi dari riwayat orders.json jika masih ada transaksi langganan yang belum terdaftar
+    try {
+        const orders = safeReadJson('./database/orders.json', []);
+        if (Array.isArray(orders) && orders.length > 0) {
+            let addedFromOrders = 0;
+            const subOrders = orders.filter(o => o && (o.isSubscription || (o.item && o.item.includes('[LANGGANAN')) || o.subscriptionId));
+
+            for (const o of subOrders) {
+                const subId = o.subscriptionId || `SUB-${o.timestamp || Date.now()}-${(o.id || '').replace(/[^0-9]/g, '').slice(-4)}`;
+                const cleanBuyer = (o.buyer || o.sender || '').replace(/[^0-9]/g, '');
+                const cleanTarget = (o.target || cleanBuyer).replace(/[^0-9]/g, '');
+                const normTarget = normPhone(cleanTarget);
+
+                const exists = subs.some(s => 
+                    (s.id && s.id === subId) || 
+                    (normPhone(s.target || s.buyerPhone) === normTarget && s.sku === o.sku)
+                );
+
+                if (!exists) {
+                    let days = o.intervalDays || 7;
+                    if (!o.intervalDays && o.item) {
+                        const dMatch = o.item.match(/(\d+)\s*(?:hari|hr)/i);
+                        if (dMatch) days = parseInt(dMatch[1], 10);
+                    }
+
+                    const price = Number(o.price || o.total || o.baseAmount || 0);
+                    const now = Date.now();
+                    const createdAt = o.timestamp || (now - (days * 86400000));
+                    const nextRunAt = createdAt + (days * 86400000);
+
+                    const restored = {
+                        id: subId,
+                        buyer: o.buyer || o.sender || '',
+                        buyerPhone: cleanBuyer,
+                        catalogId: null,
+                        sku: o.sku || 'PPOB-RECOVERED',
+                        productType: o.isPpob !== false ? 'ppob' : 'digital',
+                        productName: o.item ? o.item.replace(/\[LANGGANAN\s*#?\d*\]\s*/i, '').trim() : 'Produk Langganan',
+                        target: o.target || cleanBuyer,
+                        price: price,
+                        intervalDays: days,
+                        maxCycles: o.maxCycles || 0,
+                        currentCycle: o.cycle || 1,
+                        status: 'active',
+                        createdAt: createdAt,
+                        lastRunAt: createdAt,
+                        nextRunAt: nextRunAt > now ? nextRunAt : (now + 86400000),
+                        failCount: 0,
+                        history: [
+                            {
+                                cycle: o.cycle || 1,
+                                date: createdAt,
+                                orderId: o.id || `INV-${createdAt}`,
+                                status: o.status || 'success',
+                                amount: price
+                            }
+                        ]
+                    };
+
+                    subs.push(restored);
+                    addedFromOrders++;
+                }
+            }
+
+            if (addedFromOrders > 0) {
+                console.log(`[SUBSCRIPTION-RECOVERY] 🛡️ Berhasil merekonstruksi ${addedFromOrders} kontrak langganan dari database orders!`);
+            }
+        }
+    } catch (err) {
+        console.error('[SUBSCRIPTION-RECOVERY] Gagal scan orders.json:', err.message);
+    }
+
+    // 4. Scan & Rekonstruksi dari users.json (history member) jika di orders belum ada
+    try {
+        const users = safeReadJson('./database/users.json', {});
+        if (users && typeof users === 'object') {
+            let addedFromUsers = 0;
+            for (const [jid, u] of Object.entries(users)) {
+                if (!u || !Array.isArray(u.history) || u.history.length === 0) continue;
+                const cleanPhone = (u.phone || jid).replace(/[^0-9]/g, '');
+                const normMember = normPhone(cleanPhone);
+
+                for (const h of u.history) {
+                    if (typeof h !== 'string' || !h.includes('[LANGGANAN')) continue;
+                    const match = h.match(/\[LANGGANAN\s*#?(\d*)\]\s*(.*?)\s*\(-Rp\s*([0-9.,]+)\)/i);
+                    if (!match) continue;
+
+                    const cycle = parseInt(match[1] || '1', 10);
+                    const prodName = match[2].trim();
+                    const price = parseInt(match[3].replace(/[^0-9]/g, ''), 10);
+
+                    // Cek apakah user sudah punya kontrak untuk produk ini
+                    const exists = subs.some(s => {
+                        const sNorm = normPhone(s.buyerPhone || s.buyer);
+                        return sNorm === normMember && s.productName && s.productName.toLowerCase().includes(prodName.toLowerCase().slice(0, 15));
+                    });
+
+                    if (!exists) {
+                        let days = 7;
+                        const dMatch = prodName.match(/(\d+)\s*(?:hari|hr)/i);
+                        if (dMatch) days = parseInt(dMatch[1], 10);
+
+                        let createdAt = Date.now() - (days * 86400000);
+                        const dateMatch = h.match(/\[(\d{1,2})\/(\d{1,2})\/(\d{4})\]/);
+                        if (dateMatch) {
+                            const d = parseInt(dateMatch[1], 10);
+                            const m = parseInt(dateMatch[2], 10) - 1;
+                            const y = parseInt(dateMatch[3], 10);
+                            createdAt = new Date(y, m, d).getTime();
+                        }
+                        const nextRunAt = createdAt + (days * 86400000);
+                        const now = Date.now();
+
+                        const subId = `SUB-${createdAt}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+                        const restored = {
+                            id: subId,
+                            buyer: jid,
+                            buyerPhone: cleanPhone,
+                            catalogId: null,
+                            sku: 'XL-RECOVERED',
+                            productType: 'ppob',
+                            productName: prodName,
+                            target: cleanPhone,
+                            price: price,
+                            intervalDays: days,
+                            maxCycles: 0,
+                            currentCycle: cycle,
+                            status: 'active',
+                            createdAt: createdAt,
+                            lastRunAt: createdAt,
+                            nextRunAt: nextRunAt > now ? nextRunAt : (now + 86400000),
+                            failCount: 0,
+                            history: [
+                                {
+                                    cycle: cycle,
+                                    date: createdAt,
+                                    orderId: `INV-${createdAt}`,
+                                    status: 'success',
+                                    amount: price
+                                }
+                            ]
+                        };
+
+                        subs.push(restored);
+                        addedFromUsers++;
+                    }
+                }
+            }
+            if (addedFromUsers > 0) {
+                console.log(`[SUBSCRIPTION-RECOVERY] 🛡️ Berhasil merekonstruksi ${addedFromUsers} kontrak langganan dari history akun member!`);
+            }
+        }
+    } catch (err) {
+        console.error('[SUBSCRIPTION-RECOVERY] Gagal scan users.json:', err.message);
+    }
+
+    // 5. Pastikan produk yang ada di subscriptions juga terdaftar di subscriptionCatalog jika katalog kosong
+    try {
+        let cat = safeReadJson('./database/subscription_catalog.json', []);
+        if (Array.isArray(subs) && subs.length > 0) {
+            let catChanged = false;
+            for (const s of subs) {
+                if (!s || !s.productName) continue;
+                const inCat = cat.some(c => c.nama === s.productName || (s.sku && c.sku === s.sku));
+                if (!inCat) {
+                    cat.push({
+                        id: `SCAT-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+                        sku: s.sku || 'PPOB-RECOVERED',
+                        type: s.productType || 'ppob',
+                        nama: s.productName,
+                        kategori: 'PPOB',
+                        hargaJual: s.price || 0,
+                        enabled: true,
+                        allowedIntervals: [s.intervalDays || 7, 14, 30],
+                        defaultInterval: s.intervalDays || 7,
+                        allowedCycles: [3, 6, 12, 0],
+                        description: 'Layanan langganan otomatis berkala',
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    });
+                    catChanged = true;
+                }
+            }
+            if (catChanged) {
+                atomicWriteJson('./database/subscription_catalog.json', cat);
+                atomicWriteJson('./database/subscription_catalog.backup.json', cat);
+                console.log(`[CATALOG-RECOVERY] 🛡️ Produk langganan aktif disinkronkan ke katalog (${cat.length} produk).`);
+            }
+        }
+    } catch (_) {}
+
+    atomicWriteJson('./database/subscriptions.json', subs);
+    atomicWriteJson('./database/subscriptions.backup.json', subs);
+    return subs;
+};
+
 const db = {
     menu: safeReadJson('./database/menu.json', []),
     ppob: safeReadJson('./database/ppob.json', []),
@@ -196,8 +475,8 @@ const db = {
     store: safeReadJson('./database/store.json', { buka: true, namaToko: "DIGITAL STORE" }),
     deposits: safeReadJson('./database/deposits.json', []),
     settings: recoverSettings(),
-    subscriptionCatalog: safeReadJson('./database/subscription_catalog.json', []),
-    subscriptions: safeReadJson('./database/subscriptions.json', []),
+    subscriptionCatalog: recoverSubscriptionCatalog(),
+    subscriptions: recoverSubscriptions(),
     debts: safeReadJson('./database/debts.json', []),
     
     saveMenu: () => atomicWriteJson('./database/menu.json', db.menu),
@@ -207,8 +486,14 @@ const db = {
     savePostpaid: () => atomicWriteJson('./database/postpaid.json', db.postpaid),
     saveStore: () => atomicWriteJson('./database/store.json', db.store),
     saveDeposits: () => atomicWriteJson('./database/deposits.json', db.deposits),
-    saveSubscriptionCatalog: () => atomicWriteJson('./database/subscription_catalog.json', db.subscriptionCatalog),
-    saveSubscriptions: () => atomicWriteJson('./database/subscriptions.json', db.subscriptions),
+    saveSubscriptionCatalog: () => {
+        atomicWriteJson('./database/subscription_catalog.json', db.subscriptionCatalog);
+        atomicWriteJson('./database/subscription_catalog.backup.json', db.subscriptionCatalog);
+    },
+    saveSubscriptions: () => {
+        atomicWriteJson('./database/subscriptions.json', db.subscriptions);
+        atomicWriteJson('./database/subscriptions.backup.json', db.subscriptions);
+    },
     saveDebts: () => atomicWriteJson('./database/debts.json', db.debts),
     saveSettings: () => {
         atomicWriteJson('./database/settings.json', db.settings);
