@@ -30,7 +30,9 @@ const S = {
     INPUT_TARGET_SUBS: 16,
     PILIH_INTERVAL_SUBS: 17,
     PILIH_CYCLES_SUBS: 18,
-    CONFIRM_SUBS: 19
+    CONFIRM_SUBS: 19,
+    PILIH_QUICK_SUGGESTION: 20,
+    NEED_TARGET_QUICK: 21
 };
 
 // --- ENGINE CERDAS UNTUK SORTING & GROUPING OTOMATIS ---
@@ -719,31 +721,78 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     }
 
     // ========================================
-    // ⚡ SMART NATURAL LANGUAGE QUICK-ORDER
+    // ⚡ SMART NATURAL LANGUAGE QUICK-ORDER v2
     // ========================================
-    if (session.step === S.IDLE && !['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT'].includes(txt)) {
-        const quick = quickOrder.parseQuickOrder(text, db.ppob || []);
-        if (quick && quick.matched) {
-            const user = db.getUser(sender);
-            const userSaldo = Number(user.saldo) || 0;
-            session.tempItem = quick.product;
-            session.tempTarget = quick.target;
-            session.tempQty = 1;
-            session.step = S.CONFIRM;
+    const isExemptQuickOrder = ['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT', 'PROFIL', 'DEPOSIT', 'B', '0', 'YA', 'TIDAK'].includes(txt);
+    const isSingleDigitMenu = /^(1[0-1]|[1-9])$/.test(txt);
 
-            let card = `⚡ *QUICK ORDER TERDETEKSI*\n\n`;
-            card += `📦 Produk : *${quick.product.nama}*\n`;
-            card += `🎯 Tujuan : *${quick.target}*\n`;
-            card += `💰 Total  : *${formatRupiah(quick.product.hargaJual)}*\n`;
-            card += `💵 Saldo  : ${formatRupiah(userSaldo)}\n\n`;
-            if (userSaldo >= quick.product.hargaJual) {
-                card += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
-            } else {
-                card += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+    // Aktif saat user di IDLE, di menu utama (PILIH_KATEGORI), atau saat ditanya nomor tujuan
+    if (!isExemptQuickOrder && [S.IDLE, S.PILIH_KATEGORI, S.INPUT_TARGET_PULSA].includes(session.step)) {
+        // Jika user sedang di menu pilihan 1-11 dan mengetik angka tunggal 1-11, jangan cegat (biarkan masuk ke menu angka)
+        if (!(session.step === S.PILIH_KATEGORI && isSingleDigitMenu)) {
+            const quick = quickOrder.parseQuickOrder(text, db.ppob || []);
+            if (quick) {
+                if (quick.type === 'CONFIRM' && quick.matched && quick.product) {
+                    const user = db.getUser(sender);
+                    const userSaldo = Number(user.saldo) || 0;
+                    session.tempItem = quick.product;
+                    session.tempTarget = quick.target;
+                    session.tempQty = 1;
+                    session.step = S.CONFIRM;
+
+                    let card = `⚡ *QUICK ORDER TERDETEKSI*\n\n`;
+                    card += `📦 Produk : *${quick.product.nama}*\n`;
+                    card += `🎯 Tujuan : *${quick.target}*\n`;
+                    card += `💰 Total  : *${formatRupiah(quick.product.hargaJual)}*\n`;
+                    card += `💵 Saldo  : ${formatRupiah(userSaldo)}\n\n`;
+                    if (userSaldo >= quick.product.hargaJual) {
+                        card += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+                    } else {
+                        card += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+                    }
+                    card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
+                    card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
+                    return sock.sendMessage(sender, { text: card });
+                }
+
+                if (quick.type === 'SUGGESTIONS' && quick.suggestions && quick.suggestions.length > 0) {
+                    session.tempQuickSuggestions = quick.suggestions;
+                    session.tempTarget = quick.target;
+                    session.step = S.PILIH_QUICK_SUGGESTION;
+
+                    let msg = `🤔 *PAKET DATA ${quick.quotaVal ? quick.quotaVal + (quick.quotaUnit || 'GB') + ' ' : ''}UNTUK ${quick.target}*\n`;
+                    msg += `Paket tepat yang Anda cari tidak tersedia persis. Berikut pilihan kuota internet terbaik yang mendekati:\n\n`;
+                    quick.suggestions.forEach((s, i) => {
+                        msg += `*${i + 1}.* ${s.nama}\n   💰 *${formatRupiah(s.hargaJual)}*\n\n`;
+                    });
+                    msg += `👉 Balas *Angka (1 - ${quick.suggestions.length})* untuk langsung beli.\n`;
+                    msg += `👉 Balas *B* untuk batal.`;
+                    return sock.sendMessage(sender, { text: msg });
+                }
+
+                if (quick.type === 'NEED_PRODUCT') {
+                    session.tempTarget = quick.target;
+                    session.tempOp = quick.brand;
+                    session.tempTipe = 'Pulsa';
+                    session.step = S.INPUT_TARGET_PULSA;
+                    return sock.sendMessage(sender, { text: quick.message });
+                }
+
+                if (quick.type === 'NEED_TARGET') {
+                    session.tempPendingProduct = quick.product || null;
+                    session.tempPendingCategory = quick.category || 'Pulsa';
+                    session.tempPendingBrand = quick.brand || null;
+                    session.tempPendingNominal = quick.nominal || null;
+                    session.tempPendingQuota = quick.quotaVal || null;
+                    session.tempPendingQuotaUnit = quick.quotaUnit || 'GB';
+                    session.step = S.NEED_TARGET_QUICK;
+                    return sock.sendMessage(sender, { text: quick.message });
+                }
+
+                if (quick.type === 'GUIDE') {
+                    return sock.sendMessage(sender, { text: quick.message });
+                }
             }
-            card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
-            card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
-            return sock.sendMessage(sender, { text: card });
         }
     }
 
@@ -992,6 +1041,93 @@ if (txt === 'PROFIL') {
     if (txt === 'B' || (txt === '0' && session.step !== S.PILIH_CYCLES_SUBS)) {
         session.step = S.IDLE;
         return sock.sendMessage(sender, { text: "🚫 Aksi dibatalkan. Ketik *MENU* untuk kembali belanja." });
+    }
+
+    // 1X. ALUR RESPON SMART QUICK SUGGESTIONS (PILIH PAKET SARAN)
+    if (session.step === S.PILIH_QUICK_SUGGESTION) {
+        const idx = parseInt(txt, 10) - 1;
+        if (!isNaN(idx) && session.tempQuickSuggestions && session.tempQuickSuggestions[idx]) {
+            const product = session.tempQuickSuggestions[idx];
+            const user = db.getUser(sender);
+            const userSaldo = Number(user.saldo) || 0;
+            session.tempItem = product;
+            session.tempQty = 1;
+            session.step = S.CONFIRM;
+
+            let card = `⚡ *QUICK ORDER TERDETEKSI*\n\n`;
+            card += `📦 Produk : *${product.nama}*\n`;
+            card += `🎯 Tujuan : *${session.tempTarget}*\n`;
+            card += `💰 Total  : *${formatRupiah(product.hargaJual)}*\n`;
+            card += `💵 Saldo  : ${formatRupiah(userSaldo)}\n\n`;
+            if (userSaldo >= product.hargaJual) {
+                card += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+            } else {
+                card += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+            }
+            card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
+            card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
+            return sock.sendMessage(sender, { text: card });
+        } else {
+            return sock.sendMessage(sender, { 
+                text: `❌ Pilihan tidak valid. Silakan balas dengan angka *1 - ${session.tempQuickSuggestions ? session.tempQuickSuggestions.length : 1}*, atau ketik *B* untuk batal.` 
+            });
+        }
+    }
+
+    // 1Y. ALUR RESPON SMART QUICK TARGET INPUT
+    if (session.step === S.NEED_TARGET_QUICK) {
+        let inputTarget = text.trim();
+        const u = db.getUser ? db.getUser(sender) : null;
+        let senderPhone = u?.phone || '';
+        if (!senderPhone && !sender.includes('@lid')) senderPhone = sender.split('@')[0].split(':')[0];
+        if (senderPhone.startsWith('62')) senderPhone = '0' + senderPhone.slice(2);
+
+        if (inputTarget === '1' && senderPhone && senderPhone.startsWith('08') && senderPhone.length >= 10) {
+            inputTarget = senderPhone;
+        }
+
+        const cleanTarget = inputTarget.replace(/[^0-9]/g, '');
+        const category = session.tempPendingCategory || 'Pulsa';
+
+        if (category === 'PLN') {
+            if (cleanTarget.length < 11 || cleanTarget.length > 12) {
+                return sock.sendMessage(sender, { text: "❌ Nomor Meter / ID Pelanggan PLN harus 11 atau 12 digit. Silakan ketik ulang, atau ketik *B* untuk batal." });
+            }
+        } else {
+            if (cleanTarget.length < 10 || cleanTarget.length > 14) {
+                return sock.sendMessage(sender, { text: "❌ Nomor HP tidak valid (harus 10 - 14 digit). Silakan ketik ulang, atau ketik *B* untuk batal." });
+            }
+        }
+
+        const brand = category === 'PLN' ? 'PLN' : (session.tempPendingBrand || quickOrder.detectProviderFromPhone(cleanTarget));
+        const fullQuery = `${brand || ''} ${category} ${session.tempPendingQuota ? session.tempPendingQuota + session.tempPendingQuotaUnit : (session.tempPendingNominal || '')} ${cleanTarget}`;
+        const quick = quickOrder.parseQuickOrder(fullQuery, db.ppob || []);
+
+        if (quick && quick.matched && quick.product) {
+            const user = db.getUser(sender);
+            const userSaldo = Number(user.saldo) || 0;
+            session.tempItem = quick.product;
+            session.tempTarget = cleanTarget;
+            session.tempQty = 1;
+            session.step = S.CONFIRM;
+
+            let card = `⚡ *QUICK ORDER TERDETEKSI*\n\n`;
+            card += `📦 Produk : *${quick.product.nama}*\n`;
+            card += `🎯 Tujuan : *${cleanTarget}*\n`;
+            card += `💰 Total  : *${formatRupiah(quick.product.hargaJual)}*\n`;
+            card += `💵 Saldo  : ${formatRupiah(userSaldo)}\n\n`;
+            if (userSaldo >= quick.product.hargaJual) {
+                card += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+            } else {
+                card += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+            }
+            card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
+            card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
+            return sock.sendMessage(sender, { text: card });
+        } else {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: `❌ Maaf, produk ${category} untuk nomor ${cleanTarget} tidak ditemukan. Ketik *MENU* untuk melihat layanan.` });
+        }
     }
 
     // 2. PILIH KATEGORI (1-11)
