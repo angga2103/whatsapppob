@@ -32,7 +32,8 @@ const S = {
     PILIH_CYCLES_SUBS: 18,
     CONFIRM_SUBS: 19,
     PILIH_QUICK_SUGGESTION: 20,
-    NEED_TARGET_QUICK: 21
+    NEED_TARGET_QUICK: 21,
+    PILIH_LAYANAN_TARGET: 22
 };
 
 // --- ENGINE CERDAS UNTUK SORTING & GROUPING OTOMATIS ---
@@ -760,8 +761,13 @@ async function handleUser(sock, sender, text, session, processCheckout) {
                     session.tempTarget = quick.target;
                     session.step = S.PILIH_QUICK_SUGGESTION;
 
-                    let msg = `🤔 *PAKET DATA ${quick.quotaVal ? quick.quotaVal + (quick.quotaUnit || 'GB') + ' ' : ''}UNTUK ${quick.target}*\n`;
-                    msg += `Paket tepat yang Anda cari tidak tersedia persis. Berikut pilihan kuota internet terbaik yang mendekati:\n\n`;
+                    let title = `📶 *PILIHAN PAKET DATA ${quick.validityText ? quick.validityText.toUpperCase() + ' ' : (quick.quotaVal ? quick.quotaVal + (quick.quotaUnit || 'GB') + ' ' : '')}(${quick.brand || quick.target})*`;
+                    let msg = `${title}\n\n`;
+                    if (quick.validityText) {
+                        msg += `Berikut pilihan paket data dengan masa aktif *${quick.validityText}* terbaik untuk Anda:\n\n`;
+                    } else {
+                        msg += `Paket tepat yang Anda cari tidak tersedia persis. Berikut pilihan kuota internet terbaik yang mendekati:\n\n`;
+                    }
                     quick.suggestions.forEach((s, i) => {
                         msg += `*${i + 1}.* ${s.nama}\n   💰 *${formatRupiah(s.hargaJual)}*\n\n`;
                     });
@@ -774,7 +780,7 @@ async function handleUser(sock, sender, text, session, processCheckout) {
                     session.tempTarget = quick.target;
                     session.tempOp = quick.brand;
                     session.tempTipe = 'Pulsa';
-                    session.step = S.INPUT_TARGET_PULSA;
+                    session.step = S.PILIH_LAYANAN_TARGET;
                     return sock.sendMessage(sender, { text: quick.message });
                 }
 
@@ -785,6 +791,7 @@ async function handleUser(sock, sender, text, session, processCheckout) {
                     session.tempPendingNominal = quick.nominal || null;
                     session.tempPendingQuota = quick.quotaVal || null;
                     session.tempPendingQuotaUnit = quick.quotaUnit || 'GB';
+                    session.tempPendingValidity = quick.validityDays ? (quick.validityDays + 'hari') : null;
                     session.step = S.NEED_TARGET_QUICK;
                     return sock.sendMessage(sender, { text: quick.message });
                 }
@@ -1100,7 +1107,7 @@ if (txt === 'PROFIL') {
         }
 
         const brand = category === 'PLN' ? 'PLN' : (session.tempPendingBrand || quickOrder.detectProviderFromPhone(cleanTarget));
-        const fullQuery = `${brand || ''} ${category} ${session.tempPendingQuota ? session.tempPendingQuota + session.tempPendingQuotaUnit : (session.tempPendingNominal || '')} ${cleanTarget}`;
+        const fullQuery = `${brand || ''} ${category} ${session.tempPendingQuota ? session.tempPendingQuota + session.tempPendingQuotaUnit : ''} ${session.tempPendingValidity || ''} ${session.tempPendingNominal || ''} ${cleanTarget}`;
         const quick = quickOrder.parseQuickOrder(fullQuery, db.ppob || []);
 
         if (quick && quick.matched && quick.product) {
@@ -1124,9 +1131,145 @@ if (txt === 'PROFIL') {
             card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
             card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
             return sock.sendMessage(sender, { text: card });
+        } else if (quick && quick.type === 'SUGGESTIONS' && quick.suggestions && quick.suggestions.length > 0) {
+            session.tempQuickSuggestions = quick.suggestions;
+            session.tempTarget = cleanTarget;
+            session.step = S.PILIH_QUICK_SUGGESTION;
+
+            let title = `📶 *PILIHAN PAKET DATA ${quick.validityText ? quick.validityText.toUpperCase() + ' ' : (quick.quotaVal ? quick.quotaVal + (quick.quotaUnit || 'GB') + ' ' : '')}(${quick.brand || cleanTarget})*`;
+            let msg = `${title}\n\n`;
+            if (quick.validityText) {
+                msg += `Berikut pilihan paket data dengan masa aktif *${quick.validityText}* terbaik untuk Anda:\n\n`;
+            } else {
+                msg += `Paket tepat yang Anda cari tidak tersedia persis. Berikut pilihan kuota internet terbaik yang mendekati:\n\n`;
+            }
+            quick.suggestions.forEach((s, i) => {
+                msg += `*${i + 1}.* ${s.nama}\n   💰 *${formatRupiah(s.hargaJual)}*\n\n`;
+            });
+            msg += `👉 Balas *Angka (1 - ${quick.suggestions.length})* untuk langsung beli.\n`;
+            msg += `👉 Balas *B* untuk batal.`;
+            return sock.sendMessage(sender, { text: msg });
         } else {
             session.step = S.IDLE;
             return sock.sendMessage(sender, { text: `❌ Maaf, produk ${category} untuk nomor ${cleanTarget} tidak ditemukan. Ketik *MENU* untuk melihat layanan.` });
+        }
+    }
+
+    // 1Z. ALUR RESPON PILIH LAYANAN DARI NOMOR (PULSA vs DATA)
+    if (session.step === S.PILIH_LAYANAN_TARGET) {
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali belanja." });
+        }
+
+        const target = session.tempTarget;
+        const brand = session.tempOp || (detectOperator ? detectOperator(target) : null) || 'TELKOMSEL';
+
+        if (txt === '1') {
+            // User memilih Pulsa Reguler
+            session.tempTipe = 'Pulsa';
+            session.tempOp = brand;
+            const produkRaw = db.ppob.filter(p => p.kategori === 'Pulsa' && p.brand === brand);
+            if (produkRaw.length === 0) {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, { text: `❌ Produk Pulsa untuk ${brand} sedang kosong.` });
+            }
+            let parsedProducts = produkRaw.map(p => ({ ...p, ...parseProduct(p.nama, brand) }));
+            parsedProducts.sort((a, b) => a.hargaJual - b.hargaJual);
+            session.tempAllProducts = [...parsedProducts];
+            session.tempList = parsedProducts;
+            session.tempPage = 0;
+            session.step = S.PILIH_PRODUK_PULSA;
+            return showProductList(sock, sender, session);
+        } else if (txt === '2') {
+            // User memilih Paket Kuota Internet
+            session.tempTipe = 'Data';
+            session.tempOp = brand;
+            const produkRaw = db.ppob.filter(p => p.kategori === 'Data' && p.brand === brand);
+            if (produkRaw.length === 0) {
+                session.step = S.IDLE;
+                return sock.sendMessage(sender, { text: `❌ Produk Data untuk ${brand} sedang kosong.` });
+            }
+            let parsedProducts = produkRaw.map(p => ({ ...p, ...parseProduct(p.nama, brand) }));
+            parsedProducts.sort((a, b) => {
+                if (a.groupName < b.groupName) return -1;
+                if (a.groupName > b.groupName) return 1;
+                if (a.validityDays !== b.validityDays) return a.validityDays - b.validityDays;
+                return a.hargaJual - b.hargaJual;
+            });
+            session.tempAllProducts = [...parsedProducts];
+            parsedProducts = parsedProducts.sort((a, b) => a.hargaJual - b.hargaJual).slice(0, 5);
+            session.tempSmartMode = true;
+            session.tempList = parsedProducts;
+            session.tempPage = 0;
+            session.step = S.PILIH_PRODUK_PULSA;
+            return showProductList(sock, sender, session);
+        } else {
+            // Jika user langsung ketik nominal atau paket (contoh: "10k", "30hari", "25gb", atau ganti nomor)
+            let quick = quickOrder.parseQuickOrder(text, db.ppob || []);
+            if (!quick || (!quick.matched && !quick.suggestions && quick.type !== 'NEED_PRODUCT')) {
+                quick = quickOrder.parseQuickOrder(`${brand} ${text} ${target}`, db.ppob || []);
+            }
+
+            if (quick) {
+                if (quick.type === 'CONFIRM' && quick.matched && quick.product) {
+                    const user = db.getUser(sender);
+                    const userSaldo = Number(user.saldo) || 0;
+                    session.tempItem = quick.product;
+                    session.tempTarget = quick.target;
+                    session.tempQty = 1;
+                    session.step = S.CONFIRM;
+
+                    let card = `⚡ *QUICK ORDER TERDETEKSI*\n\n`;
+                    card += `📦 Produk : *${quick.product.nama}*\n`;
+                    card += `🎯 Tujuan : *${quick.target}*\n`;
+                    card += `💰 Total  : *${formatRupiah(quick.product.hargaJual)}*\n`;
+                    card += `💵 Saldo  : ${formatRupiah(userSaldo)}\n\n`;
+                    if (userSaldo >= quick.product.hargaJual) {
+                        card += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+                    } else {
+                        card += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+                    }
+                    card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
+                    card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
+                    return sock.sendMessage(sender, { text: card });
+                }
+
+                if (quick.type === 'SUGGESTIONS' && quick.suggestions && quick.suggestions.length > 0) {
+                    session.tempQuickSuggestions = quick.suggestions;
+                    session.tempTarget = quick.target;
+                    session.step = S.PILIH_QUICK_SUGGESTION;
+
+                    let title = `📶 *PILIHAN PAKET DATA ${quick.validityText ? quick.validityText.toUpperCase() + ' ' : (quick.quotaVal ? quick.quotaVal + (quick.quotaUnit || 'GB') + ' ' : '')}(${quick.brand || quick.target})*`;
+                    let msg = `${title}\n\n`;
+                    if (quick.validityText) {
+                        msg += `Berikut pilihan paket data dengan masa aktif *${quick.validityText}* terbaik untuk Anda:\n\n`;
+                    } else {
+                        msg += `Paket tepat yang Anda cari tidak tersedia persis. Berikut pilihan kuota internet terbaik yang mendekati:\n\n`;
+                    }
+                    quick.suggestions.forEach((s, i) => {
+                        msg += `*${i + 1}.* ${s.nama}\n   💰 *${formatRupiah(s.hargaJual)}*\n\n`;
+                    });
+                    msg += `👉 Balas *Angka (1 - ${quick.suggestions.length})* untuk langsung beli.\n`;
+                    msg += `👉 Balas *B* untuk batal.`;
+                    return sock.sendMessage(sender, { text: msg });
+                }
+
+                if (quick.type === 'NEED_PRODUCT') {
+                    session.tempTarget = quick.target;
+                    session.tempOp = quick.brand;
+                    session.step = S.PILIH_LAYANAN_TARGET;
+                    return sock.sendMessage(sender, { text: quick.message });
+                }
+            }
+
+            return sock.sendMessage(sender, {
+                text: `💡 *PILIH LAYANAN UNTUK ${target}*\n\n` +
+                      `👉 Balas *1* untuk *Pulsa Reguler*\n` +
+                      `👉 Balas *2* untuk *Paket Kuota Internet*\n\n` +
+                      `Atau langsung ketik nominal/durasi (contoh: *10k*, *25gb*, *30hari*).\n` +
+                      `Ketik *B* untuk batal.`
+            });
         }
     }
 
@@ -2159,31 +2302,6 @@ async function showInvoice(sock, sender, session) {
     
     await sock.sendMessage(sender, { text: t });
 }
-
-exports.handleUser = handleUser;
-
-exports.S = {
-    IDLE: 0,
-    PILIH_KATEGORI: 1,
-    INPUT_TARGET_PULSA: 2,
-    PILIH_PRODUK_PULSA: 3,
-    PILIH_BRAND_EMONEY: 4,
-    INPUT_TARGET_EMONEY: 5,
-    PILIH_PRODUK_EMONEY: 6,
-    PILIH_PRODUK_DIGITAL: 7,
-    QTY_DIGITAL: 8,
-    CONFIRM: 9,
-    INPUT_DEPOSIT: 10,
-    PILIH_KATEGORI_PASCA: 11,
-    INPUT_TARGET_PASCA: 12,
-    PILIH_PRODUK_PASCA: 13,
-    PILIH_SUB_MENU: 14,
-    PILIH_PRODUK_SUBS: 15,
-    INPUT_TARGET_SUBS: 16,
-    PILIH_INTERVAL_SUBS: 17,
-    PILIH_CYCLES_SUBS: 18,
-    CONFIRM_SUBS: 19
-};
 
 module.exports = {
     handleUser,
