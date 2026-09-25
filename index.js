@@ -29,9 +29,13 @@ const mutex = require('./lib/mutex');
 const app = express();
 app.use(express.json());
 
-app.get('/struk/:orderId', (req, res) => {
+app.get('/struk/:orderId', async (req, res) => {
     try {
-        const orderId = String(req.params.orderId || '').trim();
+        let orderId = String(req.params.orderId || '').trim();
+        const asPdf = req.query.pdf === '1' || orderId.toLowerCase().endsWith('.pdf');
+        if (orderId.toLowerCase().endsWith('.pdf')) {
+            orderId = orderId.slice(0, -4);
+        }
         const orders = db.orders || [];
         const order = orders.find(o => 
             (o.id && o.id.toUpperCase() === orderId.toUpperCase()) || 
@@ -52,6 +56,14 @@ app.get('/struk/:orderId', (req, res) => {
         const buyerJid = order.buyer || order.sender || '';
         const user = db.getUser ? db.getUser(buyerJid) : null;
         const warungProfile = user?.warung || {};
+
+        if (asPdf) {
+            const pdfBuffer = await receiptLib.generatePdfReceiptBuffer(order, warungProfile);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `inline; filename="Struk-${order.id || 'TRX'}.pdf"`);
+            return res.send(pdfBuffer);
+        }
+
         const html = receiptLib.generateHtmlReceipt(order, warungProfile);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.send(html);
@@ -1312,7 +1324,7 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                                   `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
                                   `🕒 Waktu           : ${timeStr}\n\n` +
                                   `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`;
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
                         await sock.sendMessage(targetJid, { text: plnMsg });
                     } else {
                         await sock.sendMessage(targetJid, {
@@ -1323,7 +1335,7 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                                   `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
                                   `🕒 Waktu    : ${timeStr}\n\n` +
                                   `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`
                         });
                     }
                 }
@@ -5708,7 +5720,7 @@ setInterval(async () => {
                                   `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
                                   `🕒 Waktu           : ${timeStr}\n\n` +
                                   `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`;
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
                         await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg });
                     } else {
                         await botSock.sendMessage(realBuyerJid || buyerJid, {
@@ -5719,7 +5731,7 @@ setInterval(async () => {
                                   `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
                                   `🕒 Waktu    : ${timeStr}\n\n` +
                                   `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk nota pembayaran siap cetak.`
+                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`
                         });
                     }
                 }

@@ -473,8 +473,9 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         }
     }
 
-    // STRUK COMMAND (.struk atau .struk [INV])
-    if (['.STRUK', '!STRUK', 'STRUK'].includes(cmdFirst)) {
+    // STRUK COMMAND (.struk atau .struk [INV] atau .strukteks)
+    if (['.STRUK', '!STRUK', 'STRUK', '.STRUKTEKS', '!STRUKTEKS', 'STRUKTEKS'].includes(cmdFirst)) {
+        const isTextOnly = cmdFirst.includes('TEKS');
         const query = (parts[1] || '').trim();
         const orders = db.orders || [];
         const cleanSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
@@ -502,19 +503,54 @@ async function handleUser(sock, sender, text, session, processCheckout) {
 
         const u = db.getUser(sender);
         const warungProfile = u.warung || {};
-        const textReceipt = receiptLib.generateTextReceipt(targetOrder, warungProfile, 32);
+        const finalPrice = Number(warungProfile.customPrice || targetOrder.customPrice || targetOrder.baseAmount || targetOrder.total || 0);
 
-        const host = process.env.PUBLIC_URL || `http://localhost:${config.port || 3000}`;
-        const webReceiptUrl = `${host}/struk/${targetOrder.id || targetOrder.oid}`;
+        if (isTextOnly) {
+            const textReceipt = receiptLib.generateTextReceipt(targetOrder, warungProfile, 32);
+            let reply = `🧾 *STRUK PEMBAYARAN THERMAL (58mm)*\n\n`;
+            reply += `\`\`\`\n${textReceipt}\n\`\`\`\n\n`;
+            reply += `💡 *Tips Warung:*\n`;
+            reply += `• Format Dokumen PDF Resmi : Ketik *.struk*\n`;
+            reply += `• Ganti Nama Toko : Ketik *.setnamatoko [Nama Warung]*\n`;
+            reply += `• Atur Harga Jual : Ketik *.strukharga [Harga]* (cth: *.strukharga 12000*)`;
+            return sock.sendMessage(sender, { text: reply });
+        }
 
-        let reply = `🧾 *STRUK PEMBAYARAN THERMAL (58mm)*\n\n`;
-        reply += `\`\`\`\n${textReceipt}\n\`\`\`\n\n`;
-        reply += `🌐 *Link Struk Cetak / PDF:*\n${webReceiptUrl}\n\n`;
-        reply += `💡 *Kustomisasi Toko Warung:*\n`;
-        reply += `• Ganti Nama Toko : Ketik *.setnamatoko [Nama Warung]*\n`;
-        reply += `• Atur Harga Jual : Ketik *.strukharga [Harga]* (cth: *.strukharga 12000*)`;
+        try {
+            const pdfBuffer = await receiptLib.generatePdfReceiptBuffer(targetOrder, warungProfile);
+            const invName = targetOrder.id || targetOrder.oid || 'TRX';
+            const fileName = `Struk-${invName}.pdf`;
 
-        return sock.sendMessage(sender, { text: reply });
+            let caption = `🧾 *STRUK PEMBAYARAN RESMI*\n\n`;
+            caption += `📋 *No. Reff :* \`${invName}\`\n`;
+            caption += `📦 *Produk   :* ${targetOrder.item || targetOrder.sku || 'Produk Digital'}\n`;
+            caption += `🎯 *Tujuan   :* ${targetOrder.target || '-'}\n`;
+            caption += `💰 *Total    :* ${formatRupiah(finalPrice)}\n`;
+            caption += `✅ *Status   :* LUNAS / BERHASIL\n\n`;
+            caption += `📄 *File PDF Struk siap cetak terlampir di atas.*\n`;
+            caption += `Bisa langsung disimpan, dicetak ke printer Bluetooth thermal, atau dikirimkan ke pelanggan.\n\n`;
+            caption += `💡 *Kustomisasi Toko Warung:*\n`;
+            caption += `• Ganti Nama Toko : Ketik *.setnamatoko [Nama Warung]*\n`;
+            caption += `• Atur Harga Jual : Ketik *.strukharga [Harga]* (cth: *.strukharga 12000*)\n`;
+            caption += `• Struk Format Teks : Ketik *.strukteks*`;
+
+            return await sock.sendMessage(sender, {
+                document: pdfBuffer,
+                mimetype: 'application/pdf',
+                fileName: fileName,
+                caption: caption
+            });
+        } catch (err) {
+            console.error('[STRUK_PDF_ERROR]', err);
+            // Fallback ke teks jika generate PDF gagal
+            const textReceipt = receiptLib.generateTextReceipt(targetOrder, warungProfile, 32);
+            let reply = `🧾 *STRUK PEMBAYARAN THERMAL*\n\n`;
+            reply += `\`\`\`\n${textReceipt}\n\`\`\`\n\n`;
+            reply += `💡 *Kustomisasi Toko Warung:*\n`;
+            reply += `• Ganti Nama Toko : Ketik *.setnamatoko [Nama Warung]*\n`;
+            reply += `• Atur Harga Jual : Ketik *.strukharga [Harga]* (cth: *.strukharga 12000*)`;
+            return sock.sendMessage(sender, { text: reply });
+        }
     }
 
     // SET NAMA TOKO WARUNG UNTUK STRUK (.setnamatoko [Nama Warung])
@@ -1089,6 +1125,8 @@ if (txt === 'PROFIL') {
             t += `• *.batallangganan [ID]* : Berhenti berlangganan\n`;
             t += `• *.transfer [NoHP] [Nominal]* : Kirim saldo ke sesama member\n`;
             t += `• *.status [Invoice]* : Cek status / token transaksi\n`;
+            t += `• *.struk [Invoice]* : Kirim file PDF struk pembayaran resmi\n`;
+            t += `• *.kasbon* : Buku kasbon hutang warung\n`;
             t += `• *B* atau *0* : Batalkan transaksi kapan saja\n\n`;
             t += `🏪 *${db.store.namaToko || 'DIGITAL STORE'}* - Aman, Cepat, dan Otomatis.`;
             return sock.sendMessage(sender, { text: t });
