@@ -1500,7 +1500,7 @@ startBot();
 
 // Inisialisasi Engine Pemantau Langganan Otomatis (Auto-Order Worker)
 subLib.startSubscriptionWorker(
-    () => currentSock,
+    () => (global.sock || currentSock),
     () => global.botTg,
     () => config,
     (sock, order, isSaldo) => handleSuccessPayment(sock, order, isSaldo)
@@ -5717,7 +5717,7 @@ setInterval(() => {
 setInterval(async () => {
     try {
         if (typeof db === 'undefined' || !db.orders) return;
-        let botSock = typeof sock !== 'undefined' ? sock : global.sock;
+        let botSock = typeof sock !== 'undefined' ? sock : (global.sock || currentSock);
         if (!botSock) return;
 
         let ordersArray = Array.isArray(db.orders) ? db.orders : Object.values(db.orders);
@@ -5729,128 +5729,222 @@ setInterval(async () => {
         const configData = require('./config'); 
 
         for (let order of pendingOrders) {
-            // Anti-Conflict: Biarkan safeHitDigiflazz menyelesaikan siklus retry awalnya (< 45 detik)
-            const orderAge = Date.now() - (order.lastRetryAt || order.timestamp || 0);
-            if (orderAge < 45000) {
-                continue;
-            }
+            try {
+                // Anti-Conflict: Untuk langganan beri jeda 10s, untuk reguler 30s
+                const minAge = order.isSubscription ? 10000 : 30000;
+                const orderAge = Date.now() - (order.lastRetryAt || order.timestamp || 0);
+                if (orderAge < minAge) {
+                    continue;
+                }
 
-            // PRIORITAS: Gunakan OID asli dari Digiflazz yang baru kita tambal
-            let oid = order.digiflazz_oid || order.ref_id || order.invoice || order.oid || order.refId || order.id; 
-            if (!oid) continue;
+                // PRIORITAS: Gunakan OID asli dari Digiflazz yang baru kita tambal
+                let oid = order.digiflazz_oid || order.ref_id || order.invoice || order.oid || order.refId || order.id; 
+                if (!oid) continue;
 
-            const sign = crypto.createHash('md5').update(configData.digiflazz.username + configData.digiflazz.key + oid).digest('hex');
-            
-            let payload = {
-                username: configData.digiflazz.username,
-                buyer_sku_code: order.sku,
-                customer_no: order.target,
-                ref_id: oid,
-                sign: sign
-            };
-
-            const isPostpaid = !!order.isPasca || (order.sku && (String(order.sku).toLowerCase().startsWith('post') || String(order.sku).toLowerCase().includes('pasca')));
-
-            if (isPostpaid) {
-                payload.commands = 'status-pasca';
-            }
-
-            // LOGGING INTELIJEN: Tampilkan apa yang sedang dicek
-            const maskTrg = (t = '') => t.length > 6 ? t.slice(0, 4) + '****' + t.slice(-3) : t;
-            console.log(`[RADAR V4] 🔍 Mengecek OID: ${oid} | SKU: ${order.sku} | Pasca: ${isPostpaid} | Trg: ${maskTrg(order.target)}`);
-
-            const req = await fetch('https://api.digiflazz.com/v1/transaction', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const res = await req.json();
-
-            if (!res || !res.data) continue;
-
-            let status = res.data.status;
-            let sn = res.data.sn || res.data.message || '';
-            let buyerJid = order.buyer || order.sender || order.jid;
-            // 🧬 Normalisasi Dompet Utama
-            let realBuyerJid = buyerJid && typeof buyerJid === 'string' && buyerJid.includes(':') ? buyerJid.split(':')[0] + '@s.whatsapp.net' : buyerJid;
-
-            console.log(`[RADAR V4] 📡 Respon Digiflazz -> Status: ${status} | Ket: ${sn}`);
-
-            if (status === 'Sukses') {
-                order.status = 'success';
-                if (sn) order.sn = sn;
-                order.profit = analytics.calculateOrderProfit(order, db.ppob);
-                if (typeof db.saveOrders === 'function') db.saveOrders();
-
-                activeTransactions.delete(
-                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                );
+                const sign = crypto.createHash('md5').update(configData.digiflazz.username + configData.digiflazz.key + oid).digest('hex');
                 
+                let payload = {
+                    username: configData.digiflazz.username,
+                    buyer_sku_code: order.sku,
+                    customer_no: order.target,
+                    ref_id: oid,
+                    sign: sign
+                };
+
+                const isPostpaid = !!order.isPasca || (order.sku && (String(order.sku).toLowerCase().startsWith('post') || String(order.sku).toLowerCase().includes('pasca')));
+
                 if (isPostpaid) {
-                    let snText = sn ? `\n🧾 *No. Ref / SN:* \`${sn}\`` : '';
-                    await botSock.sendMessage(realBuyerJid || buyerJid, {
-                        text: `✅ *PEMBAYARAN PASCABAYAR BERHASIL*\n\n` +
-                              `📦 Layanan: *${order.item || order.sku}*\n` +
-                              `🎯 ID Pelanggan: *${order.target}*\n` +
-                              `💰 Total Bayar: *${formatRupiah(order.baseAmount || order.total || 0)}*` +
-                              `${snText}\n\n` +
-                              `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
-                    });
-                } else {
+                    payload.commands = 'status-pasca';
+                }
+
+                // LOGGING INTELIJEN: Tampilkan apa yang sedang dicek
+                const maskTrg = (t = '') => t.length > 6 ? t.slice(0, 4) + '****' + t.slice(-3) : t;
+                console.log(`[RADAR V4] 🔍 Mengecek OID: ${oid} | SKU: ${order.sku} | Subs: ${!!order.isSubscription} | Trg: ${maskTrg(order.target)}`);
+
+                const req = await fetch('https://api.digiflazz.com/v1/transaction', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const res = await req.json();
+
+                if (!res || !res.data) continue;
+
+                let status = res.data.status;
+                let sn = res.data.sn || res.data.message || '';
+                let buyerJid = order.buyer || order.sender || order.jid;
+                // 🧬 Normalisasi Dompet Utama
+                let realBuyerJid = buyerJid && typeof buyerJid === 'string' && buyerJid.includes(':') ? buyerJid.split(':')[0] + '@s.whatsapp.net' : buyerJid;
+
+                console.log(`[RADAR V4] 📡 Respon Digiflazz -> Status: ${status} | Ket: ${sn}`);
+
+                if (status === 'Sukses') {
+                    order.status = 'success';
+                    if (sn) order.sn = sn;
+                    order.profit = analytics.calculateOrderProfit(order, db.ppob);
+                    if (typeof db.saveOrders === 'function') db.saveOrders();
+
+                    activeTransactions.delete(
+                        (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+                    );
+
                     const rawSn = sn || order.sn || '';
                     const plnData = formatPlnToken(rawSn);
-                    const storeName = db.store.namaToko || 'DIGITAL STORE';
+                    const storeName = db.store?.namaToko || 'DIGITAL STORE';
                     const timeStr = getTanggalLengkap(order.timestamp || Date.now());
 
-                    if (plnData) {
-                        let plnMsg = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
-                                     `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
-                                     `\`${plnData.token}\`\n` +
-                                     `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
-                        if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
-                        if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
-                        if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n`;
-                        plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
-                                  `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
-                                  `🕒 Waktu           : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
-                        await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg });
-                    } else {
+                    // 🔄 JIKA PESANAN BERASAL DARI SIKLUS LANGGANAN OTOMATIS:
+                    if (order.isSubscription) {
+                        try {
+                            const subId = order.subscriptionId;
+                            const sub = (db.subscriptions || []).find(s => s.id === subId);
+                            if (sub) {
+                                if (!Array.isArray(sub.history)) sub.history = [];
+                                const matchH = sub.history.find(h => h.orderId === order.id || h.cycle === order.cycle);
+                                if (matchH) {
+                                    matchH.status = 'success';
+                                    matchH.sn = rawSn;
+                                } else {
+                                    sub.history.push({
+                                        cycle: order.cycle || sub.currentCycle || 1,
+                                        date: Date.now(),
+                                        orderId: order.id,
+                                        status: 'success',
+                                        amount: order.baseAmount || order.total || 0,
+                                        sn: rawSn
+                                    });
+                                }
+                                if (typeof db.saveSubscriptions === 'function') db.saveSubscriptions();
+                            }
+                        } catch (subSaveErr) {
+                            console.error('[RADAR SUBS HISTORY ERR]', subSaveErr.message);
+                        }
+
+                        if (plnData) {
+                            let plnMsg = `⚡ *KODE TOKEN LISTRIK (LANGGANAN)*\n\n` +
+                                         `Perpanjangan otomatis Anda telah sukses diproses oleh provider:\n` +
+                                         `• Produk    : *${order.item || order.sku}*\n` +
+                                         `• Tujuan    : \`${order.target}\`\n` +
+                                         `• Siklus    : *Siklus ${order.cycle || 1}*\n` +
+                                         `• Invoice   : \`${order.id}\`\n\n` +
+                                         `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
+                                         `\`${plnData.token}\`\n` +
+                                         `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
+                            if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
+                            if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
+                            if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n\n`;
+                            plnMsg += `🕒 Waktu           : ${timeStr}\n\n` +
+                                      `_Terima kasih telah berlangganan di *${storeName}*!_\n\n` +
+                                      `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
+                            await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg }).catch(() => {});
+                        } else {
+                            let subSnMsg = `🧾 *SERIAL NUMBER (SN) LANGGANAN*\n\n` +
+                                           `Perpanjangan otomatis Anda telah sukses diproses oleh provider:\n` +
+                                           `• Produk    : *${order.item || order.sku}*\n` +
+                                           `• Tujuan    : \`${order.target}\`\n` +
+                                           `• Siklus    : *Siklus ${order.cycle || 1}*\n` +
+                                           `• Invoice   : \`${order.id}\`\n\n` +
+                                           `🧾 *SN / HASIL PROVIDER:*\n` +
+                                           `\`${formatDigiflazzMessage(rawSn)}\`\n\n` +
+                                           `🕒 Waktu    : ${timeStr}\n\n` +
+                                           `_Terima kasih telah berlangganan di *${storeName}*!_\n\n` +
+                                           `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
+                            await botSock.sendMessage(realBuyerJid || buyerJid, { text: subSnMsg }).catch(() => {});
+                        }
+                    } else if (isPostpaid) {
+                        let snText = sn ? `\n🧾 *No. Ref / SN:* \`${sn}\`` : '';
                         await botSock.sendMessage(realBuyerJid || buyerJid, {
-                            text: `✅ *TRANSAKSI BERHASIL*\n\n` +
-                                  `📦 Produk   : *${order.item || order.sku}*\n` +
-                                  `🎯 Tujuan   : *${order.target}*\n` +
-                                  `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
-                                  `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
-                                  `🕒 Waktu    : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`
-                        });
+                            text: `✅ *PEMBAYARAN PASCABAYAR BERHASIL*\n\n` +
+                                  `📦 Layanan: *${order.item || order.sku}*\n` +
+                                  `🎯 ID Pelanggan: *${order.target}*\n` +
+                                  `💰 Total Bayar: *${formatRupiah(order.baseAmount || order.total || 0)}*` +
+                                  `${snText}\n\n` +
+                                  `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
+                        }).catch(() => {});
+                    } else {
+                        if (plnData) {
+                            let plnMsg = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
+                                         `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
+                                         `\`${plnData.token}\`\n` +
+                                         `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
+                            if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
+                            if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
+                            if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n`;
+                            plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
+                                      `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
+                                      `🕒 Waktu           : ${timeStr}\n\n` +
+                                      `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                                      `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
+                            await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg }).catch(() => {});
+                        } else {
+                            await botSock.sendMessage(realBuyerJid || buyerJid, {
+                                text: `✅ *TRANSAKSI BERHASIL*\n\n` +
+                                      `📦 Produk   : *${order.item || order.sku}*\n` +
+                                      `🎯 Tujuan   : *${order.target}*\n` +
+                                      `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
+                                      `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
+                                      `🕒 Waktu    : ${timeStr}\n\n` +
+                                      `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                                      `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`
+                            }).catch(() => {});
+                        }
+                    }
+                    console.log(`[RADAR V4] ✅ Sukses! Pesan terkirim untuk OID: ${oid}`);
+                } 
+                else if (status === 'Gagal') {
+                    // PERISAI ANTI-REFUND PALSU:
+                    // Jika error karena kunci salah atau OID tidak ditemukan, abaikan jika masih baru!
+                    if (sn.includes("tidak ditemukan") || sn.includes("Signature") || sn.includes("Gagal memproses")) {
+                        // Jika order sudah sangat lama (> 30 menit) dan SKU tidak valid/dummy, tutup agar tidak membebani antrean
+                        if (orderAge > 30 * 60 * 1000) {
+                            order.status = 'failed';
+                            if (typeof db.saveOrders === 'function') db.saveOrders();
+                            console.log(`[RADAR V4] 🧹 Menutup order kedaluwarsa/dummy ${oid} (${order.sku}) agar radar bersih.`);
+                        } else {
+                            console.log("[RADAR V4] ⚠️ Mengabaikan Gagal palsu karena OID lama.");
+                        }
+                        continue; 
+                    }
+
+                    activeTransactions.delete(
+                        (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+                    );
+
+                    const refundRes = db.refundOrder(order, sn || 'Gagal dari server Digiflazz');
+                    if (refundRes.success) {
+                        // Jika langganan, pulihkan siklus
+                        if (order.isSubscription) {
+                            try {
+                                const sub = (db.subscriptions || []).find(s => s.id === order.subscriptionId);
+                                if (sub) {
+                                    if (sub.status === 'completed') sub.status = 'active';
+                                    sub.failCount = (sub.failCount || 0) + 1;
+                                    sub.nextRunAt = Date.now() + (24 * 60 * 60 * 1000);
+                                    if (Array.isArray(sub.history)) {
+                                        const hMatch = sub.history.find(h => h.orderId === order.id || h.cycle === order.cycle);
+                                        if (hMatch) { hMatch.status = 'failed'; hMatch.sn = sn || 'Gagal'; }
+                                    }
+                                    if (typeof db.saveSubscriptions === 'function') db.saveSubscriptions();
+                                }
+                            } catch (_) {}
+                        }
+
+                        await botSock.sendMessage(refundRes.buyerJid, { 
+                            text: `❌ *PPOB GAGAL*\n\n` +
+                                  `Produk : ${order.item || order.sku}\n` +
+                                  `Tujuan : ${order.target}\n` +
+                                  `Alasan : ${sn}\n\n` +
+                                  `💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.` 
+                        }).catch(() => {});
+                        console.log(`[RADAR V4] ❌ Gagal asli! Saldo Rp ${refundRes.amount} di-refund ke ${refundRes.buyerJid}.`);
                     }
                 }
-                console.log("[RADAR V4] ✅ Sukses! Pesan terkirim.");
-            } 
-            else if (status === 'Gagal') {
-                // PERISAI ANTI-REFUND PALSU:
-                // Jika error karena kunci salah atau OID tidak ditemukan, abaikan! Jangan refund!
-                if (sn.includes("tidak ditemukan") || sn.includes("Signature") || sn.includes("Gagal memproses")) {
-                    console.log("[RADAR V4] ⚠️ Mengabaikan Gagal palsu karena OID lama.");
-                    continue; 
-                }
-
-                activeTransactions.delete(
-                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                );
-
-                const refundRes = db.refundOrder(order, sn || 'Gagal dari server Digiflazz');
-                if (refundRes.success) {
-                    await botSock.sendMessage(refundRes.buyerJid, { text: `❌  *PPOB GAGAL*\n\nProduk: ${order.item || order.sku}\nTujuan: ${order.target}\nAlasan: ${sn}\n\n💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.` });
-                    console.log(`[RADAR V4] ❌ Gagal asli! Saldo Rp ${refundRes.amount} di-refund ke ${refundRes.buyerJid}.`);
-                }
+            } catch (orderErr) {
+                console.error(`[RADAR V4 ORDER ERR] OID: ${order.id}:`, orderErr.message);
             }
         }
     } catch (e) {
         // Mode senyap untuk error jaringan
     }
 }, 10000);
+

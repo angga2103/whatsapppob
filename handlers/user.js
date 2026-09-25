@@ -2245,6 +2245,11 @@ if (txt === 'PROFIL') {
             if (typeof paymentHandler === 'function') {
                 try {
                     await paymentHandler(sock, order, true);
+                    if (order.sn && newSub.history && newSub.history[0]) {
+                        newSub.history[0].sn = order.sn;
+                        newSub.history[0].status = order.status || 'success';
+                        db.saveSubscriptions();
+                    }
                 } catch (e) {
                     console.error('[SUBS INITIAL EXECUTION ERROR]', e.message);
                 }
