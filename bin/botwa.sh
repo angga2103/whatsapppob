@@ -886,9 +886,57 @@ cmd_reset_whatsapp() {
 # 11. Update Bot ke Versi Terbaru
 cmd_update() {
     echo -e "\n${CYAN}🚀 MEMPERBARUI BOT DARI GITHUB...${NC}"
+
+    # 1. Lindungi pengaturan aktif (Telegram, Gateway, .env) sebelum update
+    echo -e "${YELLOW}1. Mengamankan konfigurasi Telegram & database...${NC}"
+    node -e "
+        const fs = require('fs');
+        const path = require('path');
+        const bDir = './system/.cli_update_backup';
+        if (!fs.existsSync(bDir)) fs.mkdirSync(bDir, { recursive: true });
+        ['./database/settings.json', './database/settings.backup.json', './.env'].forEach(f => {
+            if (fs.existsSync(f)) {
+                try { fs.copyFileSync(f, path.join(bDir, path.basename(f))); } catch(_) {}
+            }
+        });
+    " 2>/dev/null
+
+    # 2. Tarik kode terbaru dari GitHub
+    echo -e "${CYAN}2. Mengunduh pembaharuan dari repositori Git...${NC}"
     git stash 2>/dev/null || true
     git pull origin main
     npm install --no-audit --no-fund
+
+    # 3. Pulihkan kembali konfigurasi agar tidak ter-reset
+    echo -e "${YELLOW}3. Memulihkan kredensial Telegram & konfigurasi server...${NC}"
+    node -e "
+        const fs = require('fs');
+        const path = require('path');
+        const bDir = './system/.cli_update_backup';
+        ['./database/settings.json', './database/settings.backup.json', './.env'].forEach(f => {
+            const bFile = path.join(bDir, path.basename(f));
+            if (fs.existsSync(bFile)) {
+                try {
+                    if (f.endsWith('.json')) {
+                        const saved = JSON.parse(fs.readFileSync(bFile, 'utf8'));
+                        let cur = {};
+                        if (fs.existsSync(f)) {
+                            try { cur = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_) {}
+                        }
+                        const merged = { ...cur, ...saved };
+                        fs.writeFileSync(f, JSON.stringify(merged, null, 2), 'utf8');
+                    } else {
+                        // .env: pertahankan file .env lama
+                        fs.copyFileSync(bFile, f);
+                    }
+                } catch(_) {}
+            }
+        });
+    " 2>/dev/null
+
+    # 4. Hapus git stash usang agar tidak menimpa pengaturan di kemudian hari
+    git stash clear 2>/dev/null || true
+
     chmod +x "$APP_DIR/bin/botwa.sh" 2>/dev/null || true
     ln -sf "$APP_DIR/bin/botwa.sh" /usr/local/bin/botwa 2>/dev/null || true
     ln -sf "$APP_DIR/bin/botwa.sh" /usr/bin/botwa 2>/dev/null || true

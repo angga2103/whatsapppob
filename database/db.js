@@ -122,7 +122,7 @@ const recoverSettings = () => {
             const envToken = (envConfig.TELEGRAM_TOKEN || '').trim();
             const envChatId = (envConfig.TELEGRAM_CHAT_ID || '').trim();
             const envStat = fs.statSync(envPath);
-            const settingsFile = path.resolve(__dirname, 'settings.json');
+            const settingsFile = path.resolve(__dirname, '..', 'database', 'settings.json');
             const settingsStat = fs.existsSync(settingsFile) ? fs.statSync(settingsFile) : { mtimeMs: 0 };
 
             // Jika token di .env valid dan bukan token lama
@@ -170,7 +170,7 @@ const recoverSettings = () => {
                             settings.paymentGateway = stashedObj.paymentGateway;
                         }
                         if (stashedObj.telegram?.token && !stashedObj.telegram.token.startsWith('8470095940')) {
-                            if (!settings.telegram?.token) {
+                            if (!settings.telegram?.token || settings.telegram.token.startsWith('8470095940')) {
                                 settings.telegram = stashedObj.telegram;
                                 console.log(`[RECOVERY] 🛡️ Berhasil memulihkan Telegram bot dari git stash@{${i}}!`);
                             }
