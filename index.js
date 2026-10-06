@@ -1686,7 +1686,7 @@ function initTelegramBot() {
 
         const maskSecret = (str = '') => (str && str.length > 8 ? str.slice(0, 4) + '••••' + str.slice(-4) : (str ? '••••••••' : '-'));
 
-        const cleanMd = (str = '') => String(str || '').replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+        const cleanMd = (str = '') => String(str || '').replace(/([_*`\[])/g, '\\$1');
 
         const normalizePhone = (raw) => {
             let p = String(raw || '').replace(/[^0-9]/g, '');
@@ -1869,7 +1869,7 @@ function initTelegramBot() {
         };
 
         const renderMemberSubscriptions = (phone) => {
-            const found = findMemberByQuery(phone);
+            const found = findMember(phone);
             if (!found) {
                 return {
                     text: `❌ Member dengan nomor \`${phone}\` tidak ditemukan.`,
