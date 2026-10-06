@@ -27,11 +27,55 @@ const mutex = require('./lib/mutex');
 // 🌐 EXPRESS WEB SERVER (STRUK DIGITAL & HEALTH)
 // ========================================
 const app = express();
-app.use(express.json());
+// Simple In-Memory Rate Limiter untuk proteksi scraping Web Struk
+const strukRateLimit = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 menit
+const MAX_REQUESTS_PER_WINDOW = 30; // Maksimal 30 request/menit/IP
+
+const checkRateLimit = (ip) => {
+    const now = Date.now();
+    const record = strukRateLimit.get(ip) || { count: 0, resetTime: now + RATE_LIMIT_WINDOW };
+    if (now > record.resetTime) {
+        record.count = 1;
+        record.resetTime = now + RATE_LIMIT_WINDOW;
+    } else {
+        record.count++;
+    }
+    strukRateLimit.set(ip, record);
+    // Pembersihan entri usang berkala
+    if (strukRateLimit.size > 2000) {
+        for (const [k, v] of strukRateLimit.entries()) {
+            if (now > v.resetTime) strukRateLimit.delete(k);
+        }
+    }
+    return record.count <= MAX_REQUESTS_PER_WINDOW;
+};
 
 app.get('/struk/:orderId', async (req, res) => {
     try {
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.remoteAddress || '127.0.0.1';
+        if (!checkRateLimit(clientIp)) {
+            return res.status(429).send(`
+                <!DOCTYPE html><html><head><meta charset="utf-8"><title>Terlalu Banyak Permintaan</title></head>
+                <body style="font-family:sans-serif;text-align:center;padding:50px;background:#f8fafc;color:#e11d48;">
+                    <h2>⚠️ Terlalu Banyak Permintaan (429)</h2>
+                    <p>Mohon tunggu 1 menit sebelum mengakses struk kembali demi alasan keamanan.</p>
+                </body></html>
+            `);
+        }
+
         let orderId = String(req.params.orderId || '').trim();
+        // Validasi format nomor referensi order aman (hanya alfanumerik, dash, dan underscore)
+        if (!/^[a-zA-Z0-9_\-\.]{4,60}$/.test(orderId)) {
+            return res.status(400).send(`
+                <!DOCTYPE html><html><head><meta charset="utf-8"><title>Format Tidak Valid</title></head>
+                <body style="font-family:sans-serif;text-align:center;padding:50px;background:#f8fafc;color:#e11d48;">
+                    <h2>⚠️ Format Tidak Valid (400)</h2>
+                    <p>Nomor referensi struk mengandung karakter tidak sah.</p>
+                </body></html>
+            `);
+        }
+
         const asPdf = req.query.pdf === '1' || orderId.toLowerCase().endsWith('.pdf');
         if (orderId.toLowerCase().endsWith('.pdf')) {
             orderId = orderId.slice(0, -4);

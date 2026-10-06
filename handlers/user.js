@@ -520,7 +520,7 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         }
 
         try {
-            const pdfBuffer = await receiptLib.generatePdfReceiptBuffer(targetOrder, warungProfile);
+            const pdfBuffer = await receiptLib.generatePdfReceiptBuffer(targetOrder, warungProfile, { unmasked: true });
             const invName = targetOrder.id || targetOrder.oid || 'TRX';
             const fileName = `Struk-${invName}.pdf`;
 
