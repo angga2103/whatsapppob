@@ -170,21 +170,22 @@ get_telegram_status() {
             if (fs.existsSync('./system/bot-status.json')) {
                 try { st = JSON.parse(fs.readFileSync('./system/bot-status.json', 'utf8')); } catch(_) {}
             }
+            const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
             let token = '';
             if (fs.existsSync('./database/settings.json')) {
                 try {
                     const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
-                    token = s.telegram?.token || '';
+                    if (isValid(s.telegram?.token)) token = s.telegram.token;
                 } catch(_) {}
             }
             if (!token && fs.existsSync('./.env')) {
                 try {
                     const m = fs.readFileSync('./.env', 'utf8').match(/^TELEGRAM_TOKEN=(.*)$/m);
-                    if (m) token = m[1].trim();
+                    if (m && isValid(m[1].trim())) token = m[1].trim();
                 } catch(_) {}
             }
             const tg = st.telegram || {};
-            const hasToken = Boolean(token && token.includes(':') && !token.startsWith('8470095940'));
+            const hasToken = isValid(token);
 
             if (!hasToken) {
                 console.log('DISABLED|Token belum diatur');
@@ -327,16 +328,17 @@ cmd_restart() {
     node -e "
         const https = require('https');
         const fs = require('fs');
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
         let token = '';
         try {
             const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
-            token = s.telegram?.token || '';
+            if (isValid(s.telegram?.token)) token = s.telegram.token;
         } catch(_) {}
         if (!token && fs.existsSync('./.env')) {
             const m = fs.readFileSync('./.env', 'utf8').match(/^TELEGRAM_TOKEN=(.*)$/m);
-            if (m) token = m[1].trim();
+            if (m && isValid(m[1].trim())) token = m[1].trim();
         }
-        if (token && token.includes(':') && !token.startsWith('8470095940')) {
+        if (isValid(token)) {
             https.get('https://api.telegram.org/bot' + token + '/deleteWebhook?drop_pending_updates=true', res => {
                 res.on('data', () => {});
             }).on('error', () => {});
@@ -344,7 +346,8 @@ cmd_restart() {
     " 2>/dev/null
 
     cd "$APP_DIR" || exit 1
-    pm2 restart bot-ppob 2>/dev/null || pm2 start index.js --name bot-ppob
+    local PNAME=$(get_pm2_process_name)
+    pm2 restart "$PNAME" 2>/dev/null || pm2 restart bot-ppob 2>/dev/null || pm2 start index.js --name bot-ppob
     pm2 save 2>/dev/null || true
     echo -e "${GREEN}✅ Seluruh sistem bot berhasil direstart secara bersih!${NC}"
     sleep 2
@@ -374,16 +377,17 @@ cmd_restart_tg() {
     node -e "
         const https = require('https');
         const fs = require('fs');
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
         let token = '';
         try {
             const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
-            token = s.telegram?.token || '';
+            if (isValid(s.telegram?.token)) token = s.telegram.token;
         } catch(_) {}
         if (!token && fs.existsSync('./.env')) {
             const m = fs.readFileSync('./.env', 'utf8').match(/^TELEGRAM_TOKEN=(.*)$/m);
-            if (m) token = m[1].trim();
+            if (m && isValid(m[1].trim())) token = m[1].trim();
         }
-        if (token && token.includes(':') && !token.startsWith('8470095940')) {
+        if (isValid(token)) {
             https.get('https://api.telegram.org/bot' + token + '/deleteWebhook?drop_pending_updates=false', res => {
                 res.on('data', () => {});
             }).on('error', () => {});
@@ -406,21 +410,24 @@ cmd_test_tg() {
     node -e "
         const https = require('https');
         const fs = require('fs');
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
         let token = '', chatId = '';
         try {
             const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
-            token = s.telegram?.token || '';
-            chatId = s.telegram?.chatId || '';
+            if (isValid(s.telegram?.token)) {
+                token = s.telegram.token;
+                chatId = s.telegram?.chatId || '';
+            }
         } catch(_) {}
         if (!token && fs.existsSync('./.env')) {
             const env = fs.readFileSync('./.env', 'utf8');
             const mT = env.match(/^TELEGRAM_TOKEN=(.*)$/m);
             const mC = env.match(/^TELEGRAM_CHAT_ID=(.*)$/m);
-            if (mT) token = mT[1].trim();
+            if (mT && isValid(mT[1].trim())) token = mT[1].trim();
             if (mC) chatId = mC[1].trim();
         }
 
-        if (!token || !token.includes(':') || token.startsWith('8470095940')) {
+        if (!isValid(token)) {
             console.log('❌ Token Telegram belum diatur atau tidak valid di settings.json / .env!');
             process.exit(0);
         }
@@ -615,23 +622,26 @@ cmd_change_telegram() {
     local cur_info=$(node -e "
         try {
             const fs = require('fs');
+            const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
             let token = '', chatId = '';
             if (fs.existsSync('./database/settings.json')) {
                 try {
                     const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
-                    token = s.telegram?.token || '';
-                    chatId = s.telegram?.chatId || '';
+                    if (isValid(s.telegram?.token)) {
+                        token = s.telegram.token;
+                        chatId = s.telegram?.chatId || '';
+                    }
                 } catch(_) {}
             }
             if (!token && fs.existsSync('./.env')) {
                 const env = fs.readFileSync('./.env', 'utf8');
                 const mT = env.match(/^TELEGRAM_TOKEN=(.*)$/m);
                 const mC = env.match(/^TELEGRAM_CHAT_ID=(.*)$/m);
-                if (mT) token = mT[1].trim();
+                if (mT && isValid(mT[1].trim())) token = mT[1].trim();
                 if (mC) chatId = mC[1].trim();
             }
-            const masked = token.length > 10 ? token.slice(0, 6) + '••••' + token.slice(-4) : '(belum ada)';
-            console.log(token + '|' + masked + '|' + chatId);
+            const masked = (isValid(token) && token.length > 10) ? token.slice(0, 6) + '••••' + token.slice(-4) : '(belum ada)';
+            console.log((isValid(token) ? token : '') + '|' + masked + '|' + chatId);
         } catch(_) {
             console.log('||');
         }
@@ -913,25 +923,91 @@ cmd_update() {
         const fs = require('fs');
         const path = require('path');
         const bDir = './system/.cli_update_backup';
-        ['./database/settings.json', './database/settings.backup.json', './.env'].forEach(f => {
+
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+
+        // 1. Pulihkan .env lama terlebih dahulu jika ada
+        const bEnv = path.join(bDir, '.env');
+        if (fs.existsSync(bEnv)) {
+            try { fs.copyFileSync(bEnv, './.env'); } catch(_) {}
+        }
+
+        // Baca token dan chatId dari .env
+        let envToken = '', envChatId = '';
+        if (fs.existsSync('./.env')) {
+            const envStr = fs.readFileSync('./.env', 'utf8');
+            const mT = envStr.match(/^TELEGRAM_TOKEN=(.*)$/m);
+            const mC = envStr.match(/^TELEGRAM_CHAT_ID=(.*)$/m);
+            if (mT) envToken = mT[1].trim();
+            if (mC) envChatId = mC[1].trim();
+        }
+
+        // 2. Pulihkan & gabungkan settings.json dan settings.backup.json
+        ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
             const bFile = path.join(bDir, path.basename(f));
+            let saved = {};
             if (fs.existsSync(bFile)) {
-                try {
-                    if (f.endsWith('.json')) {
-                        const saved = JSON.parse(fs.readFileSync(bFile, 'utf8'));
-                        let cur = {};
-                        if (fs.existsSync(f)) {
-                            try { cur = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_) {}
-                        }
-                        const merged = { ...cur, ...saved };
-                        fs.writeFileSync(f, JSON.stringify(merged, null, 2), 'utf8');
-                    } else {
-                        // .env: pertahankan file .env lama
-                        fs.copyFileSync(bFile, f);
-                    }
-                } catch(_) {}
+                try { saved = JSON.parse(fs.readFileSync(bFile, 'utf8')); } catch(_) {}
             }
+            let cur = {};
+            if (fs.existsSync(f)) {
+                try { cur = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_) {}
+            }
+
+            const merged = { ...cur, ...saved };
+
+            // Tentukan kredensial telegram terbaik (tidak boleh dummy)
+            let bestToken = '';
+            let bestChatId = '';
+            if (isValid(saved.telegram?.token)) {
+                bestToken = saved.telegram.token;
+                bestChatId = saved.telegram.chatId || '';
+            } else if (isValid(cur.telegram?.token)) {
+                bestToken = cur.telegram.token;
+                bestChatId = cur.telegram.chatId || '';
+            } else if (isValid(envToken)) {
+                bestToken = envToken;
+                bestChatId = envChatId;
+            }
+
+            if (!bestChatId && envChatId) bestChatId = envChatId;
+
+            merged.telegram = {
+                token: bestToken,
+                chatId: bestChatId
+            };
+
+            // Pertahankan gateway & digiflazz
+            if (saved.digiflazz?.username) merged.digiflazz = saved.digiflazz;
+            if (saved.paymentkita?.merchantId) merged.paymentkita = saved.paymentkita;
+            if (saved.pakasir?.project) merged.pakasir = saved.pakasir;
+            if (saved.paymentGateway) merged.paymentGateway = saved.paymentGateway;
+
+            fs.writeFileSync(f, JSON.stringify(merged, null, 2), 'utf8');
         });
+
+        // 3. Sinkronkan token terbaik ke .env jika .env belum punya token valid
+        if (fs.existsSync('./.env') && !isValid(envToken)) {
+            try {
+                const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
+                if (isValid(s.telegram?.token)) {
+                    let eStr = fs.readFileSync('./.env', 'utf8');
+                    if (/^TELEGRAM_TOKEN=/m.test(eStr)) {
+                        eStr = eStr.replace(/^TELEGRAM_TOKEN=.*/m, 'TELEGRAM_TOKEN=' + s.telegram.token);
+                    } else {
+                        eStr += '\nTELEGRAM_TOKEN=' + s.telegram.token;
+                    }
+                    if (s.telegram.chatId) {
+                        if (/^TELEGRAM_CHAT_ID=/m.test(eStr)) {
+                            eStr = eStr.replace(/^TELEGRAM_CHAT_ID=.*/m, 'TELEGRAM_CHAT_ID=' + s.telegram.chatId);
+                        } else {
+                            eStr += '\nTELEGRAM_CHAT_ID=' + s.telegram.chatId;
+                        }
+                    }
+                    fs.writeFileSync('./.env', eStr.trim() + '\n', 'utf8');
+                }
+            } catch(_) {}
+        }
     " 2>/dev/null
 
     # 4. Hapus git stash usang agar tidak menimpa pengaturan di kemudian hari
