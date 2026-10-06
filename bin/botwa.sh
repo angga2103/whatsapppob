@@ -897,16 +897,49 @@ cmd_reset_whatsapp() {
 cmd_update() {
     echo -e "\n${CYAN}🚀 MEMPERBARUI BOT DARI GITHUB...${NC}"
 
-    # 1. Lindungi pengaturan aktif (Telegram, Gateway, .env) sebelum update
-    echo -e "${YELLOW}1. Mengamankan konfigurasi Telegram & database...${NC}"
+    # 1. Lindungi pengaturan aktif (Telegram, Gateway, Produk Digital, Database) sebelum update
+    echo -e "${YELLOW}1. Mengamankan konfigurasi Telegram, produk digital & database...${NC}"
     node -e "
         const fs = require('fs');
         const path = require('path');
         const bDir = './system/.cli_update_backup';
+        const uDir = './system/.update_backup';
         if (!fs.existsSync(bDir)) fs.mkdirSync(bDir, { recursive: true });
-        ['./database/settings.json', './database/settings.backup.json', './.env'].forEach(f => {
+        if (!fs.existsSync(uDir)) fs.mkdirSync(uDir, { recursive: true });
+
+        const targets = [
+            'database/settings.json',
+            'database/settings.backup.json',
+            'database/menu.json',
+            'database/menu.backup.json',
+            'database/store.json',
+            'database/store.backup.json',
+            'database/ppob.json',
+            'database/ppob.backup.json',
+            'database/postpaid.json',
+            'database/postpaid.backup.json',
+            'database/users.json',
+            'database/users.backup.json',
+            'database/orders.json',
+            'database/orders.backup.json',
+            'database/deposits.json',
+            'database/deposits.backup.json',
+            'database/debts.json',
+            'database/debts.backup.json',
+            'database/subscriptions.json',
+            'database/subscriptions.backup.json',
+            'database/subscription_catalog.json',
+            'database/subscription_catalog.backup.json',
+            '.env'
+        ];
+
+        targets.forEach(f => {
             if (fs.existsSync(f)) {
-                try { fs.copyFileSync(f, path.join(bDir, path.basename(f))); } catch(_) {}
+                try {
+                    const content = fs.readFileSync(f);
+                    fs.writeFileSync(path.join(bDir, path.basename(f)), content);
+                    fs.writeFileSync(path.join(uDir, path.basename(f)), content);
+                } catch(_) {}
             }
         });
     " 2>/dev/null
@@ -918,7 +951,7 @@ cmd_update() {
     npm install --no-audit --no-fund
 
     # 3. Pulihkan kembali konfigurasi agar tidak ter-reset
-    echo -e "${YELLOW}3. Memulihkan kredensial Telegram & konfigurasi server...${NC}"
+    echo -e "${YELLOW}3. Memulihkan kredensial, produk digital & konfigurasi server...${NC}"
     node -e "
         const fs = require('fs');
         const path = require('path');
@@ -986,7 +1019,59 @@ cmd_update() {
             fs.writeFileSync(f, JSON.stringify(merged, null, 2), 'utf8');
         });
 
-        // 3. Sinkronkan token terbaik ke .env jika .env belum punya token valid
+        // 3. Pulihkan PRODUK DIGITAL (menu.json & menu.backup.json)
+        const bMenu = path.join(bDir, 'menu.json');
+        if (fs.existsSync(bMenu)) {
+            try {
+                const savedMenu = JSON.parse(fs.readFileSync(bMenu, 'utf8'));
+                if (Array.isArray(savedMenu) && savedMenu.length > 0) {
+                    fs.writeFileSync('./database/menu.json', JSON.stringify(savedMenu, null, 2), 'utf8');
+                    fs.writeFileSync('./database/menu.backup.json', JSON.stringify(savedMenu, null, 2), 'utf8');
+                }
+            } catch(_) {}
+        }
+
+        // 4. Pulihkan PENGATURAN TOKO (store.json & store.backup.json)
+        const bStore = path.join(bDir, 'store.json');
+        if (fs.existsSync(bStore)) {
+            try {
+                const savedStore = JSON.parse(fs.readFileSync(bStore, 'utf8'));
+                if (savedStore && typeof savedStore === 'object') {
+                    fs.writeFileSync('./database/store.json', JSON.stringify(savedStore, null, 2), 'utf8');
+                    fs.writeFileSync('./database/store.backup.json', JSON.stringify(savedStore, null, 2), 'utf8');
+                }
+            } catch(_) {}
+        }
+
+        // 5. Pulihkan DATA RUNTIME LAINNYA (users, orders, deposits, debts, ppob, postpaid, subscriptions)
+        const otherDataFiles = [
+            'ppob.json',
+            'postpaid.json',
+            'users.json',
+            'orders.json',
+            'deposits.json',
+            'debts.json',
+            'subscriptions.json',
+            'subscription_catalog.json'
+        ];
+
+        otherDataFiles.forEach(df => {
+            const bdf = path.join(bDir, df);
+            if (fs.existsSync(bdf)) {
+                try {
+                    const raw = fs.readFileSync(bdf, 'utf8');
+                    const parsed = JSON.parse(raw);
+                    const isNonEmpty = Array.isArray(parsed) ? parsed.length > 0 : Object.keys(parsed).length > 0;
+                    if (isNonEmpty) {
+                        fs.writeFileSync(path.join('./database', df), JSON.stringify(parsed, null, 2), 'utf8');
+                        const backupName = df.replace(/\.json$/, '.backup.json');
+                        fs.writeFileSync(path.join('./database', backupName), JSON.stringify(parsed, null, 2), 'utf8');
+                    }
+                } catch(_) {}
+            }
+        });
+
+        // 6. Sinkronkan token terbaik ke .env jika .env belum punya token valid
         if (fs.existsSync('./.env') && !isValid(envToken)) {
             try {
                 const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));

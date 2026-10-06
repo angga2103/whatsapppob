@@ -480,26 +480,241 @@ const recoverSubscriptions = () => {
     return subs;
 };
 
+const recoverMenu = () => {
+    let menu = safeReadJson('./database/menu.json', []);
+    const backupPath = './database/menu.backup.json';
+    const snapshotPaths = [
+        './database/menu.backup.json',
+        './system/.cli_update_backup/menu.json',
+        './system/.update_backup/menu.json'
+    ];
+
+    const isDefaultRepoMenu = (list) => {
+        if (!Array.isArray(list) || list.length !== 7) return false;
+        const defaultNames = ['Alight Motion 1 Tahun', 'Vidio Platinum TV', 'VIU Premium 1 Tahun', 'Netflix Premium 1 Bulan', 'APPLE MUSIC  Famhead 1 Bulan ', 'Link Redeem ChatGPT GO 3B', 'AI GEMINI INVITE 1 TAHUN '];
+        const matchCount = list.filter(item => item && defaultNames.includes(item.nama) && (!item.dataAkun || item.dataAkun.length === 0)).length;
+        return matchCount >= 6;
+    };
+
+    // 1. Cek file backup & snapshot jika menu saat ini kosong atau berupa template default repo
+    if (!Array.isArray(menu) || menu.length === 0 || isDefaultRepoMenu(menu)) {
+        for (const bp of snapshotPaths) {
+            try {
+                if (fs.existsSync(bp)) {
+                    const bData = safeReadJson(bp, []);
+                    if (Array.isArray(bData) && bData.length > 0 && !isDefaultRepoMenu(bData)) {
+                        menu = bData;
+                        console.log(`[MENU-RECOVERY] ♻️ Produk digital berhasil dipulihkan dari backup: ${bp} (${menu.length} produk)!`);
+                        break;
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+
+    // 2. Cek git stash jika masih kosong atau default
+    if (!Array.isArray(menu) || menu.length === 0 || isDefaultRepoMenu(menu)) {
+        try {
+            const { execSync } = require('child_process');
+            const stashes = execSync('git stash list', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+            if (stashes) {
+                const stashLines = stashes.split('\n');
+                for (let i = 0; i < Math.min(stashLines.length, 5); i++) {
+                    try {
+                        const stashedStr = execSync(`git show stash@{${i}}:database/menu.json`, { stdio: 'pipe', encoding: 'utf-8' }).trim();
+                        if (stashedStr) {
+                            const stashedObj = JSON.parse(stashedStr);
+                            if (Array.isArray(stashedObj) && stashedObj.length > 0 && !isDefaultRepoMenu(stashedObj)) {
+                                menu = stashedObj;
+                                console.log(`[MENU-RECOVERY] 🛡️ Berhasil memulihkan produk digital dari git stash@{${i}} (${menu.length} produk)!`);
+                                break;
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
+        } catch (_) {}
+    }
+
+    if (!Array.isArray(menu)) menu = [];
+    atomicWriteJson('./database/menu.json', menu);
+    atomicWriteJson(backupPath, menu);
+    return menu;
+};
+
+const recoverStore = () => {
+    let store = safeReadJson('./database/store.json', { buka: true, namaToko: "DIGITAL STORE" });
+    const backupPath = './database/store.backup.json';
+    const snapshotPaths = [
+        './database/store.backup.json',
+        './system/.cli_update_backup/store.json',
+        './system/.update_backup/store.json'
+    ];
+
+    const isDefaultStore = (s) => !s || (s.buka === true && s.namaToko === "DIGITAL STORE");
+
+    if (isDefaultStore(store)) {
+        for (const bp of snapshotPaths) {
+            try {
+                if (fs.existsSync(bp)) {
+                    const bData = safeReadJson(bp, null);
+                    if (bData && typeof bData === 'object' && !isDefaultStore(bData)) {
+                        store = bData;
+                        console.log(`[STORE-RECOVERY] 🏪 Berhasil memulihkan pengaturan toko admin dari: ${bp} (${store.namaToko})!`);
+                        break;
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+
+    if (isDefaultStore(store)) {
+        try {
+            const { execSync } = require('child_process');
+            const stashes = execSync('git stash list', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+            if (stashes) {
+                const stashLines = stashes.split('\n');
+                for (let i = 0; i < Math.min(stashLines.length, 5); i++) {
+                    try {
+                        const stashedStr = execSync(`git show stash@{${i}}:database/store.json`, { stdio: 'pipe', encoding: 'utf-8' }).trim();
+                        if (stashedStr) {
+                            const stashedObj = JSON.parse(stashedStr);
+                            if (stashedObj && typeof stashedObj === 'object' && !isDefaultStore(stashedObj)) {
+                                store = stashedObj;
+                                console.log(`[STORE-RECOVERY] 🛡️ Berhasil memulihkan pengaturan toko dari git stash@{${i}}!`);
+                                break;
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
+        } catch (_) {}
+    }
+
+    atomicWriteJson('./database/store.json', store);
+    atomicWriteJson(backupPath, store);
+    return store;
+};
+
+const recoverPpob = () => {
+    let ppob = safeReadJson('./database/ppob.json', []);
+    const backupPath = './database/ppob.backup.json';
+    if (!Array.isArray(ppob) || ppob.length === 0) {
+        if (fs.existsSync(backupPath)) {
+            const b = safeReadJson(backupPath, []);
+            if (Array.isArray(b) && b.length > 0) ppob = b;
+        }
+    }
+    if (Array.isArray(ppob) && ppob.length > 0) atomicWriteJson(backupPath, ppob);
+    return ppob;
+};
+
+const recoverPostpaid = () => {
+    let postpaid = safeReadJson('./database/postpaid.json', []);
+    const backupPath = './database/postpaid.backup.json';
+    if (!Array.isArray(postpaid) || postpaid.length === 0) {
+        if (fs.existsSync(backupPath)) {
+            const b = safeReadJson(backupPath, []);
+            if (Array.isArray(b) && b.length > 0) postpaid = b;
+        }
+    }
+    if (Array.isArray(postpaid) && postpaid.length > 0) atomicWriteJson(backupPath, postpaid);
+    return postpaid;
+};
+
+const recoverUsers = () => {
+    let users = safeReadJson('./database/users.json', {});
+    const backupPath = './database/users.backup.json';
+    if (!users || typeof users !== 'object' || Object.keys(users).length === 0) {
+        if (fs.existsSync(backupPath)) {
+            const b = safeReadJson(backupPath, {});
+            if (b && typeof b === 'object' && Object.keys(b).length > 0) users = b;
+        }
+    }
+    if (users && typeof users === 'object' && Object.keys(users).length > 0) atomicWriteJson(backupPath, users);
+    return users;
+};
+
+const recoverOrders = () => {
+    let orders = safeReadJson('./database/orders.json', []);
+    const backupPath = './database/orders.backup.json';
+    if (!Array.isArray(orders) || orders.length === 0) {
+        if (fs.existsSync(backupPath)) {
+            const b = safeReadJson(backupPath, []);
+            if (Array.isArray(b) && b.length > 0) orders = b;
+        }
+    }
+    if (Array.isArray(orders) && orders.length > 0) atomicWriteJson(backupPath, orders);
+    return orders;
+};
+
+const recoverDeposits = () => {
+    let deposits = safeReadJson('./database/deposits.json', []);
+    const backupPath = './database/deposits.backup.json';
+    if (!Array.isArray(deposits) || deposits.length === 0) {
+        if (fs.existsSync(backupPath)) {
+            const b = safeReadJson(backupPath, []);
+            if (Array.isArray(b) && b.length > 0) deposits = b;
+        }
+    }
+    if (Array.isArray(deposits) && deposits.length > 0) atomicWriteJson(backupPath, deposits);
+    return deposits;
+};
+
+const recoverDebts = () => {
+    let debts = safeReadJson('./database/debts.json', []);
+    const backupPath = './database/debts.backup.json';
+    if (!Array.isArray(debts) || debts.length === 0) {
+        if (fs.existsSync(backupPath)) {
+            const b = safeReadJson(backupPath, []);
+            if (Array.isArray(b) && b.length > 0) debts = b;
+        }
+    }
+    if (Array.isArray(debts) && debts.length > 0) atomicWriteJson(backupPath, debts);
+    return debts;
+};
+
 const db = {
-    menu: safeReadJson('./database/menu.json', []),
-    ppob: safeReadJson('./database/ppob.json', []),
-    users: safeReadJson('./database/users.json', {}),
-    orders: safeReadJson('./database/orders.json', []),
-    postpaid: safeReadJson('./database/postpaid.json', []),
-    store: safeReadJson('./database/store.json', { buka: true, namaToko: "DIGITAL STORE" }),
-    deposits: safeReadJson('./database/deposits.json', []),
+    menu: recoverMenu(),
+    ppob: recoverPpob(),
+    users: recoverUsers(),
+    orders: recoverOrders(),
+    postpaid: recoverPostpaid(),
+    store: recoverStore(),
+    deposits: recoverDeposits(),
     settings: recoverSettings(),
     subscriptionCatalog: recoverSubscriptionCatalog(),
     subscriptions: recoverSubscriptions(),
-    debts: safeReadJson('./database/debts.json', []),
+    debts: recoverDebts(),
     
-    saveMenu: () => atomicWriteJson('./database/menu.json', db.menu),
-    savePpob: () => atomicWriteJson('./database/ppob.json', db.ppob),
-    saveUsers: () => atomicWriteJson('./database/users.json', db.users),
-    saveOrders: () => atomicWriteJson('./database/orders.json', db.orders),
-    savePostpaid: () => atomicWriteJson('./database/postpaid.json', db.postpaid),
-    saveStore: () => atomicWriteJson('./database/store.json', db.store),
-    saveDeposits: () => atomicWriteJson('./database/deposits.json', db.deposits),
+    saveMenu: () => {
+        atomicWriteJson('./database/menu.json', db.menu);
+        atomicWriteJson('./database/menu.backup.json', db.menu);
+    },
+    savePpob: () => {
+        atomicWriteJson('./database/ppob.json', db.ppob);
+        atomicWriteJson('./database/ppob.backup.json', db.ppob);
+    },
+    saveUsers: () => {
+        atomicWriteJson('./database/users.json', db.users);
+        atomicWriteJson('./database/users.backup.json', db.users);
+    },
+    saveOrders: () => {
+        atomicWriteJson('./database/orders.json', db.orders);
+        atomicWriteJson('./database/orders.backup.json', db.orders);
+    },
+    savePostpaid: () => {
+        atomicWriteJson('./database/postpaid.json', db.postpaid);
+        atomicWriteJson('./database/postpaid.backup.json', db.postpaid);
+    },
+    saveStore: () => {
+        atomicWriteJson('./database/store.json', db.store);
+        atomicWriteJson('./database/store.backup.json', db.store);
+    },
+    saveDeposits: () => {
+        atomicWriteJson('./database/deposits.json', db.deposits);
+        atomicWriteJson('./database/deposits.backup.json', db.deposits);
+    },
     saveSubscriptionCatalog: () => {
         atomicWriteJson('./database/subscription_catalog.json', db.subscriptionCatalog);
         atomicWriteJson('./database/subscription_catalog.backup.json', db.subscriptionCatalog);
@@ -508,7 +723,10 @@ const db = {
         atomicWriteJson('./database/subscriptions.json', db.subscriptions);
         atomicWriteJson('./database/subscriptions.backup.json', db.subscriptions);
     },
-    saveDebts: () => atomicWriteJson('./database/debts.json', db.debts),
+    saveDebts: () => {
+        atomicWriteJson('./database/debts.json', db.debts);
+        atomicWriteJson('./database/debts.backup.json', db.debts);
+    },
     saveSettings: () => {
         atomicWriteJson('./database/settings.json', db.settings);
         atomicWriteJson('./database/settings.backup.json', db.settings);

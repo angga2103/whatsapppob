@@ -4336,14 +4336,25 @@ function initTelegramBot() {
                         'database/settings.json',
                         'database/settings.backup.json',
                         'database/store.json',
+                        'database/store.backup.json',
                         'database/menu.json',
+                        'database/menu.backup.json',
                         'database/ppob.json',
+                        'database/ppob.backup.json',
                         'database/postpaid.json',
+                        'database/postpaid.backup.json',
                         'database/subscription_catalog.json',
+                        'database/subscription_catalog.backup.json',
                         'database/subscriptions.json',
+                        'database/subscriptions.backup.json',
                         'database/users.json',
+                        'database/users.backup.json',
                         'database/orders.json',
+                        'database/orders.backup.json',
                         'database/deposits.json',
+                        'database/deposits.backup.json',
+                        'database/debts.json',
+                        'database/debts.backup.json',
                         '.env'
                     ];
 
@@ -4378,11 +4389,18 @@ function initTelegramBot() {
                                     const newObj = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : {};
                                     const merged = { ...newObj, ...oldObj };
                                     fs.writeFileSync(f, JSON.stringify(merged, null, 2), 'utf8');
+                                    fs.writeFileSync('database/settings.backup.json', JSON.stringify(merged, null, 2), 'utf8');
                                 } catch (_) {
                                     fs.writeFileSync(f, memoryBackups[f], 'utf8');
                                 }
                             } else {
                                 fs.writeFileSync(f, memoryBackups[f], 'utf8');
+                                if (f.startsWith('database/') && !f.includes('.backup.')) {
+                                    try {
+                                        const bPath = f.replace(/\.json$/, '.backup.json');
+                                        fs.writeFileSync(bPath, memoryBackups[f], 'utf8');
+                                    } catch (_) {}
+                                }
                             }
                         }
                     }
