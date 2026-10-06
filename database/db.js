@@ -83,7 +83,7 @@ const recoverSettings = () => {
     const backupPath = './database/settings.backup.json';
     const backupSettings = fs.existsSync(backupPath) ? safeReadJson(backupPath, {}) : {};
 
-    const isValidToken = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+    const isValidToken = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
 
     // 1. Pulihkan dari settings.backup.json jika kosong
     if (!settings.digiflazz?.username && backupSettings.digiflazz?.username) {

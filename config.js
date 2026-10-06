@@ -17,7 +17,7 @@ const getSettings = () => {
                 if (!s.paymentkita?.merchantId && b.paymentkita?.merchantId) s.paymentkita = b.paymentkita;
                 if (!s.pakasir?.project && b.pakasir?.project) s.pakasir = b.pakasir;
                 if (!s.paymentGateway && b.paymentGateway) s.paymentGateway = b.paymentGateway;
-                const isDummy = (t) => !t || typeof t !== 'string' || !t.includes(':') || t.startsWith('8470095940') || t.startsWith('8844922872');
+                const isDummy = (t) => !t || typeof t !== 'string' || !t.includes(':');
                 if (!isDummy(b.telegram?.token) && isDummy(s.telegram?.token)) s.telegram = b.telegram;
                 if (!s.owner && b.owner) s.owner = b.owner;
             } catch (_) {}
@@ -60,7 +60,7 @@ const config = {
         const envToken = (process.env.TELEGRAM_TOKEN || '').trim();
         const envChatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
 
-        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
 
         const token = isValid(sToken) ? sToken : (isValid(envToken) ? envToken : '');
         const chatId = (isValid(sToken) && sChatId) ? sChatId : (envChatId || sChatId || '');

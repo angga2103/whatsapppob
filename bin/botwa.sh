@@ -170,7 +170,7 @@ get_telegram_status() {
             if (fs.existsSync('./system/bot-status.json')) {
                 try { st = JSON.parse(fs.readFileSync('./system/bot-status.json', 'utf8')); } catch(_) {}
             }
-            const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+            const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
             let token = '';
             if (fs.existsSync('./database/settings.json')) {
                 try {
@@ -328,7 +328,7 @@ cmd_restart() {
     node -e "
         const https = require('https');
         const fs = require('fs');
-        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
         let token = '';
         try {
             const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
@@ -377,7 +377,7 @@ cmd_restart_tg() {
     node -e "
         const https = require('https');
         const fs = require('fs');
-        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
         let token = '';
         try {
             const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
@@ -410,7 +410,7 @@ cmd_test_tg() {
     node -e "
         const https = require('https');
         const fs = require('fs');
-        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
         let token = '', chatId = '';
         try {
             const s = JSON.parse(fs.readFileSync('./database/settings.json', 'utf8'));
@@ -622,7 +622,7 @@ cmd_change_telegram() {
     local cur_info=$(node -e "
         try {
             const fs = require('fs');
-            const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+            const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
             let token = '', chatId = '';
             if (fs.existsSync('./database/settings.json')) {
                 try {
@@ -957,7 +957,7 @@ cmd_update() {
         const path = require('path');
         const bDir = './system/.cli_update_backup';
 
-        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':') && !t.startsWith('8470095940') && !t.startsWith('8844922872'));
+        const isValid = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
 
         // 1. Pulihkan .env lama terlebih dahulu jika ada
         const bEnv = path.join(bDir, '.env');
