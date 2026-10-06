@@ -1870,10 +1870,19 @@ if (txt === 'PROFIL') {
 
     // 6. ALUR DIGITAL PRODUK (Manual Menu)
     if (session.step === S.PILIH_PRODUK_DIGITAL) {
-        const id = parseInt(txt);
-        const item = db.menu.find(m => m.id === id);
-        if (!item) return sock.sendMessage(sender, { text: `❌ ID Produk salah.` });
-        if (item.stok <= 0) return sock.sendMessage(sender, { text: `❌ Stok Habis.` });
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Pemilihan produk digital dibatalkan. Ketik *MENU* untuk kembali." });
+        }
+        const choiceNum = parseInt(txt.trim(), 10);
+        const list = (session.tempDigitalList && session.tempDigitalList.length > 0) ? session.tempDigitalList : db.menu;
+        // Ambil produk berdasarkan urutan nomor (1-based index) pada tampilan menu
+        const item = (choiceNum >= 1 && choiceNum <= list.length) 
+            ? list[choiceNum - 1] 
+            : list.find(m => m.id === choiceNum);
+
+        if (!item) return sock.sendMessage(sender, { text: `❌ Nomor produk tidak valid. Balas nomor 1 - ${list.length}, atau 0/B untuk batal.` });
+        if (item.stok <= 0) return sock.sendMessage(sender, { text: `❌ Stok produk *${item.nama}* saat ini habis.` });
         session.tempItem = item;
         session.step = S.QTY_DIGITAL;
         return sock.sendMessage(sender, { text: `🛒 *${item.nama}*\nBerapa jumlah yang ingin dibeli?` });
