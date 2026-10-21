@@ -807,10 +807,11 @@ cmd_change_gateway() {
 
     echo "Pilih gateway yang ingin diatur:"
     echo "1) Digiflazz (Username & Production/Development Key)"
-    echo "2) Paymentkita (Merchant ID & Secret Key)"
-    echo "3) Pakasir (Project Name & API Key)"
+    echo "2) DANA Auto Transaksi (Nomor Akun, Atas Nama & Device Token)"
+    echo "3) Status HP Pemantau DANA (Samsung J1 Ace Heartbeat)"
+    echo "4) Update Base String QRIS DANA"
     echo "0) Batal"
-    read -p "Pilihan Anda [0-3]: " gw_opt
+    read -p "Pilihan Anda [0-4]: " gw_opt
 
     local PNAME=$(get_pm2_process_name)
 
@@ -833,42 +834,72 @@ cmd_change_gateway() {
             echo -e "${GREEN}✅ Kredensial Digiflazz tersimpan dan bot ($PNAME) direstart.${NC}"
         fi
     elif [ "$gw_opt" == "2" ]; then
-        read -p "Masukkan Paymentkita Merchant ID: " PK_ID
-        read -p "Masukkan Paymentkita Secret Key : " PK_SECRET
-        if [ -n "$PK_ID" ] && [ -n "$PK_SECRET" ]; then
+        read -p "Masukkan Nomor DANA (contoh: 081775700114)        : " D_NUM
+        read -p "Masukkan Nama Pemilik DANA (contoh: ANGGA DIAN...) : " D_NAME
+        read -p "Masukkan Device Token Forwarder HP                 : " D_TOKEN
+        if [ -n "$D_NUM" ]; then
             node -e "
                 const fs = require('fs');
-                const m = (process.argv[1] || '').trim();
-                const sec = (process.argv[2] || '').trim();
+                const num = (process.argv[1] || '').trim();
+                const name = (process.argv[2] || '').trim();
+                const tok = (process.argv[3] || '').trim();
                 ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
                     let s = {}; try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_){}
-                    s.paymentkita = { merchantId: m, secret: sec };
-                    s.paymentGateway = 'paymentkita';
+                    if (!s.dana) s.dana = {};
+                    s.dana.number = num;
+                    if (name) s.dana.name = name;
+                    if (tok) s.dana.deviceToken = tok;
+                    s.paymentGateway = 'dana';
+                    delete s.paymentkita;
+                    delete s.pakasir;
                     fs.writeFileSync(f, JSON.stringify(s, null, 2), 'utf8');
                 });
-                console.log('✓ Paymentkita berhasil diperbarui!');
-            " "$PK_ID" "$PK_SECRET"
+                console.log('✓ Konfigurasi DANA Auto Transaksi berhasil diperbarui!');
+            " "$D_NUM" "$D_NAME" "$D_TOKEN"
             pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
-            echo -e "${GREEN}✅ Kredensial Paymentkita tersimpan dan bot ($PNAME) direstart.${NC}"
+            echo -e "${GREEN}✅ Konfigurasi DANA tersimpan dan bot ($PNAME) direstart.${NC}"
         fi
     elif [ "$gw_opt" == "3" ]; then
-        read -p "Masukkan Pakasir Project Slug: " PAKA_PROJ
-        read -p "Masukkan Pakasir API Key     : " PAKA_KEY
-        if [ -n "$PAKA_PROJ" ] && [ -n "$PAKA_KEY" ]; then
+        node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const statusFile = './system/dana-device-status.json';
+            if (!fs.existsSync(statusFile)) {
+                console.log('⚠️ Belum ada data status HP forwarder DANA.');
+                process.exit(0);
+            }
+            try {
+                const d = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+                const isOnline = (Date.now() - (d.lastPing || 0)) < 180000;
+                console.log('\n========================================');
+                console.log('📱 STATUS HP PEMANTAU DANA (Samsung J1 Ace)');
+                console.log('========================================');
+                console.log('• Status     : ' + (isOnline ? '🟢 ONLINE' : '🔴 OFFLINE / DELAY'));
+                console.log('• Baterai    : ' + (d.battery !== null ? d.battery + '%' : '-') + (d.isCharging ? ' (⚡ Mengisi)' : ''));
+                console.log('• Ping Akhir : ' + (d.lastPingStr || '-'));
+                console.log('• IP Forward : ' + (d.ip || '-'));
+                console.log('• Model HP   : ' + (d.deviceModel || 'Samsung J1 Ace'));
+                console.log('========================================\n');
+            } catch (e) {
+                console.log('Gagal membaca status: ' + e.message);
+            }
+        "
+    elif [ "$gw_opt" == "4" ]; then
+        read -p "Masukkan Base String QRIS DANA (000201...): " D_QRIS
+        if [ -n "$D_QRIS" ]; then
             node -e "
                 const fs = require('fs');
-                const p = (process.argv[1] || '').trim();
-                const k = (process.argv[2] || '').trim();
+                const q = (process.argv[1] || '').trim();
                 ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
                     let s = {}; try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_){}
-                    s.pakasir = { project: p, key: k };
-                    s.paymentGateway = 'pakasir';
+                    if (!s.dana) s.dana = {};
+                    s.dana.qrisString = q;
                     fs.writeFileSync(f, JSON.stringify(s, null, 2), 'utf8');
                 });
-                console.log('✓ Pakasir berhasil diperbarui!');
-            " "$PAKA_PROJ" "$PAKA_KEY"
+                console.log('✓ Base QRIS DANA berhasil disimpan!');
+            " "$D_QRIS"
             pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
-            echo -e "${GREEN}✅ Kredensial Pakasir tersimpan dan bot ($PNAME) direstart.${NC}"
+            echo -e "${GREEN}✅ Base QRIS DANA diperbarui dan bot ($PNAME) direstart.${NC}"
         fi
     fi
     pause_menu
@@ -1012,9 +1043,10 @@ cmd_update() {
 
             // Pertahankan gateway & digiflazz
             if (saved.digiflazz?.username) merged.digiflazz = saved.digiflazz;
-            if (saved.paymentkita?.merchantId) merged.paymentkita = saved.paymentkita;
-            if (saved.pakasir?.project) merged.pakasir = saved.pakasir;
-            if (saved.paymentGateway) merged.paymentGateway = saved.paymentGateway;
+            if (saved.dana) merged.dana = saved.dana;
+            merged.paymentGateway = 'dana';
+            delete merged.paymentkita;
+            delete merged.pakasir;
 
             fs.writeFileSync(f, JSON.stringify(merged, null, 2), 'utf8');
         });
@@ -1257,7 +1289,7 @@ while true; do
     echo -e " ${BOLD}[11]${NC} 📦 Backup Data Manual Sekarang (Kirim ke Telegram)"
     echo -e " ${BOLD}[12]${NC} 🔄 Restore Data dari Backup Terakhir"
     echo -e " ${BOLD}[13]${NC} 🔑 Ganti Token Telegram & Chat ID (Jika Bot Disuspend)"
-    echo -e " ${BOLD}[14]${NC} 💳 Ganti Akun Gateway (Digiflazz & Paymentkita/Pakasir)"
+    echo -e " ${BOLD}[14]${NC} 💳 Ganti Akun Gateway (Digiflazz & DANA Auto Transaksi)"
     echo -e " ${BOLD}[15]${NC} 📱 Reset Sesi & Pairing Ulang WhatsApp"
     echo -e " ${BOLD}[16]${NC} 🚀 Update Bot ke Versi Terbaru (Git Pull + Restart)"
     echo -e " ${BOLD}[17]${NC} 🧹 Bersihkan Cache, Log & File Backup Lama"

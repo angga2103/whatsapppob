@@ -14,8 +14,7 @@ const getSettings = () => {
             try {
                 const b = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
                 if (!s.digiflazz?.username && b.digiflazz?.username) s.digiflazz = b.digiflazz;
-                if (!s.paymentkita?.merchantId && b.paymentkita?.merchantId) s.paymentkita = b.paymentkita;
-                if (!s.pakasir?.project && b.pakasir?.project) s.pakasir = b.pakasir;
+                if (!s.dana?.number && b.dana?.number) s.dana = b.dana;
                 if (!s.paymentGateway && b.paymentGateway) s.paymentGateway = b.paymentGateway;
                 const isDummy = (t) => !t || typeof t !== 'string' || !t.includes(':');
                 if (!isDummy(b.telegram?.token) && isDummy(s.telegram?.token)) s.telegram = b.telegram;
@@ -36,14 +35,21 @@ const config = {
     },
     port: parseInt(process.env.PORT || '3000', 10),
     get paymentGateway() {
-        const s = getSettings();
-        return (s.paymentGateway || process.env.PAYMENT_GATEWAY || 'paymentkita').toLowerCase();
+        return 'dana';
     },
-    get pakasir() {
+    get dana() {
         const s = getSettings();
+        const d = s.dana || {};
+        let defaultQris = "00020101021240560011ID.DANA.WWW01189360091531433862600215ANGGA DIAN PRAT5204482953033605405101205802ID5924ANGGA DIAN PRATAMA PUTRA6011Kota Bekasi61051279062460804DMCT9934000200012428101201202610205004486663049B67";
+        try {
+            const { DEFAULT_DANA_QRIS_STRING } = require('./lib/qris');
+            if (DEFAULT_DANA_QRIS_STRING) defaultQris = DEFAULT_DANA_QRIS_STRING;
+        } catch (_) {}
         return {
-            project: s.pakasir?.project || process.env.PAKASIR_PROJECT || '',
-            key: s.pakasir?.key || process.env.PAKASIR_KEY || ''
+            number: String(d.number || process.env.DANA_NUMBER || '081775700114').trim(),
+            name: String(d.name || process.env.DANA_NAME || 'ANGGA DIAN PRATAMA PUTRA').trim(),
+            deviceToken: String(d.deviceToken || process.env.DANA_DEVICE_TOKEN || 'dana_secret_token_2026').trim(),
+            qrisString: String(d.qrisString || process.env.DANA_QRIS_STRING || defaultQris).trim()
         };
     },
     get digiflazz() {
@@ -66,13 +72,6 @@ const config = {
         const chatId = (isValid(sToken) && sChatId) ? sChatId : (envChatId || sChatId || '');
 
         return { token, chatId };
-    },
-    get paymentkita() {
-        const s = getSettings();
-        return {
-            merchantId: s.paymentkita?.merchantId || process.env.PAYMENTKITA_MERCHANT_ID || '',
-            secret: s.paymentkita?.secret || process.env.PAYMENTKITA_SECRET || ''
-        };
     },
     get profit() {
         const s = getSettings();

@@ -1,5 +1,5 @@
 {
-  "paymentGateway": "paymentkita",
+  "paymentGateway": "dana",
   "namaTokoAdmin": "DIGITAL STORE",
   "marginTier": {
     "kecil": 250,
@@ -19,12 +19,14 @@
     "username": "wulilio6xBvW",
     "key": "32d4d136-84de-549a-9870-3f7e873e2cd8"
   },
-  "paymentkita": {
-    "merchantId": "PKM78524949",
-    "secret": "PKSK_cEeTfLiVKc9tEESTnOmnyCoDB2GnYr8OF9ClcJ8V"
+  "dana": {
+    "number": "081775700114",
+    "name": "ANGGA DIAN PRATAMA PUTRA",
+    "deviceToken": "dana_secret_token_2026",
+    "qrisString": "00020101021240560011ID.DANA.WWW01189360091531433862600215ANGGA DIAN PRAT5204482953033605405101205802ID5924ANGGA DIAN PRATAMA PUTRA6011Kota Bekasi61051279062460804DMCT9934000200012428101201202610205004486663049B67"
   },
   "telegram": {
-    "token": "",
-    "chatId": ""
+    "token": "8844922872:AAEu5sBsvyBNsL8gHX6xLKos_pwy8u898Mk",
+    "chatId": "7236113204"
   }
 }

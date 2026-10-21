@@ -51,11 +51,11 @@ const syncSettingsToEnv = (settings) => {
         if (settings.telegram?.chatId) updates['TELEGRAM_CHAT_ID'] = settings.telegram.chatId;
         if (settings.digiflazz?.username) updates['DIGIFLAZZ_USERNAME'] = settings.digiflazz.username;
         if (settings.digiflazz?.key) updates['DIGIFLAZZ_KEY'] = settings.digiflazz.key;
-        if (settings.paymentkita?.merchantId) updates['PAYMENTKITA_MERCHANT_ID'] = settings.paymentkita.merchantId;
-        if (settings.paymentkita?.secret) updates['PAYMENTKITA_SECRET'] = settings.paymentkita.secret;
-        if (settings.pakasir?.project) updates['PAKASIR_PROJECT'] = settings.pakasir.project;
-        if (settings.pakasir?.key) updates['PAKASIR_KEY'] = settings.pakasir.key;
-        if (settings.paymentGateway) updates['PAYMENT_GATEWAY'] = settings.paymentGateway;
+        if (settings.dana?.number) updates['DANA_NUMBER'] = settings.dana.number;
+        if (settings.dana?.name) updates['DANA_NAME'] = settings.dana.name;
+        if (settings.dana?.deviceToken) updates['DANA_DEVICE_TOKEN'] = settings.dana.deviceToken;
+        if (settings.dana?.qrisString) updates['DANA_QRIS_STRING'] = settings.dana.qrisString;
+        updates['PAYMENT_GATEWAY'] = 'dana';
 
         let lines = envContent ? envContent.split(/\r?\n/) : [];
         for (const [key, val] of Object.entries(updates)) {
@@ -85,19 +85,25 @@ const recoverSettings = () => {
 
     const isValidToken = (t) => Boolean(t && typeof t === 'string' && t.includes(':'));
 
+    const defaultDana = {
+        number: "081775700114",
+        name: "ANGGA DIAN PRATAMA PUTRA",
+        deviceToken: "dana_secret_token_2026",
+        qrisString: "00020101021240560011ID.DANA.WWW01189360091531433862600215ANGGA DIAN PRAT5204482953033605405101205802ID5924ANGGA DIAN PRATAMA PUTRA6011Kota Bekasi61051279062460804DMCT9934000200012428101201202610205004486663049B67"
+    };
+
     // 1. Pulihkan dari settings.backup.json jika kosong
     if (!settings.digiflazz?.username && backupSettings.digiflazz?.username) {
         settings.digiflazz = backupSettings.digiflazz;
     }
-    if (!settings.paymentkita?.merchantId && backupSettings.paymentkita?.merchantId) {
-        settings.paymentkita = backupSettings.paymentkita;
+    if (!settings.dana?.number && backupSettings.dana?.number) {
+        settings.dana = backupSettings.dana;
     }
-    if (!settings.pakasir?.project && backupSettings.pakasir?.project) {
-        settings.pakasir = backupSettings.pakasir;
+    if (!settings.dana) {
+        settings.dana = defaultDana;
     }
-    if (!settings.paymentGateway && backupSettings.paymentGateway) {
-        settings.paymentGateway = backupSettings.paymentGateway;
-    }
+    settings.paymentGateway = 'dana';
+
     if (!isValidToken(settings.telegram?.token) && isValidToken(backupSettings.telegram?.token)) {
         settings.telegram = backupSettings.telegram;
     }
@@ -111,14 +117,12 @@ const recoverSettings = () => {
             if (!settings.digiflazz?.username && envConfig.DIGIFLAZZ_USERNAME) {
                 settings.digiflazz = { username: envConfig.DIGIFLAZZ_USERNAME, key: envConfig.DIGIFLAZZ_KEY || '' };
             }
-            if (!settings.paymentkita?.merchantId && envConfig.PAYMENTKITA_MERCHANT_ID) {
-                settings.paymentkita = { merchantId: envConfig.PAYMENTKITA_MERCHANT_ID, secret: envConfig.PAYMENTKITA_SECRET || '' };
-            }
-            if (!settings.pakasir?.project && envConfig.PAKASIR_PROJECT) {
-                settings.pakasir = { project: envConfig.PAKASIR_PROJECT, key: envConfig.PAKASIR_KEY || '' };
-            }
-            if (!settings.paymentGateway && envConfig.PAYMENT_GATEWAY) {
-                settings.paymentGateway = envConfig.PAYMENT_GATEWAY;
+            if (envConfig.DANA_NUMBER) {
+                if (!settings.dana) settings.dana = { ...defaultDana };
+                settings.dana.number = envConfig.DANA_NUMBER;
+                if (envConfig.DANA_NAME) settings.dana.name = envConfig.DANA_NAME;
+                if (envConfig.DANA_DEVICE_TOKEN) settings.dana.deviceToken = envConfig.DANA_DEVICE_TOKEN;
+                if (envConfig.DANA_QRIS_STRING) settings.dana.qrisString = envConfig.DANA_QRIS_STRING;
             }
 
             const envToken = (envConfig.TELEGRAM_TOKEN || '').trim();
@@ -161,7 +165,7 @@ const recoverSettings = () => {
     try {
         const { execSync } = require('child_process');
         const stashes = execSync('git stash list', { stdio: 'pipe', encoding: 'utf-8' }).trim();
-        if (stashes && (!settings.digiflazz?.username || !settings.paymentkita?.merchantId || !isValidToken(settings.telegram?.token))) {
+        if (stashes && (!settings.digiflazz?.username || !settings.dana?.number || !isValidToken(settings.telegram?.token))) {
             const stashLines = stashes.split('\n');
             for (let i = 0; i < Math.min(stashLines.length, 5); i++) {
                 try {
@@ -172,17 +176,11 @@ const recoverSettings = () => {
                             settings.digiflazz = stashedObj.digiflazz;
                             console.log(`[RECOVERY] 🛡️ Berhasil memulihkan akun Digiflazz dari git stash@{${i}}!`);
                         }
-                        if (stashedObj.paymentkita?.merchantId && !settings.paymentkita?.merchantId) {
-                            settings.paymentkita = stashedObj.paymentkita;
-                            console.log(`[RECOVERY] 🛡️ Berhasil memulihkan akun PaymentKita dari git stash@{${i}}!`);
+                        if (stashedObj.dana?.number && !settings.dana?.number) {
+                            settings.dana = stashedObj.dana;
+                            console.log(`[RECOVERY] 🛡️ Berhasil memulihkan akun DANA dari git stash@{${i}}!`);
                         }
-                        if (stashedObj.pakasir?.project && !settings.pakasir?.project) {
-                            settings.pakasir = stashedObj.pakasir;
-                            console.log(`[RECOVERY] 🛡️ Berhasil memulihkan akun Pakasir dari git stash@{${i}}!`);
-                        }
-                        if (stashedObj.paymentGateway && !settings.paymentGateway) {
-                            settings.paymentGateway = stashedObj.paymentGateway;
-                        }
+                        settings.paymentGateway = 'dana';
                         if (isValidToken(stashedObj.telegram?.token)) {
                             if (!isValidToken(settings.telegram?.token)) {
                                 settings.telegram = stashedObj.telegram;

@@ -24,4 +24,7 @@ database/subscriptions.backup.json
 database/subscription_catalog.json
 database/subscription_catalog.backup.json
 system/.update_backup/
+system/bot-status.json
+system/dana-device-status.json
+system/dana_unmatched.json
 pasca.json

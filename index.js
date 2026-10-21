@@ -22,11 +22,14 @@ const subLib = require('./lib/subscription');
 const express = require('express');
 const receiptLib = require('./lib/receipt');
 const mutex = require('./lib/mutex');
+const danaHelper = require('./lib/dana');
 
 // ========================================
-// 🌐 EXPRESS WEB SERVER (STRUK DIGITAL & HEALTH)
+// 🌐 EXPRESS WEB SERVER (STRUK DIGITAL, HEALTH, & DANA MUTASI)
 // ========================================
 const app = express();
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 // Simple In-Memory Rate Limiter untuk proteksi scraping Web Struk
 const strukRateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 menit
@@ -119,6 +122,145 @@ app.get('/struk/:orderId', async (req, res) => {
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime(), time: new Date().toISOString() });
 });
+
+// ========================================
+// 📲 DANA AUTO TRANSAKSI & MUTASI WEBHOOK
+// ========================================
+
+// 1. Status Monitoring Endpoint
+app.get(['/callback/dana-status', '/api/dana/status'], (req, res) => {
+    const devStatus = danaHelper.getDeviceStatus();
+    const danaCfg = danaHelper.getDanaConfig();
+    return res.json({
+        success: true,
+        gateway: 'dana_auto',
+        number: danaCfg.number,
+        name: danaCfg.name,
+        device: devStatus
+    });
+});
+
+// 2. Heartbeat Ping from Android Forwarder (Samsung J1 Ace)
+const handleDanaPing = (req, res) => {
+    const danaCfg = danaHelper.getDanaConfig();
+    const token = req.headers['x-device-token'] || 
+                  req.query.token || 
+                  req.body?.token || 
+                  req.body?.device_token || 
+                  (req.headers.authorization && req.headers.authorization.replace(/^Bearer\s+/i, ''));
+
+    if (danaCfg.deviceToken && token !== danaCfg.deviceToken) {
+        console.warn(`[DANA PING UNAUTHORIZED] Token mismatch: ${token || '(empty)'}`);
+        return res.status(401).json({ success: false, message: 'Unauthorized: Invalid device token' });
+    }
+
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.remoteAddress || '127.0.0.1';
+    const devStatus = danaHelper.recordDeviceHeartbeat({
+        ip: clientIp,
+        battery: req.body?.battery ?? req.query?.battery,
+        isCharging: req.body?.isCharging ?? req.body?.charging ?? req.query?.charging,
+        deviceModel: req.body?.deviceModel ?? req.body?.model ?? 'Samsung J1 Ace',
+        appVersion: req.body?.appVersion ?? req.body?.version ?? 'PayHook Forwarder 2026'
+    });
+
+    return res.json({
+        success: true,
+        message: 'Heartbeat ping received successfully',
+        timestamp: Date.now(),
+        device: devStatus
+    });
+};
+app.all(['/callback/dana-ping', '/api/callback/dana-ping'], handleDanaPing);
+
+// 3. Webhook Listener Mutasi Push Notification DANA
+const handleDanaWebhook = async (req, res) => {
+    try {
+        const danaCfg = danaHelper.getDanaConfig();
+        const token = req.headers['x-device-token'] || 
+                      req.query.token || 
+                      req.body?.token || 
+                      req.body?.device_token || 
+                      req.body?.secret || 
+                      (req.headers.authorization && req.headers.authorization.replace(/^Bearer\s+/i, ''));
+
+        if (danaCfg.deviceToken && token !== danaCfg.deviceToken) {
+            console.warn(`[DANA WEBHOOK UNAUTHORIZED] Token mismatch: ${token || '(empty)'}`);
+            return res.status(401).json({ success: false, message: 'Unauthorized device token' });
+        }
+
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.remoteAddress || '127.0.0.1';
+        danaHelper.recordDeviceHeartbeat({
+            ip: clientIp,
+            battery: req.body?.battery ?? req.query?.battery,
+            isCharging: req.body?.isCharging ?? req.body?.charging ?? req.query?.charging
+        });
+
+        const payload = Object.keys(req.body || {}).length > 0 ? req.body : req.query;
+        const result = await danaHelper.processIncomingDanaMutation({
+            payload,
+            onDepositSuccess: async ({ deposit, user, nominalPokok, amount, sender, targetJid }) => {
+                // Notifikasi WA Member
+                if (global.sock && typeof global.sock.sendMessage === 'function') {
+                    await global.sock.sendMessage(targetJid, {
+                        text: `✅ *DEPOSIT DANA BERHASIL*\n\n💰 Saldo Masuk: Rp ${Number(nominalPokok).toLocaleString('id-ID')}\n🧾 ID: \`${deposit.id}\`\n💵 Saldo Baru: ${formatRupiah(user.saldo)}\n\n_Terima kasih telah melakukan deposit saldo!_`
+                    }).catch(() => {});
+                }
+                // Notifikasi WA Owner
+                for (const owner of (config.owner || [])) {
+                    const ownerJid = owner.includes('@') ? owner : `${owner.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+                    if (global.sock && typeof global.sock.sendMessage === 'function') {
+                        await global.sock.sendMessage(ownerJid, {
+                            text: `💰 *DEPOSIT DANA OTOMATIS*\nUser: ${targetJid}\nNominal: Rp ${Number(nominalPokok).toLocaleString('id-ID')}\nPengirim: ${sender || '-'}\nTotal Transfer: Rp ${Number(amount).toLocaleString('id-ID')}\nID: \`${deposit.id}\``
+                        }).catch(() => {});
+                    }
+                }
+                // Notifikasi Telegram Admin
+                if (global.botTg && config.telegram?.chatId) {
+                    global.botTg.sendMessage(config.telegram.chatId,
+                        `💰 *DEPOSIT DANA OTOMATIS SUKSES*\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `• ID Deposit: \`${deposit.id}\`\n` +
+                        `• User: \`${targetJid}\`\n` +
+                        `• Nominal: *Rp ${Number(nominalPokok).toLocaleString('id-ID')}*\n` +
+                        `• Diterima: *Rp ${Number(amount).toLocaleString('id-ID')}*\n` +
+                        `• Pengirim: *${sender || '-'}*\n` +
+                        `• Saldo Baru: *${formatRupiah(user.saldo)}*`,
+                        { parse_mode: 'Markdown' }
+                    ).catch(() => {});
+                }
+            },
+            onOrderSuccess: async ({ order, amount, sender }) => {
+                // Eksekusi produk via handleSuccessPayment seketika jika bot WA aktif
+                if (global.sock) {
+                    try {
+                        await handleSuccessPayment(global.sock, order, false);
+                    } catch (errPmt) {
+                        console.error('[HANDLE SUCCESS PAYMENT ERR]', errPmt.message);
+                    }
+                }
+                // Notifikasi Telegram Admin
+                if (global.botTg && config.telegram?.chatId) {
+                    global.botTg.sendMessage(config.telegram.chatId,
+                        `⚡ *PEMBAYARAN ORDER DANA DITERIMA*\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `• Invoice : \`${order.id}\`\n` +
+                        `• Produk  : *${order.item}*\n` +
+                        `• Nominal : *Rp ${Number(amount).toLocaleString('id-ID')}*\n` +
+                        `• Pengirim: *${sender || '-'}*\n` +
+                        `• Status  : *Sedang Diproses Server*`,
+                        { parse_mode: 'Markdown' }
+                    ).catch(() => {});
+                }
+            }
+        });
+
+        return res.json(result);
+    } catch (err) {
+        console.error('[DANA WEBHOOK ERROR]', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+app.all(['/callback/dana-mutasi', '/callback/dana', '/api/callback/dana-mutasi'], handleDanaWebhook);
 
 const webPort = config.port || 3000;
 try {
@@ -1030,6 +1172,7 @@ if (!global.heartbeatStarted) {
                 'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
                 'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
+                'setdana', 'setdanatoken', 'setqris', 'danastatus',
                 'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
                 'kirimakun', 'kirim', 'batalorder',
                 'snk', 'tos', 'syarat', 'aturan', 'snkdigital', 'digital', 'aturanakun'
@@ -1187,23 +1330,32 @@ async function processCheckout(sock, sender, session) {
         qrPayload = qrBuf;
     } catch (_) {}
 
+    const danaCfg = danaHelper.getDanaConfig();
     await sock.sendMessage(sender, {
         image: qrPayload,
-        caption: `🧾 *TAGIHAN PEMBAYARAN QRIS*
-
+        caption: `🧾 *TAGIHAN PEMBAYARAN DANA / QRIS*
+━━━━━━━━━━━━━━━━━━━━━
 • Invoice : \`${oid}\`
 • Produk  : *${order.item}*
 • Tujuan  : *${order.target}*
-• Total   : *${formatRupiah(order.total)}* _(Tepat)_
+• Total   : *${formatRupiah(order.total)}* _(Wajib Tepat)_
 
 ⏳ Batas Waktu: *5 Menit* (Otomatis Batal)
 
-💡 *Cara Bayar Mudah:*
-1. Simpan / Screenshot gambar QR di atas.
-2. Buka m-Banking (BCA, Mandiri, BRI, BNI) atau E-Wallet (DANA, GoPay, OVO, ShopeePay).
-3. Pilih menu *Scan QRIS* lalu unggah foto dari galeri HP Anda.
+💡 *PILIHAN CARA PEMBAYARAN:*
 
-_Transaksi otomatis diproses seketika setelah pembayaran berhasil diterima!_`
+1️⃣ *SCAN QRIS (Semua Bank & E-Wallet):*
+• Simpan / Screenshot gambar QRIS di atas.
+• Buka m-Banking (BCA, BRI, Mandiri, BNI, dll) atau E-Wallet (DANA, GoPay, OVO, ShopeePay).
+• Pilih menu *Scan QRIS* lalu unggah foto QR dari galeri HP Anda.
+• Nominal terisi otomatis *${formatRupiah(order.total)}*.
+
+2️⃣ *TRANSFER DANA LANGSUNG:*
+• Nomor DANA : *${danaCfg.number}*
+• Atas Nama  : *${danaCfg.name}*
+• Transfer Tepat : *${formatRupiah(order.total)}*
+
+⚠️ *PENTING:* Transfer nominal *HARUS PERSIS* sama hingga digit terakhir agar otomatis terverifikasi sistem dalam hitungan detik!`
     });
     startPolling(sock, order);
 }
@@ -2089,7 +2241,7 @@ function initTelegramBot() {
 
         const renderTelegramDashboard = () => {
             const wa = getWaStatus();
-            const activeGw = (config.paymentGateway || 'paymentkita').toLowerCase();
+            const activeGw = (config.paymentGateway || 'dana').toLowerCase();
             const storeStatus = db.store.buka ? "🟢 BUKA" : "🔴 TUTUP (Offline)";
             const totalUsers = (typeof getMemberList === 'function') ? getMemberList().length : Object.keys(db.users || {}).length;
             const totalProducts = (db.ppob || []).length;
@@ -2100,7 +2252,7 @@ function initTelegramBot() {
             text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
             text += `🏪 *Toko:* *${db.store.namaToko || "DIGITAL STORE"}* (${storeStatus})\n`;
             text += `📱 *WhatsApp:* ${wa.connected ? `🟢 Terhubung (\`+${wa.phone}\`)` : '🔴 Belum Terhubung'}\n`;
-            text += `💳 *Gateway:* *${activeGw.toUpperCase()}*\n`;
+            text += `💳 *Gateway:* *DANA AUTO TRANSAKSI*\n`;
             text += `⚡ *Digiflazz:* ${config.digiflazz.username ? `🟢 \`${config.digiflazz.username}\`` : '🔴 Belum Diatur'}\n`;
             text += `📦 *Katalog:* ${totalProducts} PPOB | ${totalDigital} Digital\n`;
             text += `⏳ *Antrian:* ${pendingOrders} Trx | 👥 *Member:* ${totalUsers} Akun\n`;
@@ -2122,7 +2274,7 @@ function initTelegramBot() {
                         { text: `⏳ Antrian Order (${pendingOrders})`, callback_data: 'tg_lunas' }
                     ],
                     [
-                        { text: `💳 Gateway: ${activeGw.toUpperCase()}`, callback_data: 'tg_gw_menu' },
+                        { text: `💳 Gateway: DANA AUTO`, callback_data: 'tg_gw_menu' },
                         { text: '⚡ Menu Digiflazz', callback_data: 'tg_digi_menu' }
                     ],
                     [
@@ -2310,26 +2462,34 @@ function initTelegramBot() {
         };
 
         const renderGatewayMenu = () => {
-            const activeGw = (config.paymentGateway || 'paymentkita').toLowerCase();
-            let text = `💳 *PENGATURAN PAYMENT GATEWAY*\n\n`;
-            text += `Gateway Aktif Saat Ini: *${activeGw.toUpperCase()}*\n\n`;
-            text += `🔹 *PaymentKita:*\n`;
-            text += `• Merchant ID: \`${config.paymentkita.merchantId || '(Belum diset)'}\`\n`;
-            text += `• Secret Key: \`${maskSecret(config.paymentkita.secret)}\`\n\n`;
-            text += `🔹 *Pakasir:*\n`;
-            text += `• Project Slug: \`${config.pakasir.project || '(Belum diset)'}\`\n`;
-            text += `• API Key: \`${maskSecret(config.pakasir.key)}\`\n\n`;
+            const danaCfg = danaHelper.getDanaConfig();
+            const devStatus = danaHelper.getDeviceStatus();
+            const isOnline = devStatus.isOnline;
+            const batText = devStatus.battery !== null ? `${devStatus.battery}%` : '-';
+            const charText = devStatus.isCharging ? ' (⚡ Charging)' : '';
+
+            let text = `💳 *PENGATURAN PAYMENT GATEWAY (DANA AUTO)*\n\n`;
+            text += `Gateway Aktif: *DANA AUTO TRANSAKSI & QRIS DYNAMIC*\n`;
+            text += `• Nomor DANA : \`${danaCfg.number || '(Belum diset)'}\`\n`;
+            text += `• Atas Nama  : *${danaCfg.name || '(Belum diset)'}*\n`;
+            text += `• Device Token: \`${maskSecret(danaCfg.deviceToken)}\`\n`;
+            text += `• QRIS Base  : \`${danaCfg.qrisString ? danaCfg.qrisString.slice(0, 25) + '...' : '(Default)'}\`\n\n`;
+            text += `📱 *STATUS HP PEMANTAU MUTASI (Samsung J1 Ace):*\n`;
+            text += `• Status     : ${isOnline ? '🟢 ONLINE' : '🔴 OFFLINE / DELAY'}\n`;
+            text += `• Baterai    : ${batText}${charText}\n`;
+            text += `• Ping Akhir : ${devStatus.lastPingWib || '-'}\n`;
+            text += `• IP Forward : \`${devStatus.ip || '-'}\`\n\n`;
             text += `_Pilih aksi melalui tombol di bawah:_`;
 
             const reply_markup = {
                 inline_keyboard: [
                     [
-                        { text: activeGw === 'paymentkita' ? '✅ PaymentKita (Aktif)' : '⚡ Aktifkan PaymentKita', callback_data: 'tg_setgw_pk' },
-                        { text: activeGw === 'pakasir' ? '✅ Pakasir (Aktif)' : '⚡ Aktifkan Pakasir', callback_data: 'tg_setgw_pakasir' }
+                        { text: '📱 Ubah Nomor & Nama DANA', callback_data: 'tg_input_dana' },
+                        { text: '🔑 Ubah Device Token', callback_data: 'tg_input_danatoken' }
                     ],
                     [
-                        { text: '🔑 Set Kredensial PaymentKita', callback_data: 'tg_input_pk' },
-                        { text: '🔑 Set Kredensial Pakasir', callback_data: 'tg_input_pakasir' }
+                        { text: '🔍 Lihat Base QRIS String', callback_data: 'tg_view_qris' },
+                        { text: '🔄 Refresh Status HP', callback_data: 'tg_gw_menu' }
                     ],
                     [
                         { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
@@ -3502,30 +3662,14 @@ function initTelegramBot() {
                 return updateOrSend(chatId, messageId, renderGatewayMenu());
             }
 
-            if (action === 'tg_setgw_pk') {
-                if (!db.settings) db.settings = {};
-                db.settings.paymentGateway = 'paymentkita';
-                if (db.saveSettings) db.saveSettings();
-                global.botTg.answerCallbackQuery(query.id, { text: '✅ Gateway aktif: PAYMENTKITA' });
-                return updateOrSend(chatId, messageId, renderGatewayMenu());
-            }
-
-            if (action === 'tg_setgw_pakasir') {
-                if (!db.settings) db.settings = {};
-                db.settings.paymentGateway = 'pakasir';
-                if (db.saveSettings) db.saveSettings();
-                global.botTg.answerCallbackQuery(query.id, { text: '✅ Gateway aktif: PAKASIR' });
-                return updateOrSend(chatId, messageId, renderGatewayMenu());
-            }
-
-            if (action === 'tg_input_pk') {
+            if (action === 'tg_input_dana') {
                 global.botTg.answerCallbackQuery(query.id);
-                global.tgInputState = { type: 'set_paymentkita', chatId };
+                global.tgInputState = { type: 'set_dana', chatId };
                 return global.botTg.sendMessage(chatId,
-                    `🔑 *SET KREDENSIAL PAYMENTKITA*\n\n` +
-                    `Kirimkan Merchant ID dan Secret Key dipisahkan spasi:\n` +
-                    `Format: \`<MERCHANT_ID> <SECRET_KEY>\`\n` +
-                    `Contoh: \`PKM12345 PKSK_abcdef123456\``,
+                    `📱 *PENGATURAN NOMOR & NAMA DANA*\n\n` +
+                    `Kirimkan Nomor Akun DANA dan Atas Nama dipisahkan spasi:\n` +
+                    `Format: \`<NOMOR_DANA> <ATAS_NAMA>\`\n` +
+                    `Contoh: \`081775700114 ANGGA DIAN PRATAMA PUTRA\``,
                     {
                         parse_mode: 'Markdown',
                         reply_markup: {
@@ -3535,18 +3679,37 @@ function initTelegramBot() {
                 );
             }
 
-            if (action === 'tg_input_pakasir') {
+            if (action === 'tg_input_danatoken') {
                 global.botTg.answerCallbackQuery(query.id);
-                global.tgInputState = { type: 'set_pakasir', chatId };
+                global.tgInputState = { type: 'set_danatoken', chatId };
                 return global.botTg.sendMessage(chatId,
-                    `🔑 *SET KREDENSIAL PAKASIR*\n\n` +
-                    `Kirimkan Project Slug dan API Key dipisahkan spasi:\n` +
-                    `Format: \`<PROJECT_SLUG> <API_KEY>\`\n` +
-                    `Contoh: \`myproject 98a7bc1234...\``,
+                    `🔑 *SET DEVICE AUTH TOKEN DANA*\n\n` +
+                    `Masukkan token otentikasi rahasia untuk HP forwarder (Samsung J1 Ace):\n` +
+                    `Contoh: \`dana_secret_token_2026\``,
                     {
                         parse_mode: 'Markdown',
                         reply_markup: {
                             inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_gw_menu' }]]
+                        }
+                    }
+                );
+            }
+
+            if (action === 'tg_view_qris') {
+                global.botTg.answerCallbackQuery(query.id);
+                const danaCfg = danaHelper.getDanaConfig();
+                return global.botTg.sendMessage(chatId,
+                    `🔍 *DETAIL BASE QRIS STRING (EMVCo)*\n\n` +
+                    `String QRIS Base DANA:\n\`\`\`\n${danaCfg.qrisString}\n\`\`\`\n` +
+                    `• Nomor DANA: \`${danaCfg.number}\`\n` +
+                    `• Atas Nama : *${danaCfg.name}*\n` +
+                    `• Dynamic CRC16: Aktif (Tag 01: '12', Tag 54 dinamis)`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '💳 Kembali ke Menu Gateway', callback_data: 'tg_gw_menu' }]
+                            ]
                         }
                     }
                 );
@@ -5376,19 +5539,23 @@ function initTelegramBot() {
                     return;
                 }
 
-                if (stateType === 'set_paymentkita') {
-                    const [mId, secret] = text.split(/\s+/);
-                    if (!mId || !secret || mId.length < 3 || secret.length < 6) {
-                        return global.botTg.sendMessage(chatId, `❌ *Format salah!*\nKetik: \`<MERCHANT_ID> <SECRET_KEY>\`\nContoh: \`PKM12345 PKSK_abcdef123456\``, {
+                if (stateType === 'set_dana') {
+                    const parts = text.split(/\s+/);
+                    const number = parts[0]?.replace(/[^0-9]/g, '');
+                    const name = parts.slice(1).join(' ').trim();
+                    if (!number || number.length < 9) {
+                        return global.botTg.sendMessage(chatId, `❌ *Format salah!*\nKetik: \`<NOMOR_DANA> <ATAS_NAMA>\`\nContoh: \`081775700114 ANGGA DIAN PRATAMA PUTRA\``, {
                             parse_mode: 'Markdown',
                             reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_gw_menu' }]] }
                         });
                     }
                     if (!db.settings) db.settings = {};
-                    db.settings.paymentkita = { merchantId: mId, secret: secret };
+                    if (!db.settings.dana) db.settings.dana = {};
+                    db.settings.dana.number = number;
+                    if (name) db.settings.dana.name = name;
                     if (db.saveSettings) db.saveSettings();
                     global.tgInputState = null;
-                    return global.botTg.sendMessage(chatId, `✅ *Kredensial PaymentKita Berhasil Disimpan!*\nMerchant ID: \`${mId}\`\nSecret: \`${maskSecret(secret)}\``, {
+                    return global.botTg.sendMessage(chatId, `✅ *Kredensial DANA Berhasil Disimpan!*\n• Nomor: \`${number}\`\n• Nama: *${db.settings.dana.name || '-'}*`, {
                         parse_mode: 'Markdown',
                         reply_markup: {
                             inline_keyboard: [
@@ -5399,19 +5566,20 @@ function initTelegramBot() {
                     });
                 }
 
-                if (stateType === 'set_pakasir') {
-                    const [proj, key] = text.split(/\s+/);
-                    if (!proj || !key || proj.length < 2 || key.length < 6) {
-                        return global.botTg.sendMessage(chatId, `❌ *Format salah!*\nKetik: \`<PROJECT_SLUG> <API_KEY>\`\nContoh: \`myproject 98a7bc...\``, {
+                if (stateType === 'set_danatoken') {
+                    const token = text.trim();
+                    if (!token || token.length < 4) {
+                        return global.botTg.sendMessage(chatId, `❌ *Token terlalu pendek!*\nMasukkan minimal 4 karakter token rahasia untuk HP forwarder (Samsung J1 Ace).`, {
                             parse_mode: 'Markdown',
                             reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_gw_menu' }]] }
                         });
                     }
                     if (!db.settings) db.settings = {};
-                    db.settings.pakasir = { project: proj, key: key };
+                    if (!db.settings.dana) db.settings.dana = {};
+                    db.settings.dana.deviceToken = token;
                     if (db.saveSettings) db.saveSettings();
                     global.tgInputState = null;
-                    return global.botTg.sendMessage(chatId, `✅ *Kredensial Pakasir Berhasil Disimpan!*\nProject: \`${proj}\`\nKey: \`${maskSecret(key)}\``, {
+                    return global.botTg.sendMessage(chatId, `✅ *Device Token DANA Berhasil Disimpan!*\nToken: \`${token}\``, {
                         parse_mode: 'Markdown',
                         reply_markup: {
                             inline_keyboard: [

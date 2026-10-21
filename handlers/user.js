@@ -935,23 +935,33 @@ if (session.step === S.INPUT_DEPOSIT) {
         qrPayload = qrBuf;
     } catch (_) {}
 
+    const danaHelper = require('../lib/dana');
+    const danaCfg = danaHelper.getDanaConfig();
     await sock.sendMessage(sender, {
         image: qrPayload,
-        caption: `💰 *TAGIHAN DEPOSIT SALDO (QRIS)*
-
+        caption: `💰 *TAGIHAN DEPOSIT SALDO (DANA / QRIS)*
+━━━━━━━━━━━━━━━━━━━━━
 • Nominal Masuk : *${formatRupiah(amount)}*
-• Total Bayar   : *Rp ${finalAmountNum.toLocaleString('id-ID')}* _(Tepat)_
+• Total Bayar   : *Rp ${finalAmountNum.toLocaleString('id-ID')}* _(Wajib Tepat)_
 • Biaya / Unik  : Rp ${(finalAmountNum - amount).toLocaleString('id-ID')}
 • ID Tagihan    : \`${depositId}\`
 
 ⏳ Batas Waktu  : *5 Menit* (Otomatis Masuk)
 
-💡 *Cara Bayar Mudah:*
-1. Simpan / Screenshot gambar QR di atas.
-2. Buka m-Banking (BCA, Mandiri, BRI, BNI) atau E-Wallet (DANA, GoPay, OVO, ShopeePay).
-3. Pilih menu *Scan QRIS* lalu unggah foto dari galeri HP Anda.
+💡 *PILIHAN CARA PEMBAYARAN:*
 
-_Saldo akun akan bertambah otomatis dalam beberapa detik setelah pembayaran lunas!_
+1️⃣ *SCAN QRIS (Semua Bank & E-Wallet):*
+• Simpan / Screenshot gambar QRIS di atas.
+• Buka m-Banking (BCA, BRI, Mandiri, BNI, dll) atau E-Wallet (DANA, GoPay, OVO, ShopeePay).
+• Pilih menu *Scan QRIS* lalu unggah foto dari galeri HP Anda.
+• Nominal terisi otomatis *Rp ${finalAmountNum.toLocaleString('id-ID')}*.
+
+2️⃣ *TRANSFER DANA LANGSUNG:*
+• Nomor DANA : *${danaCfg.number}*
+• Atas Nama  : *${danaCfg.name}*
+• Transfer Tepat : *Rp ${finalAmountNum.toLocaleString('id-ID')}*
+
+⚠️ *PENTING:* Masukkan nominal transfer *PERSIS* hingga digit terakhir agar saldo langsung bertambah otomatis dalam hitungan detik!
 
 ⚖️ _Membayar berarti menyetujui S&K Layanan. Dilarang menggunakan dana ilegal / hasil kejahatan. Info: ketik .snk_`
     });

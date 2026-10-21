@@ -126,11 +126,11 @@ async function runInstaller() {
     const owner = (Array.isArray(existingSettings.owner) ? existingSettings.owner[0] : '') || process.env.OWNER_NUMBER || '';
     const digiUser = existingSettings.digiflazz?.username || process.env.DIGIFLAZZ_USERNAME || '';
     const digiKey = existingSettings.digiflazz?.key || process.env.DIGIFLAZZ_KEY || '';
-    const pMId = existingSettings.paymentkita?.merchantId || process.env.PAYMENTKITA_MERCHANT_ID || '';
-    const pSecret = existingSettings.paymentkita?.secret || process.env.PAYMENTKITA_SECRET || '';
-    const pksProj = existingSettings.pakasir?.project || process.env.PAKASIR_PROJECT || '';
-    const pksKey = existingSettings.pakasir?.key || process.env.PAKASIR_KEY || '';
-    const pGw = existingSettings.paymentGateway || process.env.PAYMENT_GATEWAY || 'paymentkita';
+    const danaNum = existingSettings.dana?.number || process.env.DANA_NUMBER || '081775700114';
+    const danaName = existingSettings.dana?.name || process.env.DANA_NAME || 'ANGGA DIAN PRATAMA PUTRA';
+    const danaToken = existingSettings.dana?.deviceToken || process.env.DANA_DEVICE_TOKEN || 'dana_secret_token_2026';
+    const danaQris = existingSettings.dana?.qrisString || process.env.DANA_QRIS_STRING || '';
+    const pGw = 'dana';
 
     const envContent = `# ==============================================================================
 # 🤖 KREDENSIAL BOT PPOB & TOKO DIGITAL
@@ -150,11 +150,11 @@ OWNER_NUMBER=${owner}
 DIGIFLAZZ_USERNAME=${digiUser}
 DIGIFLAZZ_KEY=${digiKey}
 
-# Payment Gateway Kredensial (Dapat diset via bot Telegram / WA)
-PAYMENTKITA_MERCHANT_ID=${pMId}
-PAYMENTKITA_SECRET=${pSecret}
-PAKASIR_PROJECT=${pksProj}
-PAKASIR_KEY=${pksKey}
+# DANA Auto Transaksi & Dynamic QRIS
+DANA_NUMBER=${danaNum}
+DANA_NAME=${danaName}
+DANA_DEVICE_TOKEN=${danaToken}
+DANA_QRIS_STRING=${danaQris}
 `;
 
     fs.writeFileSync('.env', envContent, 'utf8');
@@ -211,7 +211,7 @@ PAKASIR_KEY=${pksKey}
     console.log(`${C.green}║                                                                  ║${C.reset}`);
     console.log(`${C.green}║   ${C.yellow}${C.bold}FITUR-FITUR INTERAKTIF MODEL TOMBOL INLINE TELEGRAM:${C.reset}${C.green}           ║${C.reset}`);
     console.log(`${C.green}║   • [📱 Hubungkan WA] : Minta kode pairing WhatsApp 8 digit      ║${C.reset}`);
-    console.log(`${C.green}║   • [💳 Ganti Gateway] : Pilih PaymentKita / Pakasir & set key   ║${C.reset}`);
+    console.log(`${C.green}║   • [💳 Gateway DANA]  : DANA Auto & QRIS Dynamic EMVCo (0% Fee)  ║${C.reset}`);
     console.log(`${C.green}║   • [⚡ Digiflazz]     : Set username/key & cek saldo live       ║${C.reset}`);
     console.log(`${C.green}║   • [🏪 Buka/Tutup]   : Buka atau tutup toko langsung 1-klik     ║${C.reset}`);
     console.log(`${C.green}║   • [🔄 Sync PPOB]     : Sinkronisasi katalog produk otomatis    ║${C.reset}`);

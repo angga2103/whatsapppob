@@ -15,9 +15,10 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         let t = `👑 *COMMAND CENTER*\n🏪 Toko: *${db.store.namaToko || "STORE"}*\nStatus: ${statusToko}\n--------------------------\n`;
         t += `⚙️ *PENGATURAN BOT (IN-CHAT)*\n`;
         t += `• *.settings* (Lihat Semua Pengaturan Aktif)\n`;
-        t += `• *.setgateway* [paymentkita/pakasir] (Ganti Payment Gateway)\n`;
-        t += `• *.setpayment* Merchant Secret (Update PaymentKita)\n`;
-        t += `• *.setpakasir* Project Key (Update Pakasir)\n`;
+        t += `• *.setdana* NoHP NamaPemilik (Update Rekening DANA)\n`;
+        t += `• *.setdanatoken* SecretToken (Update Token Listener HP)\n`;
+        t += `• *.setqris* StringQRIS (Update Template Base QRIS)\n`;
+        t += `• *.danastatus* (Cek Status Live HP Pemantau DANA)\n`;
         t += `• *.setdigi* User Key (Update API Digiflazz)\n`;
         t += `• *.settg* Token ChatID (Update Telegram Alert)\n`;
         t += `• *.settier* [kecil/sedang/besar/premium] Nominal (Margin Prabayar)\n`;
@@ -928,12 +929,16 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
         const configData = require('../config');
         const lim = marginHelper.getTierLimits();
         const tier = marginHelper.getProfitTier();
-        const activeGw = (configData.paymentGateway || 'paymentkita').toLowerCase();
+        const danaHelper = require('../lib/dana');
+        const devStatus = danaHelper.getDeviceStatus();
+        const danaCfg = danaHelper.getDanaConfig();
+
         let t = `⚙️ *PENGATURAN BOT AKTIF*\n\n`;
         t += `🏪 *TOKO:*\n• Nama: *${db.store.namaToko || "DIGITAL STORE"}*\n• Status: *${db.store.buka ? "🟢 BUKA" : "🔴 TUTUP"}*\n\n`;
-        t += `💳 *PAYMENT GATEWAY (AKTIF: ${activeGw.toUpperCase()}):*\n`;
-        t += `• PaymentKita: Merchant ID \`${configData.paymentkita.merchantId || '-'}\` | Secret \`${maskSecret(configData.paymentkita.secret)}\`\n`;
-        t += `• Pakasir: Project \`${configData.pakasir.project || '-'}\` | Key \`${maskSecret(configData.pakasir.key)}\`\n\n`;
+        t += `💳 *PAYMENT GATEWAY (DANA AUTO TRANSAKSI 0% FEE):*\n`;
+        t += `• Akun DANA : \`${danaCfg.number}\` a.n *${danaCfg.name}*\n`;
+        t += `• Token Auth: \`${maskSecret(danaCfg.deviceToken)}\`\n`;
+        t += `• Status HP : *${devStatus.isOnline ? '🟢 ONLINE' : '🔴 OFFLINE/STANDBY'}* (Bat: ${devStatus.battery}%, Last: ${devStatus.lastPingStr})\n\n`;
         t += `🔑 *DIGIFLAZZ API:*\n• User: \`${configData.digiflazz.username || '-'}\`\n• Key: \`${maskSecret(configData.digiflazz.key)}\`\n\n`;
         t += `🤖 *TELEGRAM COMMAND CENTER:*\n• Token: \`${maskSecret(configData.telegram.token)}\`\n• Chat ID: \`${configData.telegram.chatId || '-'}\`\n\n`;
         t += `📊 *SKEMA MARGIN AUTOTIER (HARGA MODAL):*\n`;
@@ -952,55 +957,83 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
         return sock.sendMessage(sender, { text: marginHelper.getMarginSummaryText() });
     }
 
-    if (cmd === 'setgateway' || cmd === 'gateway') {
-        const targetGw = args.trim().toLowerCase();
-        if (!['paymentkita', 'pakasir'].includes(targetGw)) {
+    if (cmd === 'danastatus' || cmd === 'cekdana' || cmd === 'hpstatus') {
+        const danaHelper = require('../lib/dana');
+        const devStatus = danaHelper.getDeviceStatus();
+        const danaCfg = danaHelper.getDanaConfig();
+
+        let t = `📱 *STATUS HP PEMANTAU MUTASI DANA*\n\n`;
+        t += `• Perangkat   : *${devStatus.deviceId || 'Samsung J1 Ace'}*\n`;
+        t += `• Aplikasi    : *${devStatus.appVersion || 'PayHook / Notification Listener'}*\n`;
+        t += `• Status      : *${devStatus.isOnline ? '🟢 TERHUBUNG (ONLINE)' : '🔴 TERPUTUS / STANDBY'}*\n`;
+        t += `• Level Baterai: *${devStatus.battery}%* ${devStatus.isCharging ? '⚡ (Sedang Diisi)' : ''}\n`;
+        t += `• IP Device   : \`${devStatus.clientIp}\`\n`;
+        t += `• Ping Terakhir: *${devStatus.lastPingStr}*\n\n`;
+        t += `💳 *AKUN DANA AKTIF:*\n`;
+        t += `• Nomor HP    : \`${danaCfg.number}\`\n`;
+        t += `• Atas Nama   : *${danaCfg.name}*\n`;
+        t += `• Token Device: \`${maskSecret(danaCfg.deviceToken)}\`\n\n`;
+        t += `_Pemberitahuan: Mutasi pembayaran QRIS dan Transfer DANA otomatis diproses detik itu juga begitu notifikasi masuk ke HP._`;
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    if (cmd === 'setdana') {
+        const parts = args.trim().split(/\s+/);
+        if (parts.length < 2) {
             return sock.sendMessage(sender, { 
-                text: `❌ Pilihan gateway tidak valid.\nFormat: .setgateway [paymentkita|pakasir]\nContoh: .setgateway pakasir` 
+                text: "❌ Format salah.\nFormat: .setdana [Nomor_DANA] [Nama_Pemilik]\nContoh: .setdana 081775700114 ANGGA DIAN PRATAMA PUTRA" 
             });
         }
+        const phone = parts[0].replace(/[^0-9]/g, '');
+        const name = parts.slice(1).join(' ').trim();
+        if (phone.length < 10 || !name) {
+            return sock.sendMessage(sender, { text: "❌ Nomor HP DANA minimal 10 digit dan nama pemilik wajib diisi." });
+        }
         if (!db.settings) db.settings = {};
-        db.settings.paymentGateway = targetGw;
+        if (!db.settings.dana) db.settings.dana = {};
+        db.settings.dana.number = phone;
+        db.settings.dana.name = name;
         if (db.saveSettings) db.saveSettings();
         return sock.sendMessage(sender, { 
-            text: `✅ Payment Gateway aktif berhasil disetel ke: *${targetGw.toUpperCase()}*` 
+            text: `✅ *Akun DANA Berhasil Diperbarui!*\n\n• Nomor : \`${phone}\`\n• Nama  : *${name}*` 
         });
     }
 
-    if (cmd === 'setdigi') {
-        const [user, key] = args.trim().split(/\s+/);
-        if (!user || !key || user.length < 3 || key.length < 8) {
-            return sock.sendMessage(sender, { text: "❌ Format salah atau kredensial terlalu pendek.\nFormat: .setdigi [username] [api_key]\nContoh: .setdigi myuser 32d4-xxxx" });
-        }
-        if (!db.settings) db.settings = {};
-        db.settings.digiflazz = { username: user, key: key };
-        if (db.saveSettings) db.saveSettings();
-        return sock.sendMessage(sender, { text: `✅ Berhasil memperbarui kredensial Digiflazz!\nUsername: ${user}\nKey: ${maskSecret(key)}` });
-    }
-
-    if (cmd === 'setpayment') {
-        const [mId, secret] = args.trim().split(/\s+/);
-        if (!mId || !secret || mId.length < 3 || secret.length < 8) {
-            return sock.sendMessage(sender, { text: "❌ Format salah atau secret terlalu pendek.\nFormat: .setpayment [merchant_id] [secret_key]\nContoh: .setpayment PKM12345 PKSK_xxxx" });
-        }
-        if (!db.settings) db.settings = {};
-        db.settings.paymentkita = { merchantId: mId, secret: secret };
-        if (db.saveSettings) db.saveSettings();
-        return sock.sendMessage(sender, { text: `✅ Berhasil memperbarui kredensial PaymentKita!\nMerchant ID: ${mId}\nSecret: ${maskSecret(secret)}` });
-    }
-
-    if (cmd === 'setpakasir') {
-        const [project, key] = args.trim().split(/\s+/);
-        if (!project || !key || project.length < 2 || key.length < 6) {
+    if (cmd === 'setdanatoken') {
+        const token = args.trim();
+        if (!token || token.length < 8) {
             return sock.sendMessage(sender, { 
-                text: "❌ Format salah atau kredensial terlalu pendek.\nFormat: .setpakasir [project_slug] [api_key]\nContoh: .setpakasir myproject 98a7bc..." 
+                text: "❌ Secret token terlalu pendek (minimal 8 karakter).\nFormat: .setdanatoken [SecretToken]\nContoh: .setdanatoken dana_rahasia_12345" 
             });
         }
         if (!db.settings) db.settings = {};
-        db.settings.pakasir = { project, key };
+        if (!db.settings.dana) db.settings.dana = {};
+        db.settings.dana.deviceToken = token;
         if (db.saveSettings) db.saveSettings();
         return sock.sendMessage(sender, { 
-            text: `✅ Berhasil memperbarui kredensial Pakasir!\nProject: ${project}\nKey: ${maskSecret(key)}` 
+            text: `✅ *Token Autentikasi HP DANA Diperbarui!*\nToken Baru: \`${maskSecret(token)}\`` 
+        });
+    }
+
+    if (cmd === 'setqris') {
+        const qrisStr = args.trim();
+        if (!qrisStr || qrisStr.length < 30) {
+            return sock.sendMessage(sender, { 
+                text: "❌ String QRIS terlalu pendek atau tidak valid." 
+            });
+        }
+        const qrisHelper = require('../lib/qris');
+        if (!qrisHelper.validateQris(qrisStr)) {
+            return sock.sendMessage(sender, { 
+                text: "⚠️ Peringatan: Format QRIS tidak valid atau checksum CRC16 salah. Pastikan string QRIS utuh diambil dari aplikasi DANA Bisnis." 
+            });
+        }
+        if (!db.settings) db.settings = {};
+        if (!db.settings.dana) db.settings.dana = {};
+        db.settings.dana.qrisString = qrisStr;
+        if (db.saveSettings) db.saveSettings();
+        return sock.sendMessage(sender, { 
+            text: `✅ *Template Base QRIS DANA Berhasil Disimpan!*\n\nSistem otomatis mengkonversi QRIS ini menjadi QRIS Dinamis berstandar nasional EMVCo dengan nominal terkunci untuk tiap transaksi.` 
         });
     }
 
