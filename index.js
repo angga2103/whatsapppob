@@ -205,7 +205,6 @@ const handleDanaWebhook = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Unauthorized device token' });
         }
 
-        const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.remoteAddress || '127.0.0.1';
         danaHelper.recordDeviceHeartbeat({
             ip: clientIp,
             battery: req.body?.battery ?? req.query?.battery,
