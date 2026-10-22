@@ -6402,6 +6402,19 @@ setInterval(() => {
     } catch (_) {}
 }, 2000);
 
+// ============================================================
+// 🔄 IPAY OFFLINE QUEUE WATCHDOG & AUTO-REPLAY SERVICE
+// Memutar ulang mutasi yang tertunda saat server iPay down/offline
+// ============================================================
+setInterval(async () => {
+    try {
+        if (config.provider?.active === 'ipay') {
+            const ipayHelper = require('./lib/ipay');
+            await ipayHelper.flushPendingQueue();
+        }
+    } catch (_) {}
+}, 30000);
+
 
 
 
