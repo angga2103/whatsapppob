@@ -278,6 +278,146 @@ const handleDanaWebhook = async (req, res) => {
 };
 app.all(['/callback/dana-mutasi', '/callback/dana', '/api/callback/dana-mutasi'], handleDanaWebhook);
 
+// ============================================================
+// 🚀 IPAY H2H TRANSACTION WEBHOOK CALLBACK (PUSH NOTIFICATION)
+// ============================================================
+const ipayHelper = require('./lib/ipay');
+
+const handleIpayWebhook = async (req, res) => {
+    try {
+        const payload = req.body || req.query || {};
+        const event = String(payload.event || payload.type || '').toLowerCase().trim();
+
+        if (event === 'ping') {
+            return res.json({ status: 'ok', success: true, message: 'iPay Webhook Online' });
+        }
+
+        const refId = String(payload.ref_id || payload.client_ref_id || payload.data?.ref_id || '').trim();
+        if (!refId) {
+            return res.json({ status: 'ok', success: true, message: 'No ref_id provided' });
+        }
+
+        console.log(`[IPAY WEBHOOK] ⚡ Callback diterima untuk Ref: ${refId} | Status: ${payload.status}`);
+
+        // Verifikasi Signature jika disertakan dari server iPay
+        if (payload.sign) {
+            const isValid = ipayHelper.verifySignature(payload.sign, refId);
+            if (!isValid) {
+                console.warn(`[IPAY WEBHOOK] ⚠️ Signature mismatch untuk ref_id: ${refId}`);
+                return res.status(401).json({ status: 'error', success: false, message: 'Signature Mismatch' });
+            }
+        }
+
+        // Cari transaksi di database Bot WA
+        const order = (db.orders || []).find(o => o.id === refId);
+        if (!order) {
+            console.warn(`[IPAY WEBHOOK] Order ${refId} tidak ditemukan di database bot.`);
+            return res.json({ status: 'ok', success: false, message: 'Order not found in this bot' });
+        }
+
+        const rawStat = String(payload.status || payload.data?.status || '').toLowerCase();
+        const snToken = String(payload.sn || payload.data?.sn || '').trim();
+        const apiMsg = String(payload.message || payload.data?.message || '').trim();
+        const buyerJid = order.buyer || order.sender || order.jid;
+        const realBuyerJid = buyerJid && typeof buyerJid === 'string' && buyerJid.includes(':') 
+            ? buyerJid.split(':')[0] + '@s.whatsapp.net' 
+            : buyerJid;
+
+        if (rawStat === 'success' || rawStat === 'sukses') {
+            if (order.status !== 'success') {
+                order.status = 'success';
+                if (snToken) order.sn = snToken;
+                order.profit = analytics.calculateOrderProfit(order, db.ppob);
+                if (typeof db.saveOrders === 'function') db.saveOrders();
+
+                activeTransactions.delete(
+                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+                );
+
+                // Kirim notifikasi WA ke Pembeli
+                if (global.sock && realBuyerJid) {
+                    const rawSn = snToken || order.sn || '';
+                    const plnData = formatPlnToken(rawSn);
+                    const storeName = db.store?.namaToko || 'DIGITAL STORE';
+                    const timeStr = getTanggalLengkap(order.timestamp || Date.now());
+
+                    let textSucc = `🎉 *PESANAN SELESAI!*\n`;
+                    textSucc += `━━━━━━━━━━━━━━━━━━━━━\n`;
+                    textSucc += `🏪 *Toko:* ${storeName}\n`;
+                    textSucc += `🧾 *Invoice:* \`${order.id}\`\n`;
+                    textSucc += `📦 *Produk:* ${order.item}\n`;
+                    textSucc += `🎯 *Target:* ${order.target}\n`;
+                    textSucc += `💰 *Harga:* ${formatRupiah(order.price)}\n`;
+                    textSucc += `📅 *Waktu:* ${timeStr}\n`;
+                    textSucc += `━━━━━━━━━━━━━━━━━━━━━\n`;
+                    if (plnData.isPln) {
+                        textSucc += `⚡ *TOKEN PLN:* \`${plnData.token}\`\n`;
+                    } else if (rawSn) {
+                        textSucc += `🔑 *SN / Bukti:* \`${rawSn}\`\n`;
+                    }
+                    textSucc += `\n_Terima kasih telah bertransaksi di toko kami!_`;
+
+                    await global.sock.sendMessage(realBuyerJid, { text: textSucc }).catch(() => {});
+                }
+
+                // Kirim notifikasi Telegram ke Admin
+                if (global.botTg && config.telegram?.chatId) {
+                    global.botTg.sendMessage(config.telegram.chatId,
+                        `✅ *TRANSAKSI H2H IPAY SUKSES*\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `• Invoice : \`${order.id}\`\n` +
+                        `• Produk  : *${order.item}*\n` +
+                        `• Target  : \`${order.target}\`\n` +
+                        `• SN/Token: \`${snToken || '-'}\`\n` +
+                        `• Profit  : *${formatRupiah(order.profit || 0)}*`,
+                        { parse_mode: 'Markdown' }
+                    ).catch(() => {});
+                }
+            }
+        } else if (rawStat === 'failed' || rawStat === 'gagal') {
+            if (order.status !== 'failed' && !order.refunded) {
+                // Auto-Refund dengan proteksi anti double refund
+                const refundRes = db.refundOrder(order, `Transaksi Gagal dari Provider iPay (${apiMsg || 'Gagal'})`);
+
+                activeTransactions.delete(
+                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+                );
+
+                // Kirim pesan WA ke Pembeli
+                if (global.sock && realBuyerJid) {
+                    const failMsg = `❌ *TRANSAKSI GAGAL*\n\n` +
+                        `Pesanan *${order.item}* untuk nomor *${order.target}* mengalami kendala dari provider.\n\n` +
+                        `💰 Saldo sebesar *${formatRupiah(order.price)}* telah *DIKEMBALIKAN 100%* ke dompet Anda.\n` +
+                        `Silakan coba beberapa saat lagi atau hubungi admin.`;
+
+                    await global.sock.sendMessage(realBuyerJid, { text: failMsg }).catch(() => {});
+                }
+
+                // Notifikasi Telegram Admin
+                if (global.botTg && config.telegram?.chatId) {
+                    global.botTg.sendMessage(config.telegram.chatId,
+                        `⚠️ *TRANSAKSI H2H IPAY GAGAL (REFUND)*\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━\n` +
+                        `• Invoice : \`${order.id}\`\n` +
+                        `• Produk  : *${order.item}*\n` +
+                        `• Target  : \`${order.target}\`\n` +
+                        `• Alasan  : *${apiMsg || 'Gagal dari provider'}*\n` +
+                        `• Refund  : *${refundRes.success ? formatRupiah(order.price) : 'Gagal (' + refundRes.reason + ')'}*`,
+                        { parse_mode: 'Markdown' }
+                    ).catch(() => {});
+                }
+            }
+        }
+
+        return res.json({ success: true, message: 'iPay Webhook Processed', status: rawStat });
+    } catch (err) {
+        console.error('[IPAY WEBHOOK EXCEPTION]', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+app.all(['/callback/ipay-trx', '/callback/ipay', '/api/callback/ipay-trx', '/api/ppob/webhook'], handleIpayWebhook);
+
 const webPort = config.port || 3000;
 try {
     const server = app.listen(webPort, () => {
@@ -1187,7 +1327,7 @@ if (!global.heartbeatStarted) {
                 'admin', 'pullppob', 'cekdigi', 'addsaldo', 'tariksaldo', 'addmenu', 'adddata', 'delmenu', 
                 'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
-                'settings', 'pengaturan', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
+                'settings', 'pengaturan', 'setprovider', 'setipay', 'statusipay', 'cekipay', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
                 'setdana', 'setdanatoken', 'setqris', 'danastatus',
                 'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
                 'kirimakun', 'kirim', 'batalorder',
@@ -1266,6 +1406,7 @@ async function processCheckout(sock, sender, session) {
         isPasca: !!item.isPasca,
         sku: item.sku, 
         target: session.tempTarget || '-', 
+        provider: config.provider?.active || 'digiflazz',
         timestamp: Date.now() 
     };
 
@@ -2517,19 +2658,37 @@ function initTelegramBot() {
         };
 
         const renderDigiMenu = () => {
-            let text = `⚡ *PENGATURAN DIGIFLAZZ*\n\n`;
-            text += `• Username: \`${config.digiflazz.username || '(Belum diatur)'}\`\n`;
-            text += `• API Key: \`${maskSecret(config.digiflazz.key)}\`\n\n`;
+            const configData = require('./config');
+            const isIpay = configData.provider?.active === 'ipay';
+            let text = `⚡ *PENGATURAN PROVIDER & H2H API*\n\n`;
+            text += `• Provider Aktif: *${isIpay ? '🚀 iPay (GarudaTel H2H)' : '⚡ Digiflazz Direct'}*\n\n`;
+            text += `🚀 *iPay (GarudaTel H2H):*\n`;
+            text += `• Merchant ID : \`${configData.ipay.merchantId || '(Belum diatur)'}\`\n`;
+            text += `• API Key     : \`${maskSecret(configData.ipay.apiKey)}\`\n`;
+            text += `• Base URL    : \`${configData.ipay.baseUrl}\`\n\n`;
+            text += `⚡ *Digiflazz Direct:*\n`;
+            text += `• Username    : \`${config.digiflazz.username || '(Belum diatur)'}\`\n`;
+            text += `• API Key     : \`${maskSecret(config.digiflazz.key)}\`\n\n`;
             text += `_Pilih aksi melalui tombol di bawah:_`;
 
             const reply_markup = {
                 inline_keyboard: [
                     [
-                        { text: '🔑 Set Username & Key', callback_data: 'tg_input_digi' }
+                        { 
+                            text: isIpay ? '⚡ Beralih ke Digiflazz Direct' : '🚀 Beralih ke iPay (GarudaTel H2H)', 
+                            callback_data: 'tg_switch_provider' 
+                        }
                     ],
                     [
-                        { text: '💰 Cek Saldo Digi', callback_data: 'tg_cekdigi' },
-                        { text: '🔄 Sinkronisasi Produk', callback_data: 'tg_sync' }
+                        { text: '🚀 Atur Kredensial iPay', callback_data: 'tg_input_ipay' },
+                        { text: '⚡ Atur Digiflazz', callback_data: 'tg_input_digi' }
+                    ],
+                    [
+                        { text: '💰 Saldo iPay', callback_data: 'tg_cek_ipay' },
+                        { text: '💰 Saldo Digi', callback_data: 'tg_cekdigi' }
+                    ],
+                    [
+                        { text: '🔄 Sinkronisasi Produk Aktif', callback_data: 'tg_sync' }
                     ],
                     [
                         { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
@@ -3735,6 +3894,62 @@ function initTelegramBot() {
                 global.tgInputState = null;
                 global.botTg.answerCallbackQuery(query.id);
                 return updateOrSend(chatId, messageId, renderDigiMenu());
+            }
+
+            if (action === 'tg_switch_provider') {
+                const configData = require('./config');
+                const cur = configData.provider?.active === 'ipay' ? 'digiflazz' : 'ipay';
+                if (!db.settings) db.settings = {};
+                if (!db.settings.provider) db.settings.provider = {};
+                db.settings.provider.active = cur;
+                db.settings.providerActive = cur;
+                if (db.saveSettings) db.saveSettings();
+
+                global.botTg.answerCallbackQuery(query.id, { 
+                    text: `✅ Provider diubah ke: ${cur === 'ipay' ? 'iPay (GarudaTel H2H)' : 'Digiflazz Direct'}` 
+                });
+                return updateOrSend(chatId, messageId, renderDigiMenu());
+            }
+
+            if (action === 'tg_input_ipay') {
+                global.botTg.answerCallbackQuery(query.id);
+                global.tgInputState = { type: 'set_ipay', chatId };
+                return global.botTg.sendMessage(chatId,
+                    `🚀 *PENGATURAN KREDENSIAL H2H IPAY*\n\n` +
+                    `Kirimkan data berikut dipisahkan spasi:\n` +
+                    `\`<MERCHANT_ID> <API_KEY> <SECRET_KEY> [BASE_URL]\`\n\n` +
+                    `Contoh:\n` +
+                    `\`IPAY_MCH_00789 IPAY_LIVE_3a91b... SEC_99881... https://ipay.my.id\``,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digi_menu' }]]
+                        }
+                    }
+                );
+            }
+
+            if (action === 'tg_cek_ipay') {
+                global.botTg.answerCallbackQuery(query.id, { text: '⏳ Mengambil saldo iPay H2H...' });
+                const saldo = await ipayHelper.cekSaldoIpay();
+                const cfg = ipayHelper.getIpayConfig();
+                const text = `🚀 *SALDO H2H IPAY (GARUDATEL)*\n\n` +
+                    `• Base URL: \`${cfg.baseUrl}\`\n` +
+                    `• Merchant ID: \`${cfg.merchantId || '(Belum disetel)'}\`\n` +
+                    `• Saldo: *${typeof saldo === 'number' ? formatRupiah(saldo) : saldo}*\n` +
+                    `• Status: *${typeof saldo === 'number' ? '🟢 TERHUBUNG' : '🔴 ' + saldo}*\n` +
+                    `• Waktu Cek: ${new Date().toLocaleString('id-ID')}\n\n` +
+                    `_Webhook:_ \`https://botwa.garudatel.my.id/callback/ipay-trx\``;
+                return updateOrSend(chatId, messageId, {
+                    text,
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔄 Cek Saldo iPay Lagi', callback_data: 'tg_cek_ipay' }],
+                            [{ text: '⚡ Menu Provider', callback_data: 'tg_digi_menu' }],
+                            [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
+                        ]
+                    }
+                });
             }
 
             if (action === 'tg_input_digi') {
@@ -5623,6 +5838,43 @@ function initTelegramBot() {
                         reply_markup: {
                             inline_keyboard: [
                                 [{ text: '💰 Cek Saldo', callback_data: 'tg_cekdigi' }],
+                                [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
+                            ]
+                        }
+                    });
+                }
+
+                if (stateType === 'set_ipay') {
+                    const parts = text.split(/\s+/);
+                    if (parts.length < 3) {
+                        return global.botTg.sendMessage(chatId,
+                            `❌ *Format salah!*\n\nKirimkan dengan format:\n\`<MERCHANT_ID> <API_KEY> <SECRET_KEY> [BASE_URL]\`\n\nContoh:\n\`IPAY_MCH_00789 IPAY_LIVE_3a91b... SEC_99881... https://ipay.my.id\``, {
+                            parse_mode: 'Markdown',
+                            reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_digi_menu' }]] }
+                        });
+                    }
+                    const [mchId, apiKey, secKey, customUrl] = parts;
+                    if (!db.settings) db.settings = {};
+                    if (!db.settings.provider) db.settings.provider = {};
+                    if (!db.settings.provider.ipay) db.settings.provider.ipay = {};
+                    db.settings.provider.ipay.merchantId = mchId;
+                    db.settings.provider.ipay.apiKey = apiKey;
+                    db.settings.provider.ipay.secretKey = secKey;
+                    if (customUrl) db.settings.provider.ipay.baseUrl = customUrl.replace(/\/+$/, '');
+                    if (db.saveSettings) db.saveSettings();
+                    global.tgInputState = null;
+
+                    return global.botTg.sendMessage(chatId,
+                        `✅ *Kredensial H2H iPay Berhasil Disimpan!*\n\n` +
+                        `• Merchant ID: \`${mchId}\`\n` +
+                        `• API Key    : \`${maskSecret(apiKey)}\`\n` +
+                        `• Base URL   : \`${db.settings.provider.ipay.baseUrl || 'https://ipay.my.id'}\`\n\n` +
+                        `_Silakan uji koneksi & cek saldo dengan tombol di bawah:_`, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '🚀 Cek Saldo & Status iPay', callback_data: 'tg_cek_ipay' }],
+                                [{ text: '⚡ Menu Provider', callback_data: 'tg_digi_menu' }],
                                 [{ text: '🤖 Menu Utama', callback_data: 'tg_menu' }]
                             ]
                         }

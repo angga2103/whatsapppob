@@ -59,6 +59,24 @@ const config = {
             key: s.digiflazz?.key || process.env.DIGIFLAZZ_KEY || ''
         };
     },
+    get provider() {
+        const s = getSettings();
+        const p = s.provider || {};
+        return {
+            active: String(p.active || s.providerActive || process.env.PROVIDER_ACTIVE || 'digiflazz').toLowerCase().trim(),
+            ipay: {
+                baseUrl: String(p.ipay?.baseUrl || s.ipay?.baseUrl || process.env.IPAY_BASE_URL || 'https://ipay.my.id').replace(/\/+$/, ''),
+                merchantId: String(p.ipay?.merchantId || s.ipay?.merchantId || process.env.IPAY_MERCHANT_ID || '').trim(),
+                apiKey: String(p.ipay?.apiKey || s.ipay?.apiKey || process.env.IPAY_API_KEY || '').trim(),
+                secretKey: String(p.ipay?.secretKey || s.ipay?.secretKey || process.env.IPAY_SECRET_KEY || '').trim(),
+                autoSyncMinutes: Number(p.ipay?.autoSyncMinutes || s.ipay?.autoSyncMinutes || 30),
+                lowBalanceAlert: Number(p.ipay?.lowBalanceAlert || s.ipay?.lowBalanceAlert || 100000)
+            }
+        };
+    },
+    get ipay() {
+        return this.provider.ipay;
+    },
     get telegram() {
         const s = getSettings();
         const sToken = (s.telegram?.token || '').trim();

@@ -807,11 +807,13 @@ cmd_change_gateway() {
 
     echo "Pilih gateway yang ingin diatur:"
     echo "1) Digiflazz (Username & Production/Development Key)"
-    echo "2) DANA Auto Transaksi (Nomor Akun, Atas Nama & Device Token)"
-    echo "3) Status HP Pemantau DANA (Samsung J1 Ace Heartbeat)"
-    echo "4) Update Base String QRIS DANA"
+    echo "2) iPay H2H GarudaTel (Merchant ID, API Key, Secret Key, URL)"
+    echo "3) Ganti Provider PPOB Aktif (ipay / digiflazz)"
+    echo "4) DANA Auto Transaksi (Nomor Akun, Atas Nama & Device Token)"
+    echo "5) Status HP Pemantau DANA (Samsung J1 Ace Heartbeat)"
+    echo "6) Update Base String QRIS DANA"
     echo "0) Batal"
-    read -p "Pilihan Anda [0-4]: " gw_opt
+    read -p "Pilihan Anda [0-6]: " gw_opt
 
     local PNAME=$(get_pm2_process_name)
 
@@ -834,6 +836,62 @@ cmd_change_gateway() {
             echo -e "${GREEN}✅ Kredensial Digiflazz tersimpan dan bot ($PNAME) direstart.${NC}"
         fi
     elif [ "$gw_opt" == "2" ]; then
+        echo -e "\n${CYAN}⚙️ PENGATURAN KREDENSIAL IPAY H2H (GARUDATEL)${NC}"
+        read -p "Merchant ID iPay (contoh: MCH-12345678): " IPAY_MCH
+        read -p "API Key iPay                        : " IPAY_KEY
+        read -p "Secret Key iPay                     : " IPAY_SEC
+        read -p "Base URL iPay (Default: https://ipay.my.id): " IPAY_URL
+        if [ -z "$IPAY_URL" ]; then
+            IPAY_URL="https://ipay.my.id"
+        fi
+        if [ -n "$IPAY_KEY" ]; then
+            node -e "
+                const fs = require('fs');
+                const mch = (process.argv[1] || '').trim();
+                const key = (process.argv[2] || '').trim();
+                const sec = (process.argv[3] || '').trim();
+                const url = (process.argv[4] || 'https://ipay.my.id').trim();
+                ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
+                    let s = {}; try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_){}
+                    if (!s.ipay) s.ipay = {};
+                    if (mch) s.ipay.merchantId = mch;
+                    if (key) s.ipay.apiKey = key;
+                    if (sec) s.ipay.secretKey = sec;
+                    if (url) s.ipay.baseUrl = url;
+                    fs.writeFileSync(f, JSON.stringify(s, null, 2), 'utf8');
+                });
+                console.log('✓ Kredensial iPay H2H berhasil diperbarui!');
+            " "$IPAY_MCH" "$IPAY_KEY" "$IPAY_SEC" "$IPAY_URL"
+            pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+            echo -e "${GREEN}✅ Kredensial iPay H2H tersimpan dan bot ($PNAME) direstart.${NC}"
+        fi
+    elif [ "$gw_opt" == "3" ]; then
+        echo -e "\n${CYAN}🔄 GANTI PROVIDER PPOB AKTIF${NC}"
+        echo "1) iPay (H2H via https://ipay.my.id)"
+        echo "2) Digiflazz (Direct Digiflazz API)"
+        read -p "Pilih provider [1/2]: " prov_choice
+        local NEW_PROV=""
+        if [ "$prov_choice" == "1" ]; then
+            NEW_PROV="ipay"
+        elif [ "$prov_choice" == "2" ]; then
+            NEW_PROV="digiflazz"
+        fi
+        if [ -n "$NEW_PROV" ]; then
+            node -e "
+                const fs = require('fs');
+                const p = process.argv[1];
+                ['./database/settings.json', './database/settings.backup.json'].forEach(f => {
+                    let s = {}; try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch(_){}
+                    if (!s.provider) s.provider = {};
+                    s.provider.active = p;
+                    fs.writeFileSync(f, JSON.stringify(s, null, 2), 'utf8');
+                });
+                console.log('✓ Provider aktif berhasil diubah menjadi: ' + p.toUpperCase());
+            " "$NEW_PROV"
+            pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
+            echo -e "${GREEN}✅ Provider aktif diubah ke $NEW_PROV dan bot ($PNAME) direstart.${NC}"
+        fi
+    elif [ "$gw_opt" == "4" ]; then
         read -p "Masukkan Nomor DANA (contoh: 081775700114)        : " D_NUM
         read -p "Masukkan Nama Pemilik DANA (contoh: ANGGA DIAN...) : " D_NAME
         read -p "Masukkan Device Token Forwarder HP                 : " D_TOKEN
@@ -859,7 +917,7 @@ cmd_change_gateway() {
             pm2 restart "$PNAME" 2>/dev/null || pm2 restart all 2>/dev/null || pm2 start index.js --name bot-ppob
             echo -e "${GREEN}✅ Konfigurasi DANA tersimpan dan bot ($PNAME) direstart.${NC}"
         fi
-    elif [ "$gw_opt" == "3" ]; then
+    elif [ "$gw_opt" == "5" ]; then
         node -e "
             const fs = require('fs');
             const path = require('path');
@@ -884,7 +942,7 @@ cmd_change_gateway() {
                 console.log('Gagal membaca status: ' + e.message);
             }
         "
-    elif [ "$gw_opt" == "4" ]; then
+    elif [ "$gw_opt" == "6" ]; then
         read -p "Masukkan Base String QRIS DANA (000201...): " D_QRIS
         if [ -n "$D_QRIS" ]; then
             node -e "

@@ -15,6 +15,9 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         let t = `👑 *COMMAND CENTER*\n🏪 Toko: *${db.store.namaToko || "STORE"}*\nStatus: ${statusToko}\n--------------------------\n`;
         t += `⚙️ *PENGATURAN BOT (IN-CHAT)*\n`;
         t += `• *.settings* (Lihat Semua Pengaturan Aktif)\n`;
+        t += `• *.setprovider* [ipay/digi] (Ganti Provider Aktif)\n`;
+        t += `• *.setipay* MchID ApiKey SecKey [URL] (Konfigurasi H2H iPay)\n`;
+        t += `• *.statusipay* (Cek Koneksi & Saldo H2H iPay)\n`;
         t += `• *.setdana* NoHP NamaPemilik (Update Rekening DANA)\n`;
         t += `• *.setdanatoken* SecretToken (Update Token Listener HP)\n`;
         t += `• *.setqris* StringQRIS (Update Template Base QRIS)\n`;
@@ -935,6 +938,13 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
 
         let t = `⚙️ *PENGATURAN BOT AKTIF*\n\n`;
         t += `🏪 *TOKO:*\n• Nama: *${db.store.namaToko || "DIGITAL STORE"}*\n• Status: *${db.store.buka ? "🟢 BUKA" : "🔴 TUTUP"}*\n\n`;
+        t += `🌐 *PROVIDER TRANSAKSI UTAMA:*\n`;
+        t += `• Mode Aktif: *${configData.provider?.active === 'ipay' ? '🚀 iPay (GarudaTel H2H)' : '⚡ Digiflazz Direct'}*\n\n`;
+        t += `🚀 *IPAY (GARUDATEL) H2H API:*\n`;
+        t += `• Base URL   : \`${configData.ipay.baseUrl}\`\n`;
+        t += `• Merchant ID: \`${configData.ipay.merchantId || '-'}\`\n`;
+        t += `• API Key    : \`${maskSecret(configData.ipay.apiKey)}\`\n`;
+        t += `• Status H2H : *${configData.ipay.apiKey && configData.ipay.merchantId ? '🟢 TERKONFIGURASI' : '🔴 BELUM DIATUR'}*\n\n`;
         t += `💳 *PAYMENT GATEWAY (DANA AUTO TRANSAKSI 0% FEE):*\n`;
         t += `• Akun DANA : \`${danaCfg.number}\` a.n *${danaCfg.name}*\n`;
         t += `• Token Auth: \`${maskSecret(danaCfg.deviceToken)}\`\n`;
@@ -1046,6 +1056,81 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
         db.settings.telegram = { token, chatId };
         if (db.saveSettings) db.saveSettings();
         return sock.sendMessage(sender, { text: `✅ Berhasil memperbarui konfigurasi Telegram!\nToken: ${maskSecret(token)}\nChat ID: ${chatId}` });
+    }
+
+    if (cmd === 'setprovider') {
+        const mode = args.trim().toLowerCase();
+        if (!['ipay', 'digi', 'digiflazz'].includes(mode)) {
+            return sock.sendMessage(sender, {
+                text: `❌ Format salah.\nPilihan provider:\n• *.setprovider ipay* (Mode H2H GarudaTel)\n• *.setprovider digi* (Mode Langsung Digiflazz)`
+            });
+        }
+        const activeMode = (mode === 'digi' || mode === 'digiflazz') ? 'digiflazz' : 'ipay';
+        if (!db.settings) db.settings = {};
+        if (!db.settings.provider) db.settings.provider = {};
+        db.settings.provider.active = activeMode;
+        db.settings.providerActive = activeMode;
+        if (db.saveSettings) db.saveSettings();
+        return sock.sendMessage(sender, {
+            text: `✅ *PROVIDER TRANSAKSI BERHASIL DIUBAH!*\n\n• Provider Aktif: *${activeMode === 'ipay' ? '🚀 iPay (GarudaTel H2H)' : '⚡ Digiflazz Direct'}*\n\n_💡 Tips: Ketik *.sync* untuk memperbarui katalog produk dari provider aktif._`
+        });
+    }
+
+    if (cmd === 'setipay') {
+        const parts = args.trim().split(/\s+/);
+        if (parts.length < 3) {
+            return sock.sendMessage(sender, {
+                text: `❌ Format salah.\nFormat: *.setipay [Merchant_ID] [API_Key] [Secret_Key] [Base_URL_Opsional]*\n\nContoh:\n.setipay IPAY_MCH_00789 IPAY_LIVE_3a91b8... SEC_998811... https://ipay.my.id`
+            });
+        }
+        const [mchId, apiKey, secKey, customUrl] = parts;
+        if (!db.settings) db.settings = {};
+        if (!db.settings.provider) db.settings.provider = {};
+        if (!db.settings.provider.ipay) db.settings.provider.ipay = {};
+        db.settings.provider.ipay.merchantId = mchId;
+        db.settings.provider.ipay.apiKey = apiKey;
+        db.settings.provider.ipay.secretKey = secKey;
+        if (customUrl) db.settings.provider.ipay.baseUrl = customUrl.replace(/\/+$/, '');
+        if (db.saveSettings) db.saveSettings();
+
+        return sock.sendMessage(sender, {
+            text: `✅ *KREDENSIAL H2H IPAY BERHASIL DISIMPAN!*\n\n` +
+                  `• Merchant ID: \`${mchId}\`\n` +
+                  `• API Key    : \`${maskSecret(apiKey)}\`\n` +
+                  `• Secret Key : \`${maskSecret(secKey)}\`\n` +
+                  `• Base URL   : \`${db.settings.provider.ipay.baseUrl || 'https://ipay.my.id'}\`\n\n` +
+                  `_Ketik *.statusipay* untuk mengetes koneksi & saldo H2H, atau ketik *.setprovider ipay* untuk mengaktifkan._`
+        });
+    }
+
+    if (cmd === 'statusipay' || cmd === 'cekipay') {
+        const ipayHelper = require('../lib/ipay');
+        const cfg = ipayHelper.getIpayConfig();
+        const saldo = await ipayHelper.cekSaldoIpay();
+        const saldoStr = typeof saldo === 'number' ? formatRupiah(saldo) : saldo;
+
+        let t = `🚀 *STATUS KONEKSI H2H IPAY (GARUDATEL)*\n\n`;
+        t += `• Base URL   : \`${cfg.baseUrl}\`\n`;
+        t += `• Merchant ID: \`${cfg.merchantId || '(Belum disetel)'}\`\n`;
+        t += `• API Key    : \`${maskSecret(cfg.apiKey)}\`\n`;
+        t += `• Saldo Akun : *${saldoStr}*\n`;
+        t += `• Status H2H : *${typeof saldo === 'number' ? '🟢 TERHUBUNG (ONLINE)' : '🔴 ' + saldo}*\n\n`;
+        t += `_Webhook URL Bot WA:_ \`https://botwa.garudatel.my.id/callback/ipay-trx\``;
+        return sock.sendMessage(sender, { text: t });
+    }
+
+    if (cmd === 'setdigi') {
+        const parts = args.trim().split(/\s+/);
+        if (parts.length < 2) {
+            return sock.sendMessage(sender, { text: "❌ Format: .setdigi [Username] [API_Key]\nContoh: .setdigi user123 32d4-xxxx-xxxx" });
+        }
+        const [username, key] = parts;
+        if (!db.settings) db.settings = {};
+        db.settings.digiflazz = { username, key };
+        if (db.saveSettings) db.saveSettings();
+        return sock.sendMessage(sender, {
+            text: `✅ *Kredensial Digiflazz Berhasil Disimpan!*\n\n• Username: \`${username}\`\n• Key: \`${maskSecret(key)}\``
+        });
     }
 
     if (cmd === 'setprofit') {
