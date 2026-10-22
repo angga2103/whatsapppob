@@ -167,21 +167,28 @@ if (cmd === 'namatoko') {
         
         const targetJid = `${phone}@s.whatsapp.net`;
         const user = db.getUser(targetJid);
-        user.saldo = (Number(user.saldo) || 0) + nominal;
+
+        // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Update ke iPay terlebih dahulu jika provider iPay aktif
+        if (config.provider?.active === 'ipay') {
+            try {
+                const ipayHelper = require('../lib/ipay');
+                const ipayRes = await ipayHelper.adjustMemberBalance(phone, nominal, 'add', 'Topup Manual Admin Bot WA');
+                if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                    user.saldo = ipayRes.new_balance;
+                } else {
+                    return sock.sendMessage(sender, { text: `❌ Gagal update saldo di iPay: ${ipayRes?.message || 'Server timeout'}` });
+                }
+            } catch (e) {
+                return sock.sendMessage(sender, { text: `❌ Terjadi kesalahan saat menghubungi iPay: ${e.message}` });
+            }
+        } else {
+            user.saldo = (Number(user.saldo) || 0) + nominal;
+        }
+
         if (!Array.isArray(user.history)) user.history = [];
         const dateStr = new Date().toLocaleDateString('id-ID');
         user.history.push(`[${dateStr}] 🟢 Topup Admin (+Rp ${nominal.toLocaleString('id-ID')})`);
         db.saveUsers();
-
-        // Sinkronkan ke akun member di iPay jika provider iPay aktif
-        if (config.provider?.active === 'ipay') {
-            try {
-                const ipayHelper = require('../lib/ipay');
-                ipayHelper.adjustMemberBalance(phone, nominal, 'add', 'Topup Manual Admin Bot WA').catch(e => {
-                    console.error('[IPAY ADDSALDO ERROR]', e.message);
-                });
-            } catch (_) {}
-        }
 
         await sock.sendMessage(targetJid, { text: `✅ Saldo disesuaikan Admin: ${formatRupiah(nominal)}. Saldo Anda: ${formatRupiah(user.saldo)}` }).catch(()=>{});
         return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditambah ${formatRupiah(nominal)}. Saldo baru: ${formatRupiah(user.saldo)}` });
@@ -202,24 +209,31 @@ if (cmd === 'namatoko') {
 
         const targetJid = `${phone}@s.whatsapp.net`;
         const user = db.getUser(targetJid);
-        if ((Number(user.saldo) || 0) < nominal) {
-            return sock.sendMessage(sender, { text: `❌ Saldo member tidak mencukupi untuk ditarik. Saldo saat ini: ${formatRupiah(user.saldo || 0)}` });
+
+        // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Tarik saldo di iPay terlebih dahulu jika provider iPay aktif
+        if (config.provider?.active === 'ipay') {
+            try {
+                const ipayHelper = require('../lib/ipay');
+                const ipayRes = await ipayHelper.adjustMemberBalance(phone, nominal, 'deduct', 'Tarik Saldo Manual Admin Bot WA');
+                if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                    user.saldo = ipayRes.new_balance;
+                } else {
+                    return sock.sendMessage(sender, { text: `❌ Gagal tarik saldo di iPay: ${ipayRes?.message || 'Saldo tidak mencukupi'}` });
+                }
+            } catch (e) {
+                return sock.sendMessage(sender, { text: `❌ Terjadi kesalahan saat menghubungi iPay: ${e.message}` });
+            }
+        } else {
+            if ((Number(user.saldo) || 0) < nominal) {
+                return sock.sendMessage(sender, { text: `❌ Saldo member tidak mencukupi untuk ditarik. Saldo saat ini: ${formatRupiah(user.saldo || 0)}` });
+            }
+            user.saldo = (Number(user.saldo) || 0) - nominal;
         }
-        user.saldo = (Number(user.saldo) || 0) - nominal;
+
         if (!Array.isArray(user.history)) user.history = [];
         const dateStr = new Date().toLocaleDateString('id-ID');
         user.history.push(`[${dateStr}] 🔴 Penarikan/Koreksi Admin (-Rp ${nominal.toLocaleString('id-ID')})`);
         db.saveUsers();
-
-        // Sinkronkan ke akun member di iPay jika provider iPay aktif
-        if (config.provider?.active === 'ipay') {
-            try {
-                const ipayHelper = require('../lib/ipay');
-                ipayHelper.adjustMemberBalance(phone, nominal, 'deduct', 'Tarik Saldo Manual Admin Bot WA').catch(e => {
-                    console.error('[IPAY TARIK ERROR]', e.message);
-                });
-            } catch (_) {}
-        }
 
         await sock.sendMessage(targetJid, { text: `⚠️ Saldo Anda dikoreksi/ditarik Admin sebesar ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` }).catch(()=>{});
         return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditarik ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` });

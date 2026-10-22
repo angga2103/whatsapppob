@@ -215,14 +215,19 @@ const handleDanaWebhook = async (req, res) => {
         const result = await danaHelper.processIncomingDanaMutation({
             payload,
             onDepositSuccess: async ({ deposit, user, nominalPokok, amount, sender, targetJid }) => {
-                // Sinkronkan ke saldo akun member di iPay jika provider iPay aktif
+                // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Sinkronkan ke saldo akun member di iPay jika provider iPay aktif
                 if (config.provider?.active === 'ipay') {
                     try {
                         const targetPhone = user.phone || targetJid.replace(/[^0-9]/g, '');
-                        ipayHelper.adjustMemberBalance(targetPhone, nominalPokok, 'add', `Deposit DANA Bot WA (${deposit.id})`).catch(e => {
-                            console.error('[IPAY DEPOSIT SYNC ERR]', e.message);
-                        });
-                    } catch (_) {}
+                        const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, nominalPokok, 'add', `Deposit DANA (${deposit.id})`);
+                        if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                            user.saldo = ipayRes.new_balance;
+                            if (db.saveUsers) db.saveUsers();
+                            console.log(`[IPAY DEPOSIT SYNC OK] User ${targetPhone} saldo sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
+                        }
+                    } catch (e) {
+                        console.error('[IPAY DEPOSIT SYNC ERR]', e.message);
+                    }
                 }
 
                 // Notifikasi WA Member
@@ -279,6 +284,21 @@ const handleDanaWebhook = async (req, res) => {
                 }
             }
         });
+
+        // ⚠️ Deteksi Mutasi DANA Masuk Tanpa Tiket Pending / Tanpa Kode Unik
+        if (!result.success && result.unmatched) {
+            if (global.botTg && config.telegram?.chatId) {
+                global.botTg.sendMessage(config.telegram.chatId,
+                    `⚠️ *MUTASI DANA MASUK (UNMATCHED / TANPA TIKET)*\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `• Nominal: *Rp ${Number(result.amount).toLocaleString('id-ID')}*\n` +
+                    `• Pengirim: *${result.sender || 'Member DANA'}*\n` +
+                    `• Waktu: ${danaHelper.formatWib()}\n\n` +
+                    `_Perhatian: Mutasi ini tidak cocok dengan tiket pending manapun (kemungkinan member transfer tanpa kode unik atau tiket sudah kedaluwarsa). Silakan cek manual jika diperlukan._`,
+                    { parse_mode: 'Markdown' }
+                ).catch(() => {});
+            }
+        }
 
         return res.json(result);
     } catch (err) {
@@ -1486,15 +1506,19 @@ async function processCheckout(sock, sender, session) {
             db.orders.push(order);
             db.saveOrders();
 
-            // Potong saldo akun member di server iPay secara live
+            // 🚀 Potong saldo akun member di server iPay secara live (SSOT)
             if (config.provider?.active === 'ipay') {
                 try {
                     const ipayHelper = require('./lib/ipay');
                     const bPhone = buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, '');
-                    ipayHelper.adjustMemberBalance(bPhone, baseAmount, 'deduct', `Beli ${order.item} (${oid})`).catch(e => {
-                        console.error('[IPAY DEDUCT MEMBER ERROR]', e.message);
-                    });
-                } catch (_) {}
+                    const ipayRes = await ipayHelper.adjustMemberBalance(bPhone, baseAmount, 'deduct', `Beli ${order.item} (${oid})`);
+                    if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                        buyerUser.saldo = ipayRes.new_balance;
+                        if (db.saveUsers) db.saveUsers();
+                    }
+                } catch (e) {
+                    console.error('[IPAY DEDUCT MEMBER ERROR]', e.message);
+                }
             }
 
             return handleSuccessPayment(sock, order, true);
@@ -1618,7 +1642,13 @@ function resumeDepositPolling(sock, dep) {
 
             const check = await api.checkQris(depositId, finalAmount);
             if (check === 'PAID') {
-                currentDep.status = 'paid';
+                if (currentDep.isCredited) {
+                    clearInterval(depositChecker);
+                    activeCheckers.delete(depositId);
+                    return;
+                }
+                currentDep.isCredited = true;
+                currentDep.status = 'success';
                 currentDep.paidAt = Date.now();
                 clearInterval(depositChecker);
                 activeCheckers.delete(depositId);
@@ -1628,17 +1658,22 @@ function resumeDepositPolling(sock, dep) {
                 if (!Array.isArray(user.history)) user.history = [];
                 const dateStr = new Date().toLocaleDateString('id-ID');
                 user.history.push(`[${dateStr}] 🟢 Deposit QRIS (+Rp ${Number(currentDep.amount).toLocaleString('id-ID')})`);
-                if (db.saveDeposits) db.saveDeposits();
-                db.saveUsers();
 
+                // 🚀 SSOT Sync dengan iPay
                 if (config.provider?.active === 'ipay') {
                     try {
                         const targetPhone = user.phone || targetJid.replace(/[^0-9]/g, '');
-                        ipayHelper.adjustMemberBalance(targetPhone, currentDep.amount, 'add', `Deposit QRIS Bot WA (${depositId})`).catch(e => {
-                            console.error('[IPAY DEPOSIT CHECK SYNC ERR]', e.message);
-                        });
-                    } catch (_) {}
+                        const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, currentDep.amount, 'add', `Deposit QRIS Bot WA (${depositId})`);
+                        if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                            user.saldo = ipayRes.new_balance;
+                        }
+                    } catch (e) {
+                        console.error('[IPAY DEPOSIT CHECK SYNC ERR]', e.message);
+                    }
                 }
+
+                if (db.saveDeposits) db.saveDeposits();
+                db.saveUsers();
 
                 await sock.sendMessage(targetJid, {
                     text: `✅ *DEPOSIT BERHASIL*\n\n💰 Saldo Masuk: Rp ${Number(currentDep.amount).toLocaleString('id-ID')}\n🧾 ID: \`${depositId}\`\n💵 Saldo Baru: ${formatRupiah(user.saldo)}`
@@ -3511,7 +3546,20 @@ function initTelegramBot() {
             if (action.startsWith('tg_viewuser_')) {
                 const phone = action.replace('tg_viewuser_', '');
                 global.tgInputState = null;
-                global.botTg.answerCallbackQuery(query.id);
+                global.botTg.answerCallbackQuery(query.id, { text: '⏳ Sinkronkan data member...' });
+                if (config.provider?.active === 'ipay') {
+                    try {
+                        const sync = await ipayHelper.syncMember(phone, '', false);
+                        if (sync && sync.success && sync.user) {
+                            const f = findMember(phone);
+                            if (f && f.user) {
+                                f.user.saldo = sync.user.balance;
+                                if (sync.user.name && (!f.user.name || f.user.name === 'User')) f.user.name = sync.user.name;
+                                db.saveUsers();
+                            }
+                        }
+                    } catch (_) {}
+                }
                 return updateOrSend(chatId, messageId, renderMemberProfile(phone));
             }
 
@@ -5060,7 +5108,21 @@ function initTelegramBot() {
                     const user = found.user;
 
                     if (mode === 'plus') {
-                        user.saldo = (Number(user.saldo) || 0) + nom;
+                        // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Update ke iPay terlebih dahulu jika provider iPay aktif
+                        if (config.provider?.active === 'ipay') {
+                            const ipayRes = await ipayHelper.adjustMemberBalance(phone, nom, 'add', 'Topup Admin Telegram Quick');
+                            if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                                user.saldo = ipayRes.new_balance;
+                            } else {
+                                return global.botTg.sendMessage(chatId, `❌ *Gagal Update Saldo iPay!*\n\n${ipayRes?.message || 'Server timeout'}`, {
+                                    parse_mode: 'Markdown',
+                                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                                });
+                            }
+                        } else {
+                            user.saldo = (Number(user.saldo) || 0) + nom;
+                        }
+
                         if (!Array.isArray(user.history)) user.history = [];
                         const dateStr = new Date().toLocaleDateString('id-ID');
                         user.history.push(`[${dateStr}] 🟢 Topup Admin Telegram (+Rp ${nom.toLocaleString('id-ID')})`);
@@ -5091,14 +5153,28 @@ function initTelegramBot() {
                             }
                         );
                     } else if (mode === 'minus') {
-                        if ((Number(user.saldo) || 0) < nom) {
-                            return global.botTg.sendMessage(chatId,
-                                `❌ *Saldo Tidak Mencukupi!*\n\nSaldo member \`+${phone}\` saat ini hanya *${formatRupiah(user.saldo || 0)}*, tidak dapat ditarik *${formatRupiah(nom)}*.`,
-                                {
+                        // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Tarik saldo di iPay terlebih dahulu jika provider iPay aktif
+                        if (config.provider?.active === 'ipay') {
+                            const ipayRes = await ipayHelper.adjustMemberBalance(phone, nom, 'deduct', 'Tarik Saldo Admin Telegram Quick');
+                            if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                                user.saldo = ipayRes.new_balance;
+                            } else {
+                                return global.botTg.sendMessage(chatId, `❌ *Gagal Tarik Saldo iPay!*\n\n${ipayRes?.message || 'Saldo member di iPay tidak mencukupi'}`, {
                                     parse_mode: 'Markdown',
                                     reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
-                                }
-                            );
+                                });
+                            }
+                        } else {
+                            if ((Number(user.saldo) || 0) < nom) {
+                                return global.botTg.sendMessage(chatId,
+                                    `❌ *Saldo Tidak Mencukupi!*\n\nSaldo member \`+${phone}\` saat ini hanya *${formatRupiah(user.saldo || 0)}*, tidak dapat ditarik *${formatRupiah(nom)}*.`,
+                                    {
+                                        parse_mode: 'Markdown',
+                                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                                    }
+                                );
+                            }
+                            user.saldo = (Number(user.saldo) || 0) - nom;
                         }
 
                         user.saldo = (Number(user.saldo) || 0) - nom;
@@ -5164,7 +5240,21 @@ function initTelegramBot() {
                     const targetJid = found.jid;
 
                     if (sign === '+') {
-                        user.saldo = (Number(user.saldo) || 0) + nom;
+                        // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Update ke iPay terlebih dahulu jika provider iPay aktif
+                        if (config.provider?.active === 'ipay') {
+                            const ipayRes = await ipayHelper.adjustMemberBalance(phone, nom, 'add', 'Topup Admin Telegram (+)');
+                            if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                                user.saldo = ipayRes.new_balance;
+                            } else {
+                                return global.botTg.sendMessage(chatId, `❌ *Gagal Update Saldo iPay!*\n\n${ipayRes?.message || 'Server timeout'}`, {
+                                    parse_mode: 'Markdown',
+                                    reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                                });
+                            }
+                        } else {
+                            user.saldo = (Number(user.saldo) || 0) + nom;
+                        }
+
                         if (!Array.isArray(user.history)) user.history = [];
                         const dateStr = new Date().toLocaleDateString('id-ID');
                         user.history.push(`[${dateStr}] 🟢 Topup Admin Telegram (+Rp ${nom.toLocaleString('id-ID')})`);
@@ -5188,17 +5278,30 @@ function initTelegramBot() {
                             }
                         );
                     } else {
-                        if ((Number(user.saldo) || 0) < nom) {
-                            return global.botTg.sendMessage(chatId,
-                                `❌ *Saldo Tidak Mencukupi!*\n\nSaldo member \`+${phone}\` saat ini hanya *${formatRupiah(user.saldo || 0)}*.`,
-                                {
+                        // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Tarik saldo di iPay terlebih dahulu jika provider iPay aktif
+                        if (config.provider?.active === 'ipay') {
+                            const ipayRes = await ipayHelper.adjustMemberBalance(phone, nom, 'deduct', 'Tarik Saldo Admin Telegram (-)');
+                            if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                                user.saldo = ipayRes.new_balance;
+                            } else {
+                                return global.botTg.sendMessage(chatId, `❌ *Gagal Tarik Saldo iPay!*\n\n${ipayRes?.message || 'Saldo member di iPay tidak mencukupi'}`, {
                                     parse_mode: 'Markdown',
                                     reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
-                                }
-                            );
+                                });
+                            }
+                        } else {
+                            if ((Number(user.saldo) || 0) < nom) {
+                                return global.botTg.sendMessage(chatId,
+                                    `❌ *Saldo Tidak Mencukupi!*\n\nSaldo member \`+${phone}\` saat ini hanya *${formatRupiah(user.saldo || 0)}*.`,
+                                    {
+                                        parse_mode: 'Markdown',
+                                        reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'tg_member_menu' }]] }
+                                    }
+                                );
+                            }
+                            user.saldo = (Number(user.saldo) || 0) - nom;
                         }
 
-                        user.saldo = (Number(user.saldo) || 0) - nom;
                         if (!Array.isArray(user.history)) user.history = [];
                         const dateStr = new Date().toLocaleDateString('id-ID');
                         user.history.push(`[${dateStr}] 🔴 Penarikan Admin Telegram (-Rp ${nom.toLocaleString('id-ID')})`);
@@ -5257,8 +5360,26 @@ function initTelegramBot() {
                     const user = db.getUser(targetJid);
                     user.name = name;
                     user.phone = cleanPhone;
+
+                    // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Daftarkan & sinkronkan saldo awal ke iPay
+                    if (config.provider?.active === 'ipay') {
+                        try {
+                            const syncRes = await ipayHelper.syncMember(cleanPhone, name, true, saldoAwal);
+                            if (syncRes && syncRes.success && syncRes.user) {
+                                user.saldo = syncRes.user.balance;
+                            } else if (saldoAwal > 0) {
+                                user.saldo = (Number(user.saldo) || 0) + saldoAwal;
+                            }
+                        } catch (_) {
+                            if (saldoAwal > 0) user.saldo = (Number(user.saldo) || 0) + saldoAwal;
+                        }
+                    } else {
+                        if (saldoAwal > 0) {
+                            user.saldo = (Number(user.saldo) || 0) + saldoAwal;
+                        }
+                    }
+
                     if (saldoAwal > 0) {
-                        user.saldo = (Number(user.saldo) || 0) + saldoAwal;
                         if (!Array.isArray(user.history)) user.history = [];
                         const dateStr = new Date().toLocaleDateString('id-ID');
                         user.history.push(`[${dateStr}] 🟢 Saldo Awal Admin (+Rp ${saldoAwal.toLocaleString('id-ID')})`);

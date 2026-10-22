@@ -501,6 +501,24 @@ async function handleUser(sock, sender, text, session, processCheckout) {
         if (!Array.isArray(targetUser.history)) targetUser.history = [];
         const dateStr = new Date().toLocaleDateString('id-ID');
         targetUser.history.push(`[${dateStr}] 🟢 Terima Transfer (+Rp ${nom.toLocaleString('id-ID')}) dari ${senderPhone}`);
+
+        // 🚀 SSOT: Sinkronkan transfer saldo antar user ke server iPay
+        if (config.provider?.active === 'ipay') {
+            try {
+                const ipayHelper = require('../lib/ipay');
+                const deductIpay = await ipayHelper.adjustMemberBalance(senderPhone, nom, 'deduct', `Transfer ke ${targetNo}`);
+                if (deductIpay && deductIpay.success && typeof deductIpay.new_balance === 'number') {
+                    senderUser.saldo = deductIpay.new_balance;
+                }
+                const addIpay = await ipayHelper.adjustMemberBalance(targetNo, nom, 'add', `Transfer dari ${senderPhone}`);
+                if (addIpay && addIpay.success && typeof addIpay.new_balance === 'number') {
+                    targetUser.saldo = addIpay.new_balance;
+                }
+            } catch (e) {
+                console.error('[IPAY TRANSFER SALDO ERR]', e.message);
+            }
+        }
+
         db.saveUsers();
 
         await sock.sendMessage(sender, {
@@ -1075,7 +1093,13 @@ ${depositId}`
 
         // PAID
         if (check === 'PAID') {
-            dep.status = 'paid';
+            if (dep.isCredited) {
+                clearInterval(checker);
+                return;
+            }
+            dep.isCredited = true;
+            dep.status = 'success';
+            dep.paidAt = Date.now();
             clearInterval(checker);
 
             const user = db.getUser ? db.getUser(sender) : (db.users[sender] || (db.users[sender] = { saldo: 0 }));
@@ -1083,6 +1107,20 @@ ${depositId}`
             if (!Array.isArray(user.history)) user.history = [];
             const dateStr = new Date().toLocaleDateString('id-ID');
             user.history.push(`[${dateStr}] 🟢 Deposit QRIS (+Rp ${amount.toLocaleString('id-ID')})`);
+
+            // 🚀 SSOT Sync dengan iPay
+            if (config.provider?.active === 'ipay') {
+                try {
+                    const ipayHelper = require('../lib/ipay');
+                    const targetPhone = user.phone || sender.replace(/[^0-9]/g, '');
+                    const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, amount, 'add', `Deposit QRIS Bot WA (${depositId})`);
+                    if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                        user.saldo = ipayRes.new_balance;
+                    }
+                } catch (e) {
+                    console.error('[IPAY USER DEPOSIT SYNC ERR]', e.message);
+                }
+            }
 
             if (db.saveDeposits) db.saveDeposits();
             db.saveUsers();
