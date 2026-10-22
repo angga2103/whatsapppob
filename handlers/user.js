@@ -264,34 +264,56 @@ async function renderProfileText(sender, isSubMenu = false) {
     if (displayNo.startsWith('62')) displayNo = '0' + displayNo.slice(2);
     if (!displayNo && !sender.includes('@lid')) displayNo = sender.split('@')[0].split(':')[0];
     const isOwner = checkIsOwner(sender);
+
+    // ============================================================
+    // 🚀 SINKRONISASI OTOMATIS DENGAN DATABASE IPAY (OMNICHANNEL)
+    // ============================================================
+    let isIpaySynced = false;
+    if (config.provider?.active === 'ipay') {
+        try {
+            const ipayHelper = require('../lib/ipay');
+            const targetPhone = displayNo || u.phone;
+            if (targetPhone) {
+                const syncRes = await ipayHelper.syncMember(targetPhone, u.name, true, Number(u.saldo) || 0);
+                if (syncRes && syncRes.success && syncRes.user) {
+                    u.saldo = syncRes.user.balance;
+                    if (syncRes.user.name && (!u.name || u.name === 'User')) {
+                        u.name = syncRes.user.name;
+                    }
+                    if (db.saveUsers) db.saveUsers();
+                    isIpaySynced = true;
+                }
+            }
+        } catch (err) {
+            console.warn('[IPAY SYNC PROFILE WARN]', err.message);
+        }
+    }
+
     const roleTag = isOwner ? ' (👑 Owner)' : '';
     const namePart = u.name ? `\n👤 Nama: *${u.name}*${roleTag}` : (isOwner ? `\n👤 Role: *👑 Owner/Admin Toko*` : '');
     
     let text = `👤 *PROFIL PENGGUNA*${namePart}\n` +
                `📱 Nomor HP: *${displayNo || '-'}*\n` +
-               `💰 Saldo Dompet: *${formatRupiah(u.saldo || 0)}*`;
+               `💰 Saldo: *${formatRupiah(u.saldo || 0)}*`;
+
+    if (isIpaySynced) {
+        text += `\n🌐 Akun: *🟢 Tersinkronisasi dengan iPay*`;
+    }
 
     if (isOwner) {
-        const isIpay = config.provider?.active === 'ipay';
         let provSaldoStr = 'Memuat...';
         try {
-            if (isIpay) {
-                const ipayHelper = require('../lib/ipay');
-                const s = await ipayHelper.cekSaldoIpay();
-                provSaldoStr = typeof s === 'number' ? formatRupiah(s) : s;
-            } else {
-                const s = await api.cekSaldoDigi();
-                provSaldoStr = typeof s === 'number' ? formatRupiah(s) : s;
-            }
+            const ipayHelper = require('../lib/ipay');
+            const s = await ipayHelper.cekSaldoIpay();
+            provSaldoStr = typeof s === 'number' ? formatRupiah(s) : s;
         } catch (_) {
             provSaldoStr = 'Gagal memuat';
         }
 
-        text += `\n\n💼 *SALDO PROVIDER (MODAL SERVER PPOB):*\n` +
-                `• Provider Aktif : *${isIpay ? '🚀 iPay (GarudaTel H2H)' : '⚡ Digiflazz Direct'}*\n` +
-                `• Saldo Modal    : *${provSaldoStr}*\n` +
-                `• Status Koneksi : 🟢 TERHUBUNG\n\n` +
-                `_📌 Catatan: Saldo dompet di atas adalah saldo akun member Anda di bot WA. Saldo modal di bawah adalah saldo deposit induk Anda di server ${isIpay ? 'iPay (GarudaTel)' : 'Digiflazz'}._`;
+        text += `\n\n💼 *MODAL SERVER PPOB (MERCHANT):*\n` +
+                `• Provider Aktif : *🚀 iPay (GarudaTel H2H)*\n` +
+                `• Modal Induk    : *${provSaldoStr}*\n` +
+                `• Status H2H     : 🟢 TERHUBUNG`;
     }
 
     text += `\n\n_Ketik *MENU* untuk belanja, atau ${isSubMenu ? 'balas *8*' : 'ketik *DEPOSIT*'} untuk isi saldo._`;

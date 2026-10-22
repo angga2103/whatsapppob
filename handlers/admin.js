@@ -18,6 +18,7 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.setprovider* [ipay/digi] (Ganti Provider Aktif)\n`;
         t += `• *.setipay* MchID ApiKey SecKey [URL] (Konfigurasi H2H iPay)\n`;
         t += `• *.statusipay* (Cek Koneksi & Saldo H2H iPay)\n`;
+        t += `• *.syncmembers* (Sinkronkan Seluruh Member ke Database iPay)\n`;
         t += `• *.setdana* NoHP NamaPemilik (Update Rekening DANA)\n`;
         t += `• *.setdanatoken* SecretToken (Update Token Listener HP)\n`;
         t += `• *.setqris* StringQRIS (Update Template Base QRIS)\n`;
@@ -172,6 +173,16 @@ if (cmd === 'namatoko') {
         user.history.push(`[${dateStr}] 🟢 Topup Admin (+Rp ${nominal.toLocaleString('id-ID')})`);
         db.saveUsers();
 
+        // Sinkronkan ke akun member di iPay jika provider iPay aktif
+        if (config.provider?.active === 'ipay') {
+            try {
+                const ipayHelper = require('../lib/ipay');
+                ipayHelper.adjustMemberBalance(phone, nominal, 'add', 'Topup Manual Admin Bot WA').catch(e => {
+                    console.error('[IPAY ADDSALDO ERROR]', e.message);
+                });
+            } catch (_) {}
+        }
+
         await sock.sendMessage(targetJid, { text: `✅ Saldo disesuaikan Admin: ${formatRupiah(nominal)}. Saldo Anda: ${formatRupiah(user.saldo)}` }).catch(()=>{});
         return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditambah ${formatRupiah(nominal)}. Saldo baru: ${formatRupiah(user.saldo)}` });
     }
@@ -200,8 +211,38 @@ if (cmd === 'namatoko') {
         user.history.push(`[${dateStr}] 🔴 Penarikan/Koreksi Admin (-Rp ${nominal.toLocaleString('id-ID')})`);
         db.saveUsers();
 
+        // Sinkronkan ke akun member di iPay jika provider iPay aktif
+        if (config.provider?.active === 'ipay') {
+            try {
+                const ipayHelper = require('../lib/ipay');
+                ipayHelper.adjustMemberBalance(phone, nominal, 'deduct', 'Tarik Saldo Manual Admin Bot WA').catch(e => {
+                    console.error('[IPAY TARIK ERROR]', e.message);
+                });
+            } catch (_) {}
+        }
+
         await sock.sendMessage(targetJid, { text: `⚠️ Saldo Anda dikoreksi/ditarik Admin sebesar ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` }).catch(()=>{});
         return sock.sendMessage(sender, { text: `✅ Saldo user ${phone} berhasil ditarik ${formatRupiah(nominal)}. Sisa saldo: ${formatRupiah(user.saldo)}` });
+    }
+
+    if (cmd === 'syncmembers' || cmd === 'syncmember') {
+        const ipayHelper = require('../lib/ipay');
+        if (config.provider?.active !== 'ipay') {
+            return sock.sendMessage(sender, {
+                text: `⚠️ Provider aktif saat ini bukan iPay.\nKetik *.setprovider ipay* terlebih dahulu.`
+            });
+        }
+        await sock.sendMessage(sender, {
+            text: `⏳ *MEMULAI SINKRONISASI MASSAL MEMBER KE IPAY...*\nSedang memproses seluruh database member bot WA ke server iPay (Auto-Sync & Auto-Create). Mohon tunggu beberapa detik...`
+        });
+        const res = await ipayHelper.batchSyncAllMembers();
+        return sock.sendMessage(sender, {
+            text: `✅ *SINKRONISASI MEMBER SELESAI!*\n\n` +
+                  `• Total Member Diproses : *${res.total} member*\n` +
+                  `• Berhasil Disinkronkan : *${res.synced} member*\n` +
+                  `• Gagal / Dilewati       : *${res.errors} member*\n\n` +
+                  `_Seluruh saldo member di Bot WA kini identik dan tersinkronisasi 100% dengan database iPay!_`
+        });
     }
 
     if (cmd === 'setnama' || cmd === 'editnama') {

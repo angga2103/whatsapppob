@@ -1058,6 +1058,18 @@ const db = {
         db.saveUsers();
         db.saveOrders();
 
+        // JIKA PROVIDER IPAY: Sinkronkan refund saldo member ke server iPay
+        try {
+            const config = require('../config');
+            if (config.provider?.active === 'ipay') {
+                const ipayHelper = require('../lib/ipay');
+                const targetPhone = user.phone || buyerJid.replace(/[^0-9]/g, '');
+                ipayHelper.adjustMemberBalance(targetPhone, refundAmount, 'add', `Refund ${order.item || order.sku || order.id} (${reason})`).catch(e => {
+                    console.error('[IPAY REFUND SYNC ERR]', e.message);
+                });
+            }
+        } catch (_) {}
+
         console.log(`[REFUND SUKSES] ✅ Order ${order.id}: Rp ${refundAmount.toLocaleString('id-ID')} dikembalikan ke ${buyerJid}. Saldo sekarang: Rp ${user.saldo.toLocaleString('id-ID')}`);
         return { success: true, amount: refundAmount, buyerJid, newSaldo: user.saldo };
     }

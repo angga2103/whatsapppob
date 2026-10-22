@@ -215,6 +215,16 @@ const handleDanaWebhook = async (req, res) => {
         const result = await danaHelper.processIncomingDanaMutation({
             payload,
             onDepositSuccess: async ({ deposit, user, nominalPokok, amount, sender, targetJid }) => {
+                // Sinkronkan ke saldo akun member di iPay jika provider iPay aktif
+                if (config.provider?.active === 'ipay') {
+                    try {
+                        const targetPhone = user.phone || targetJid.replace(/[^0-9]/g, '');
+                        ipayHelper.adjustMemberBalance(targetPhone, nominalPokok, 'add', `Deposit DANA Bot WA (${deposit.id})`).catch(e => {
+                            console.error('[IPAY DEPOSIT SYNC ERR]', e.message);
+                        });
+                    } catch (_) {}
+                }
+
                 // Notifikasi WA Member
                 if (global.sock && typeof global.sock.sendMessage === 'function') {
                     await global.sock.sendMessage(targetJid, {
@@ -1327,7 +1337,7 @@ if (!global.heartbeatStarted) {
                 'admin', 'pullppob', 'cekdigi', 'addsaldo', 'tariksaldo', 'addmenu', 'adddata', 'delmenu', 
                 'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
                 'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
-                'settings', 'pengaturan', 'setprovider', 'setipay', 'statusipay', 'cekipay', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
+                'settings', 'pengaturan', 'setprovider', 'setipay', 'statusipay', 'cekipay', 'syncmembers', 'syncmember', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
                 'setdana', 'setdanatoken', 'setqris', 'danastatus',
                 'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
                 'kirimakun', 'kirim', 'batalorder',
@@ -1449,6 +1459,22 @@ async function processCheckout(sock, sender, session) {
     }
 
     const buyerUser = db.getUser(cleanBuyer);
+
+    // Live sync saldo member dari iPay jika provider iPay aktif
+    if (config.provider?.active === 'ipay') {
+        try {
+            const ipayHelper = require('./lib/ipay');
+            const bPhone = buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, '');
+            if (bPhone) {
+                const sRes = await ipayHelper.syncMember(bPhone, buyerUser.name, true, Number(buyerUser.saldo) || 0);
+                if (sRes && sRes.success && sRes.user) {
+                    buyerUser.saldo = sRes.user.balance;
+                    if (db.saveUsers) db.saveUsers();
+                }
+            }
+        } catch (_) {}
+    }
+
     const actualSaldo = Number(buyerUser.saldo) || 0;
 
     if (actualSaldo >= baseAmount) {
@@ -1459,6 +1485,18 @@ async function processCheckout(sock, sender, session) {
             order.status = 'processing';
             db.orders.push(order);
             db.saveOrders();
+
+            // Potong saldo akun member di server iPay secara live
+            if (config.provider?.active === 'ipay') {
+                try {
+                    const ipayHelper = require('./lib/ipay');
+                    const bPhone = buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, '');
+                    ipayHelper.adjustMemberBalance(bPhone, baseAmount, 'deduct', `Beli ${order.item} (${oid})`).catch(e => {
+                        console.error('[IPAY DEDUCT MEMBER ERROR]', e.message);
+                    });
+                } catch (_) {}
+            }
+
             return handleSuccessPayment(sock, order, true);
         }
     }
@@ -1592,6 +1630,15 @@ function resumeDepositPolling(sock, dep) {
                 user.history.push(`[${dateStr}] 🟢 Deposit QRIS (+Rp ${Number(currentDep.amount).toLocaleString('id-ID')})`);
                 if (db.saveDeposits) db.saveDeposits();
                 db.saveUsers();
+
+                if (config.provider?.active === 'ipay') {
+                    try {
+                        const targetPhone = user.phone || targetJid.replace(/[^0-9]/g, '');
+                        ipayHelper.adjustMemberBalance(targetPhone, currentDep.amount, 'add', `Deposit QRIS Bot WA (${depositId})`).catch(e => {
+                            console.error('[IPAY DEPOSIT CHECK SYNC ERR]', e.message);
+                        });
+                    } catch (_) {}
+                }
 
                 await sock.sendMessage(targetJid, {
                     text: `✅ *DEPOSIT BERHASIL*\n\n💰 Saldo Masuk: Rp ${Number(currentDep.amount).toLocaleString('id-ID')}\n🧾 ID: \`${depositId}\`\n💵 Saldo Baru: ${formatRupiah(user.saldo)}`
@@ -2531,6 +2578,9 @@ function initTelegramBot() {
                         { text: '📋 10 Member Terbaru', callback_data: 'tg_listmember' }
                     ],
                     [
+                        { text: '🔄 Sync Seluruh Member ke iPay', callback_data: 'tg_sync_members' }
+                    ],
+                    [
                         { text: '⬅️ Kembali ke Menu Utama', callback_data: 'tg_menu' }
                     ]
                 ]
@@ -3309,6 +3359,26 @@ function initTelegramBot() {
                 global.tgInputState = null;
                 global.botTg.answerCallbackQuery(query.id);
                 return updateOrSend(chatId, messageId, renderMemberMenu());
+            }
+
+            if (action === 'tg_sync_members') {
+                global.botTg.answerCallbackQuery(query.id, { text: '⏳ Memulai sinkronisasi massal member...' });
+                await global.botTg.sendMessage(chatId, "⏳ *Sedang menyinkronkan seluruh database member ke server iPay...*\nMohon tunggu beberapa detik...", { parse_mode: 'Markdown' });
+                const ipayHelper = require('./lib/ipay');
+                const res = await ipayHelper.batchSyncAllMembers();
+                return global.botTg.sendMessage(chatId,
+                    `✅ *SINKRONISASI MEMBER SELESAI!*\n\n` +
+                    `• Total Member Diproses : *${res.total} member*\n` +
+                    `• Berhasil Disinkronkan : *${res.synced} member*\n` +
+                    `• Gagal / Dilewati       : *${res.errors} member*\n\n` +
+                    `_Seluruh saldo member di Bot WA kini identik dengan database iPay!_`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '👥 Kembali ke Menu Member', callback_data: 'tg_member_menu' }]]
+                        }
+                    }
+                );
             }
 
             if (action === 'tg_listmember') {
