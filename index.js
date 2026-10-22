@@ -2432,10 +2432,10 @@ function initTelegramBot() {
                     ],
                     [
                         { text: `💳 Gateway: DANA AUTO`, callback_data: 'tg_gw_menu' },
-                        { text: '⚡ Menu Digiflazz', callback_data: 'tg_digi_menu' }
+                        { text: config.provider?.active === 'ipay' ? '🚀 Provider: iPay H2H' : '⚡ Provider: Digiflazz', callback_data: 'tg_digi_menu' }
                     ],
                     [
-                        { text: '💰 Cek Saldo Digi', callback_data: 'tg_cekdigi' },
+                        { text: config.provider?.active === 'ipay' ? '💰 Saldo iPay' : '💰 Saldo Digi', callback_data: config.provider?.active === 'ipay' ? 'tg_cek_ipay' : 'tg_cekdigi' },
                         { text: '🔄 Sync Produk PPOB', callback_data: 'tg_sync' }
                     ],
                     [
@@ -3989,21 +3989,28 @@ function initTelegramBot() {
 
             if (action === 'tg_sync') {
                 global.botTg.answerCallbackQuery(query.id, { text: '⏳ Memulai sinkronisasi produk...' });
-                await global.botTg.sendMessage(chatId, "⏳ *Sedang menyinkronkan seluruh produk Digiflazz...*\nMohon tunggu sejenak...", { parse_mode: 'Markdown' });
+                const configData = require('./config');
+                const isIpay = configData.provider?.active === 'ipay';
+                const provName = isIpay ? 'iPay (GarudaTel H2H)' : 'Digiflazz';
+                await global.botTg.sendMessage(chatId, `⏳ *Sedang menyinkronkan seluruh produk ${provName}...*\nMohon tunggu sejenak...`, { parse_mode: 'Markdown' });
                 
                 const prep = await api.pullAllDigiPrepaid();
-                const pascaRes = await api.pullDigiPostpaid();
+                const pascaRes = isIpay ? true : await api.pullDigiPostpaid();
 
-                let report = "📊 *HASIL SINKRONISASI DIGIFLAZZ*\n\n";
+                let report = `📊 *HASIL SINKRONISASI ${provName.toUpperCase()}*\n\n`;
                 if (prep) {
-                    report += `• PULSA: ${prep.pulsa} produk\n`;
-                    report += `• DATA: ${prep.data} produk\n`;
-                    report += `• EMONEY: ${prep.emoney} produk\n`;
-                    report += `• PLN: ${prep.pln} produk\n`;
+                    report += `• PULSA: ${prep.pulsa || 0} produk\n`;
+                    report += `• DATA: ${prep.data || 0} produk\n`;
+                    report += `• EMONEY: ${prep.emoney || 0} produk\n`;
+                    report += `• PLN: ${prep.pln || 0} produk\n`;
                 } else {
                     report += `• PRABAYAR (PULSA/DATA/EMONEY/PLN): ❌ Gagal\n`;
                 }
-                report += `• PASCABAYAR: ${pascaRes !== false ? pascaRes + ' produk' : '❌ Gagal'}\n\n`;
+                if (!isIpay) {
+                    report += `• PASCABAYAR: ${pascaRes !== false ? pascaRes + ' produk' : '❌ Gagal'}\n\n`;
+                } else {
+                    report += `• PASCABAYAR: Otomatis via H2H iPay\n\n`;
+                }
                 report += `✅ *Total Produk Aktif:* ${db.ppob.length + (db.postpaid || []).length} SKU`;
                 return global.botTg.sendMessage(chatId, report, {
                     parse_mode: 'Markdown',

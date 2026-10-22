@@ -242,6 +242,62 @@ async function showProductList(sock, sender, session) {
     await sock.sendMessage(sender, { text: t });
 }
 
+function checkIsOwner(sender) {
+    const canonicalSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
+    const isOwnerByConfig = (config.owner || []).some(o => {
+        const normO = db.normalizeJid ? db.normalizeJid(o) : o;
+        return normO === canonicalSender || o === sender;
+    });
+    if (isOwnerByConfig) return true;
+    const u = db.getUser ? db.getUser(sender) : null;
+    if (u && u.phone) {
+        const cleanU = u.phone.replace(/^62/, '0');
+        const danaPhone = (config.dana?.number || '').trim();
+        if (danaPhone && cleanU === danaPhone) return true;
+    }
+    return false;
+}
+
+async function renderProfileText(sender, isSubMenu = false) {
+    const u = db.getUser(sender);
+    let displayNo = u.phone || '';
+    if (displayNo.startsWith('62')) displayNo = '0' + displayNo.slice(2);
+    if (!displayNo && !sender.includes('@lid')) displayNo = sender.split('@')[0].split(':')[0];
+    const isOwner = checkIsOwner(sender);
+    const roleTag = isOwner ? ' (👑 Owner)' : '';
+    const namePart = u.name ? `\n👤 Nama: *${u.name}*${roleTag}` : (isOwner ? `\n👤 Role: *👑 Owner/Admin Toko*` : '');
+    
+    let text = `👤 *PROFIL PENGGUNA*${namePart}\n` +
+               `📱 Nomor HP: *${displayNo || '-'}*\n` +
+               `💰 Saldo Dompet: *${formatRupiah(u.saldo || 0)}*`;
+
+    if (isOwner) {
+        const isIpay = config.provider?.active === 'ipay';
+        let provSaldoStr = 'Memuat...';
+        try {
+            if (isIpay) {
+                const ipayHelper = require('../lib/ipay');
+                const s = await ipayHelper.cekSaldoIpay();
+                provSaldoStr = typeof s === 'number' ? formatRupiah(s) : s;
+            } else {
+                const s = await api.cekSaldoDigi();
+                provSaldoStr = typeof s === 'number' ? formatRupiah(s) : s;
+            }
+        } catch (_) {
+            provSaldoStr = 'Gagal memuat';
+        }
+
+        text += `\n\n💼 *SALDO PROVIDER (MODAL SERVER PPOB):*\n` +
+                `• Provider Aktif : *${isIpay ? '🚀 iPay (GarudaTel H2H)' : '⚡ Digiflazz Direct'}*\n` +
+                `• Saldo Modal    : *${provSaldoStr}*\n` +
+                `• Status Koneksi : 🟢 TERHUBUNG\n\n` +
+                `_📌 Catatan: Saldo dompet di atas adalah saldo akun member Anda di bot WA. Saldo modal di bawah adalah saldo deposit induk Anda di server ${isIpay ? 'iPay (GarudaTel)' : 'Digiflazz'}._`;
+    }
+
+    text += `\n\n_Ketik *MENU* untuk belanja, atau ${isSubMenu ? 'balas *8*' : 'ketik *DEPOSIT*'} untuk isi saldo._`;
+    return text;
+}
+
 async function handleUser(sock, sender, text, session, processCheckout) {
     const rawTrim = text.trim();
     const txt = rawTrim.toUpperCase();
@@ -1043,16 +1099,10 @@ ${depositId}`
     return;
 }
 
-if (txt === 'PROFIL') {
+    if (txt === 'PROFIL') {
         session.step = S.IDLE;
-        const u = db.getUser(sender);
-        let displayNo = u.phone || '';
-        if (displayNo.startsWith('62')) displayNo = '0' + displayNo.slice(2);
-        if (!displayNo && !sender.includes('@lid')) displayNo = sender.split('@')[0].split(':')[0];
-        const namePart = u.name ? `\n👤 Nama: *${u.name}*` : '';
-        return sock.sendMessage(sender, { 
-            text: `👤 *PROFIL PENGGUNA*${namePart}\n📱 Nomor HP: *${displayNo || '-'}*\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau ketik *DEPOSIT* untuk isi saldo._` 
-        });
+        const profileMsg = await renderProfileText(sender, false);
+        return sock.sendMessage(sender, { text: profileMsg });
     }
 
     if (txt === 'B' || (txt === '0' && session.step !== S.PILIH_CYCLES_SUBS)) {
@@ -1367,14 +1417,8 @@ if (txt === 'PROFIL') {
             });
         } else if (txt === '9') {
             session.step = S.IDLE;
-            const u = db.getUser(sender);
-            let displayNo = u.phone || '';
-            if (displayNo.startsWith('62')) displayNo = '0' + displayNo.slice(2);
-            if (!displayNo && !sender.includes('@lid')) displayNo = sender.split('@')[0].split(':')[0];
-            const namePart = u.name ? `\n👤 Nama: *${u.name}*` : '';
-            return sock.sendMessage(sender, {
-                text: `👤 *PROFIL PENGGUNA*${namePart}\n📱 Nomor HP: *${displayNo || '-'}*\n💰 Saldo: *${formatRupiah(u.saldo || 0)}*\n\n_Ketik *MENU* untuk belanja, atau balas *8* untuk isi saldo._`
-            });
+            const profileMsg = await renderProfileText(sender, true);
+            return sock.sendMessage(sender, { text: profileMsg });
         } else if (txt === '10') {
             session.step = S.IDLE;
             const canonical = db.normalizeJid(sender);
