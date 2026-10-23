@@ -1790,16 +1790,22 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
 
                 const refundRes = db.refundOrder(order, hit.data.message || 'Gangguan Server');
                 if (refundRes.success) {
-                    await sock.sendMessage(targetJid, {
-                        text:
+                    if (!order.isSubscription) {
+                        let userReason = hit.data.message || 'Gangguan';
+                        if (userReason.toLowerCase().includes('saldo deposit') || userReason.toLowerCase().includes('saldo buyer')) {
+                            userReason = 'Jalur operator sedang mengalami antrean padat / gangguan sementara';
+                        }
+                        await sock.sendMessage(targetJid, {
+                            text:
 `❌ *TRANSAKSI GAGAL*
 
 Alasan:
-${hit.data.message || 'Gangguan'}
+${userReason}
 
 💰 Saldo otomatis dikembalikan:
 ${formatRupiah(refundRes.amount)}`
-                    });
+                        });
+                    }
 
                     for (const owner of config.owner) {
                         await sock.sendMessage(owner, { 

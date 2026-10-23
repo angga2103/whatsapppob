@@ -2297,6 +2297,30 @@ ${depositId}`
             }
             if (buyerPhone.startsWith('0')) buyerPhone = '62' + buyerPhone.slice(1);
 
+            // 🚀 Potong saldo akun member di server iPay secara live (SSOT)
+            if (config.provider?.active === 'ipay') {
+                try {
+                    const ipayHelper = require('../lib/ipay');
+                    const bPhone = buyerUser.phone || buyerPhone || cleanBuyer.replace(/[^0-9]/g, '');
+                    const ipayRes = await ipayHelper.adjustMemberBalance(bPhone, harga, 'deduct', `[LANGGANAN #1] ${session.tempSubProduct.nama} (${oid})`);
+                    if (!ipayRes || !ipayRes.success) {
+                        // Rollback local deduction jika server iPay menolak
+                        buyerUser.saldo = (Number(buyerUser.saldo) || 0) + harga;
+                        if (db.saveUsers) db.saveUsers();
+                        session.step = S.IDLE;
+                        return sock.sendMessage(sender, {
+                            text: `❌ *GAGAL MEMPROSES TRANSAKSI*\nAlasan: ${ipayRes?.message || 'Saldo akun iPay Anda tidak mencukupi'}`
+                        });
+                    }
+                    if (typeof ipayRes.new_balance === 'number') {
+                        buyerUser.saldo = ipayRes.new_balance;
+                        if (db.saveUsers) db.saveUsers();
+                    }
+                } catch (e) {
+                    console.error('[IPAY SUBS INITIAL DEDUCT ERROR]', e.message);
+                }
+            }
+
             const newSub = subLib.createSubscription({
                 buyer: cleanBuyer,
                 buyerPhone: buyerPhone,
