@@ -475,8 +475,10 @@ async function sendDailyFinancialReportToTelegram(targetChatId = null) {
     let digiBalance = 'Memeriksa...';
     try {
         const digiRes = await api.cekSaldoDigi();
-        if (digiRes && digiRes.data && digiRes.data.deposit !== undefined) {
-            digiBalance = Number(digiRes.data.deposit);
+        if (typeof digiRes === 'number') {
+            digiBalance = digiRes;
+        } else if (typeof digiRes === 'string') {
+            digiBalance = digiRes;
         }
     } catch (_) {}
 
@@ -4096,15 +4098,25 @@ function initTelegramBot() {
             if (action === 'tg_cekdigi') {
                 global.botTg.answerCallbackQuery(query.id, { text: '⏳ Mengambil saldo Digiflazz...' });
                 const saldo = await api.cekSaldoDigi();
-                const text = `💰 *SALDO API DIGIFLAZZ*\n\n` +
-                    `• Username: \`${config.digiflazz.username || '-'}\`\n` +
-                    `• Saldo: *${typeof saldo === 'number' ? formatRupiah(saldo) : saldo}*\n` +
+                const isSuccess = typeof saldo === 'number';
+                let text = `💰 *SALDO API DIGIFLAZZ*\n\n` +
+                    `• Username: \`${config.digiflazz.username || '(Belum disetel)'}\`\n` +
+                    `• Saldo: *${isSuccess ? formatRupiah(saldo) : saldo}*\n` +
+                    `• Status: *${isSuccess ? '🟢 TERHUBUNG' : '🔴 ' + saldo}*\n` +
                     `• Waktu Cek: ${new Date().toLocaleString('id-ID')}`;
+
+                if (!isSuccess && typeof saldo === 'string' && (saldo.toLowerCase().includes('ip') || saldo.includes('whitelist') || saldo.includes('42'))) {
+                    text += `\n\n⚠️ *Perhatian:* Pastikan IP server/VPS Anda sudah terdaftar di menu *Pengaturan Koneksi API > IP Whitelist* pada dashboard member Digiflazz.`;
+                } else if (!isSuccess && typeof saldo === 'string' && (saldo.includes('Signature') || saldo.includes('41') || saldo.includes('Belum Diatur'))) {
+                    text += `\n\n⚠️ *Perhatian:* Periksa kembali Username dan Production Secret Key Digiflazz Anda di menu Provider.`;
+                }
+
                 return updateOrSend(chatId, messageId, {
                     text,
                     reply_markup: {
                         inline_keyboard: [
                             [{ text: '🔄 Cek Saldo Lagi', callback_data: 'tg_cekdigi' }],
+                            [{ text: '⚡ Menu Provider', callback_data: 'tg_digi_menu' }],
                             [{ text: '⬅️ Menu Utama', callback_data: 'tg_menu' }]
                         ]
                     }

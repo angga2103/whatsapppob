@@ -149,7 +149,13 @@ if (cmd === 'namatoko') {
 
     if (cmd === 'cekdigi') {
         const saldo = await api.cekSaldoDigi();
-        return sock.sendMessage(sender, { text: `💳 *SALDO DIGIFLAZZ*\nSisa Saldo: *${saldo !== 'Error' ? formatRupiah(saldo) : 'Gagal cek'}*` });
+        const isNum = typeof saldo === 'number';
+        return sock.sendMessage(sender, { 
+            text: `💳 *SALDO API DIGIFLAZZ*\n\n` +
+                  `• Username : *${config.digiflazz.username || '-'}*\n` +
+                  `• Sisa Saldo: *${isNum ? formatRupiah(saldo) : saldo}*\n` +
+                  `• Status    : *${isNum ? '🟢 TERHUBUNG' : '🔴 ' + saldo}*` 
+        });
     }
 
     if (cmd === 'addsaldo') {
@@ -915,8 +921,10 @@ ${ok ? '🟢 SIAP OPERASI' : '🔴 PERLU TINDAKAN'}`;
         let digiBalance = 'Memeriksa...';
         try {
             const digiRes = await api.cekSaldoDigi();
-            if (digiRes && digiRes.data && digiRes.data.deposit !== undefined) {
-                digiBalance = Number(digiRes.data.deposit);
+            if (typeof digiRes === 'number') {
+                digiBalance = digiRes;
+            } else if (typeof digiRes === 'string') {
+                digiBalance = digiRes;
             }
         } catch (_) {}
 
