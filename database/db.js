@@ -797,13 +797,16 @@ const db = {
                         user.canonical = canonicalJid;
                         changed = true;
                     } else {
-                        // Jika akun canonical sudah ada, gabungkan saldo dan history
+                        // Jika akun canonical sudah ada, gabungkan history dan pastikan info sinkron
                         if (!db.users[canonicalJid].phone) {
                             db.users[canonicalJid].phone = cleanPhone;
                             changed = true;
                         }
+                        // 🛡️ ANTI SALDO GANDA: @lid dan canonical adalah orang yang sama, JANGAN dijumlahkan!
                         if (user.saldo && Number(user.saldo) > 0) {
-                            db.users[canonicalJid].saldo = (Number(db.users[canonicalJid].saldo) || 0) + Number(user.saldo);
+                            if (!db.users[canonicalJid].saldo || Number(db.users[canonicalJid].saldo) <= 0) {
+                                db.users[canonicalJid].saldo = Number(user.saldo);
+                            }
                             user.saldo = 0;
                             changed = true;
                         }
@@ -863,8 +866,11 @@ const db = {
 
         if (db.users[cleanLid]) {
             const lidUser = db.users[cleanLid];
+            // 🛡️ ANTI SALDO GANDA: @lid dan canonical adalah orang yang sama, JANGAN dijumlahkan!
             if (Number(lidUser.saldo) > 0) {
-                canUser.saldo = (Number(canUser.saldo) || 0) + Number(lidUser.saldo);
+                if (!canUser.saldo || Number(canUser.saldo) <= 0) {
+                    canUser.saldo = Number(lidUser.saldo);
+                }
                 lidUser.saldo = 0;
             }
             if (Array.isArray(lidUser.history) && lidUser.history.length > 0) {

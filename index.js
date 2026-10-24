@@ -3546,10 +3546,37 @@ function initTelegramBot() {
 
             if (action === 'tg_input_cekuser' || action.startsWith('tg_pick_member_')) {
                 global.tgInputState = null;
-                global.botTg.answerCallbackQuery(query.id);
                 const page = action.startsWith('tg_pick_member_')
                     ? parseInt(action.replace('tg_pick_member_', ''), 10) || 0
                     : 0;
+
+                // 🚀 SSOT AUTO-SYNC: Selalu sinkronkan saldo live dari iPay sebelum menampilkan daftar member
+                if (config.provider?.active === 'ipay') {
+                    try {
+                        const members = getMemberList();
+                        const pageSize = 6;
+                        const startIdx = page * pageSize;
+                        const pageMembers = members.slice(startIdx, startIdx + pageSize);
+                        const ipayHelper = require('./lib/ipay');
+                        await Promise.all(pageMembers.map(async (m) => {
+                            if (!m.phone) return;
+                            try {
+                                const s = await ipayHelper.syncMember(m.phone, m.name, false);
+                                if (s && s.success && s.user && typeof s.user.balance === 'number') {
+                                    if (m.user) m.user.saldo = s.user.balance;
+                                    m.saldo = s.user.balance;
+                                    if (s.user.name && (!m.user.name || m.user.name === 'User')) {
+                                        m.user.name = s.user.name;
+                                        m.name = s.user.name;
+                                    }
+                                }
+                            } catch (_) {}
+                        }));
+                        if (db.saveUsers) db.saveUsers();
+                    } catch (_) {}
+                }
+
+                global.botTg.answerCallbackQuery(query.id);
                 return updateOrSend(chatId, messageId, renderMemberPicker(page));
             }
 
@@ -6452,6 +6479,32 @@ setInterval(async () => {
         }
     } catch (_) {}
 }, 30000);
+
+// ============================================================
+// 🚀 IPAY AUTOMATIC SSOT MEMBER SYNC (STARTUP & BERKALA)
+// Menjamin saldo seluruh member di Bot WA/Tele selalu 100% identik dengan iPay
+// ============================================================
+if (config.provider?.active === 'ipay') {
+    // 1. Sinkronisasi instan saat bot booting / selesai update (delay 5 detik)
+    setTimeout(async () => {
+        try {
+            const ipayHelper = require('./lib/ipay');
+            console.log('[IPAY BOOT AUTO-SYNC] 🚀 Memulai sinkronisasi otomatis seluruh member ke server iPay...');
+            const res = await ipayHelper.batchSyncAllMembers();
+            console.log(`[IPAY BOOT AUTO-SYNC OK] Selesai sinkronisasi ${res.synced}/${res.total} member dari iPay.`);
+        } catch (err) {
+            console.warn('[IPAY BOOT AUTO-SYNC WARN]', err.message);
+        }
+    }, 5000);
+
+    // 2. Sinkronisasi berkala di background setiap 15 menit
+    setInterval(async () => {
+        try {
+            const ipayHelper = require('./lib/ipay');
+            await ipayHelper.batchSyncAllMembers();
+        } catch (_) {}
+    }, 15 * 60 * 1000);
+}
 
 
 
