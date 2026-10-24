@@ -1509,7 +1509,11 @@ async function processCheckout(sock, sender, session) {
             db.saveOrders();
 
             // 🚀 Potong saldo akun member di server iPay secara live (SSOT)
-            if (config.provider?.active === 'ipay') {
+            // PERINGATAN H2H: Jika pembeli adalah OWNER / MERCHANT TOKO, iPay (create_transaction)
+            // akan OTOMATIS memotong harga modal wholesale dari akun iPay owner (merchant.user.balance).
+            // JANGAN panggil adjustMemberBalance('deduct') lagi untuk owner agar TIDAK TERJADI DOUBLE DEDUCTION!
+            const isOwnerBuyer = db.isOwner ? db.isOwner(cleanBuyer) : false;
+            if (config.provider?.active === 'ipay' && !isOwnerBuyer) {
                 try {
                     const ipayHelper = require('./lib/ipay');
                     const bPhone = buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, '');
@@ -1719,6 +1723,23 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                 if (hit.data.ref_id) order.digiflazz_oid = hit.data.ref_id;
                 order.profit = analytics.calculateOrderProfit(order, db.ppob);
                 db.saveOrders();
+
+                // 🚀 SINKRONISASI SALDO OWNER REAL-TIME DARI IPAY (KARENA MODAL WHOLESALE DIPOTONG DARI AKUN OWNER)
+                if (db.isOwner && db.isOwner(order.buyer) && config.provider?.active === 'ipay') {
+                    try {
+                        const ipayHelper = require('./lib/ipay');
+                        ipayHelper.cekSaldoIpay().then(provBal => {
+                            if (typeof provBal === 'number') {
+                                const u = db.getUser(order.buyer);
+                                if (u) {
+                                    u.saldo = provBal;
+                                    if (db.saveUsers) db.saveUsers();
+                                    console.log(`[IPAY OWNER BALANCE SYNC OK] Saldo Owner diperbarui: Rp ${u.saldo.toLocaleString('id-ID')}`);
+                                }
+                            }
+                        }).catch(() => {});
+                    } catch (_) {}
+                }
 
                 activeTransactions.delete(
                     (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
@@ -5195,7 +5216,6 @@ function initTelegramBot() {
                             user.saldo = (Number(user.saldo) || 0) - nom;
                         }
 
-                        user.saldo = (Number(user.saldo) || 0) - nom;
                         if (!Array.isArray(user.history)) user.history = [];
                         const dateStr = new Date().toLocaleDateString('id-ID');
                         user.history.push(`[${dateStr}] 🔴 Penarikan Admin Telegram (-Rp ${nom.toLocaleString('id-ID')})`);
@@ -6468,32 +6488,44 @@ setInterval(async () => {
                 let oid = order.digiflazz_oid || order.ref_id || order.invoice || order.oid || order.refId || order.id; 
                 if (!oid) continue;
 
-                const sign = crypto.createHash('md5').update(configData.digiflazz.username + configData.digiflazz.key + oid).digest('hex');
-                
-                let payload = {
-                    username: configData.digiflazz.username,
-                    buyer_sku_code: order.sku,
-                    customer_no: order.target,
-                    ref_id: oid,
-                    sign: sign
-                };
+                let res;
+                if (configData.provider?.active === 'ipay') {
+                    const ipayService = require('./lib/ipay');
+                    const check = await ipayService.checkStatusIpay(oid);
+                    if (check) {
+                        res = {
+                            data: {
+                                status: check.status,
+                                sn: check.sn || check.message || '',
+                                message: check.message || '',
+                                ref_id: oid
+                            }
+                        };
+                    }
+                } else {
+                    const sign = crypto.createHash('md5').update(configData.digiflazz.username + configData.digiflazz.key + oid).digest('hex');
+                    
+                    let payload = {
+                        username: configData.digiflazz.username,
+                        buyer_sku_code: order.sku,
+                        customer_no: order.target,
+                        ref_id: oid,
+                        sign: sign
+                    };
 
-                const isPostpaid = !!order.isPasca || (order.sku && (String(order.sku).toLowerCase().startsWith('post') || String(order.sku).toLowerCase().includes('pasca')));
+                    const isPostpaid = !!order.isPasca || (order.sku && (String(order.sku).toLowerCase().startsWith('post') || String(order.sku).toLowerCase().includes('pasca')));
 
-                if (isPostpaid) {
-                    payload.commands = 'status-pasca';
+                    if (isPostpaid) {
+                        payload.commands = 'status-pasca';
+                    }
+
+                    const req = await fetch('https://api.digiflazz.com/v1/transaction', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    res = await req.json();
                 }
-
-                // LOGGING INTELIJEN: Tampilkan apa yang sedang dicek
-                const maskTrg = (t = '') => t.length > 6 ? t.slice(0, 4) + '****' + t.slice(-3) : t;
-                console.log(`[RADAR V4] 🔍 Mengecek OID: ${oid} | SKU: ${order.sku} | Subs: ${!!order.isSubscription} | Trg: ${maskTrg(order.target)}`);
-
-                const req = await fetch('https://api.digiflazz.com/v1/transaction', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const res = await req.json();
 
                 if (!res || !res.data) continue;
 

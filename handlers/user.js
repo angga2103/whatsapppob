@@ -2298,7 +2298,8 @@ ${depositId}`
             if (buyerPhone.startsWith('0')) buyerPhone = '62' + buyerPhone.slice(1);
 
             // 🚀 Potong saldo akun member di server iPay secara live (SSOT)
-            if (config.provider?.active === 'ipay') {
+            const isOwnerBuyer = checkIsOwner(sender);
+            if (config.provider?.active === 'ipay' && !isOwnerBuyer) {
                 try {
                     const ipayHelper = require('../lib/ipay');
                     const bPhone = buyerUser.phone || buyerPhone || cleanBuyer.replace(/[^0-9]/g, '');

@@ -938,6 +938,50 @@ const db = {
         return true;
     },
 
+    // 👑 Identifikasi Pemilik Toko / Owner Merchant (Multi-Format & LID Resilient)
+    isOwner: (identifier) => {
+        if (!identifier) return false;
+        try {
+            const config = require('../config');
+            const strId = String(identifier).trim();
+            const cleanDigits = strId.replace(/[^0-9]/g, '');
+            const cleanPhone08 = cleanDigits.startsWith('62') ? '0' + cleanDigits.slice(2) : cleanDigits;
+            const cleanPhone62 = cleanDigits.startsWith('0') ? '62' + cleanDigits.slice(1) : cleanDigits;
+
+            // 1. Cek terhadap config.owner (array atau string)
+            const owners = Array.isArray(config.owner) ? config.owner : (config.owner ? [config.owner] : []);
+            for (const o of owners) {
+                if (!o) continue;
+                const oStr = String(o).trim();
+                const oDigits = oStr.replace(/[^0-9]/g, '');
+                if (strId === oStr || (cleanDigits && oDigits && cleanDigits === oDigits)) return true;
+                if (db.normalizeJid && db.normalizeJid(strId) === db.normalizeJid(oStr)) return true;
+            }
+
+            // 2. Cek terhadap nomor DANA owner / toko
+            const danaNumber = String(config.dana?.number || '').replace(/[^0-9]/g, '');
+            const dana08 = danaNumber.startsWith('62') ? '0' + danaNumber.slice(2) : danaNumber;
+            const dana62 = danaNumber.startsWith('0') ? '62' + danaNumber.slice(1) : danaNumber;
+            if (danaNumber && (cleanPhone08 === dana08 || cleanPhone62 === dana62 || strId.includes(dana08) || strId.includes(dana62))) {
+                return true;
+            }
+
+            // 3. Cek data user jika identifier berupa JID (@lid atau @s.whatsapp.net)
+            const normJid = db.normalizeJid ? db.normalizeJid(strId) : strId;
+            const u = db.users ? (db.users[strId] || db.users[normJid]) : null;
+            if (u && u.phone) {
+                const uDigits = String(u.phone).replace(/[^0-9]/g, '');
+                const u08 = uDigits.startsWith('62') ? '0' + uDigits.slice(2) : uDigits;
+                if (dana08 && u08 === dana08) return true;
+                for (const o of owners) {
+                    const oDigits = String(o).replace(/[^0-9]/g, '');
+                    if (oDigits && uDigits === oDigits) return true;
+                }
+            }
+        } catch (_) {}
+        return false;
+    },
+
     // 🧬 Normalisasi JID Terpusat (Resolusi @lid dan Multi-Device ke Canonical @s.whatsapp.net)
     normalizeJid: (sender) => {
         if (!sender || typeof sender !== 'string') return sender;
@@ -1061,18 +1105,32 @@ const db = {
         // 🚀 JIKA PROVIDER IPAY: Sinkronkan refund saldo member ke server iPay (SSOT)
         try {
             const config = require('../config');
+            const isOwnerBuyer = db.isOwner ? db.isOwner(buyerJid) : false;
             if (config.provider?.active === 'ipay') {
                 const ipayHelper = require('../lib/ipay');
-                const targetPhone = user.phone || buyerJid.replace(/[^0-9]/g, '');
-                ipayHelper.adjustMemberBalance(targetPhone, refundAmount, 'add', `Refund ${order.item || order.sku || order.id} (${reason})`).then(res => {
-                    if (res && res.success && typeof res.new_balance === 'number') {
-                        user.saldo = res.new_balance;
-                        db.saveUsers();
-                        console.log(`[IPAY REFUND SYNC OK] User ${targetPhone} saldo sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
-                    }
-                }).catch(e => {
-                    console.error('[IPAY REFUND SYNC ERR]', e.message);
-                });
+                if (!isOwnerBuyer) {
+                    // Regular Member: Tambahkan refund ke saldo member iPay
+                    const targetPhone = user.phone || buyerJid.replace(/[^0-9]/g, '');
+                    ipayHelper.adjustMemberBalance(targetPhone, refundAmount, 'add', `Refund ${order.item || order.sku || order.id} (${reason})`).then(res => {
+                        if (res && res.success && typeof res.new_balance === 'number') {
+                            user.saldo = res.new_balance;
+                            db.saveUsers();
+                            console.log(`[IPAY REFUND SYNC OK] User ${targetPhone} saldo sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
+                        }
+                    }).catch(e => {
+                        console.error('[IPAY REFUND SYNC ERR]', e.message);
+                    });
+                } else {
+                    // Owner Toko: iPay sudah otomatis me-refund modal merchant ke akun owner saat transaksi ditolak.
+                    // Cukup sinkronkan saldo real-time akun owner dari server iPay agar tidak terjadi double-credit.
+                    ipayHelper.cekSaldoIpay().then(provBal => {
+                        if (typeof provBal === 'number') {
+                            user.saldo = provBal;
+                            db.saveUsers();
+                            console.log(`[IPAY OWNER REFUND SYNC OK] Saldo Owner sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
+                        }
+                    }).catch(() => {});
+                }
             }
         } catch (_) {}
 
