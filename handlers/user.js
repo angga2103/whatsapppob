@@ -477,56 +477,111 @@ async function handleUser(sock, sender, text, session, processCheckout) {
                 text: `💸 *FORMAT TRANSFER SALDO:*\n.transfer [Nomor_Tujuan] [Nominal]\n\nContoh:\n.transfer 08123456789 10000\n\n📌 _Minimal transfer Rp1.000 (Maks Rp50.000.000)_`
             });
         }
-        if (targetNo.startsWith('0')) targetNo = '62' + targetNo.slice(1);
-        
-        const senderUser = db.getUser ? db.getUser(sender) : (db.users[sender] || (db.users[sender] = { saldo: 0 }));
-        const senderPhone = (senderUser.phone || sender.split('@')[0].split(':')[0]).replace(/[^0-9]/g, '');
-        
+        const cleanTargetNo = db.getCanonicalPhone ? db.getCanonicalPhone(targetNo) : (targetNo.startsWith('0') ? '62' + targetNo.slice(1) : targetNo);
+        if (!cleanTargetNo || cleanTargetNo.length < 10) {
+            return sock.sendMessage(sender, { text: "❌ Nomor tujuan tidak valid. Masukkan nomor GSM Indonesia yang benar (contoh: 08123456789)." });
+        }
+
+        const canonicalSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
+        const senderUser = db.getUser ? db.getUser(canonicalSender) : (db.users[canonicalSender] || (db.users[canonicalSender] = { saldo: 0 }));
+        const senderPhone = db.getCanonicalPhone ? db.getCanonicalPhone(canonicalSender) : (senderUser.phone || '').replace(/[^0-9]/g, '');
+
+        if (!senderPhone) {
+            return sock.sendMessage(sender, { text: "❌ Akun WhatsApp Anda belum memiliki nomor telepon GSM terverifikasi. Silakan hubungi admin toko." });
+        }
+
         // 🛡️ CEGAH TRANSFER KE DIRI SENDIRI
-        if (targetNo === senderPhone) {
+        const normTarget = cleanTargetNo.startsWith('62') ? '0' + cleanTargetNo.slice(2) : cleanTargetNo;
+        const normSender = senderPhone.startsWith('62') ? '0' + senderPhone.slice(2) : senderPhone;
+        if (normTarget === normSender) {
             return sock.sendMessage(sender, { text: "❌ Tidak dapat mentransfer saldo ke nomor Anda sendiri." });
         }
 
-        // 🛡️ DEDUCTION ATOMIK: Menjamin saldo cukup dan bebas race condition
-        const deductRes = db.deductSaldo(sender, nom, `TRF-${targetNo}`, `Transfer ke ${targetNo}`);
+        // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Eksekusi di iPay terlebih dahulu jika provider iPay aktif!
+        if (config.provider?.active === 'ipay') {
+            const ipayHelper = require('../lib/ipay');
+            // 1. Live sync saldo pengirim dari iPay
+            try {
+                const sSync = await ipayHelper.syncMember(normSender, senderUser.name, false);
+                if (sSync && sSync.success && sSync.user && typeof sSync.user.balance === 'number') {
+                    senderUser.saldo = sSync.user.balance;
+                }
+            } catch (_) {}
+
+            if ((Number(senderUser.saldo) || 0) < nom) {
+                return sock.sendMessage(sender, {
+                    text: `❌ Transfer gagal: Saldo tidak mencukupi.\nSaldo Anda saat ini: ${formatRupiah(senderUser.saldo || 0)}`
+                });
+            }
+
+            // 2. Eksekusi pemotongan saldo pengirim di iPay
+            const deductIpay = await ipayHelper.adjustMemberBalance(normSender, nom, 'deduct', `Transfer ke ${normTarget}`);
+            if (!deductIpay || !deductIpay.success) {
+                return sock.sendMessage(sender, {
+                    text: `❌ *TRANSFER DITOLAK SERVER IPAY*\nAlasan: ${deductIpay?.message || 'Saldo tidak mencukupi'}\nSaldo Anda: ${formatRupiah(senderUser.saldo || 0)}`
+                });
+            }
+
+            // 3. Eksekusi penambahan saldo penerima di iPay
+            const addIpay = await ipayHelper.adjustMemberBalance(normTarget, nom, 'add', `Transfer dari ${normSender}`);
+            if (!addIpay || !addIpay.success) {
+                // 🛡️ ROLLBACK OTOMATIS: Kembalikan saldo pengirim di iPay jika penambahan ke penerima gagal!
+                console.error(`[IPAY TRANSFER CRITICAL] Gagal menambah ke ${normTarget}, melakukan rollback pengembalian ke ${normSender}...`);
+                await ipayHelper.adjustMemberBalance(normSender, nom, 'add', `Rollback gagal transfer ke ${normTarget}`);
+                return sock.sendMessage(sender, {
+                    text: `❌ *TRANSFER GAGAL DILANJUTKAN*\nNomor tujuan ${normTarget} tidak dapat menerima saldo di iPay (${addIpay?.message || 'Nomor tidak terdaftar'}). Saldo Anda telah dikembalikan secara utuh.`
+                });
+            }
+
+            // 4. Update saldo lokal setelah iPay sukses
+            if (typeof deductIpay.new_balance === 'number') senderUser.saldo = deductIpay.new_balance;
+            else senderUser.saldo = Math.max(0, (Number(senderUser.saldo) || 0) - nom);
+            
+            const targetJid = (cleanTargetNo.startsWith('0') ? '62' + cleanTargetNo.slice(1) : cleanTargetNo) + '@s.whatsapp.net';
+            const targetUser = db.getUser ? db.getUser(targetJid) : (db.users[targetJid] || (db.users[targetJid] = { saldo: 0, phone: cleanTargetNo }));
+            if (typeof addIpay.new_balance === 'number') targetUser.saldo = addIpay.new_balance;
+            else targetUser.saldo = (Number(targetUser.saldo) || 0) + nom;
+
+            const dateStr = new Date().toLocaleDateString('id-ID');
+            if (!Array.isArray(senderUser.history)) senderUser.history = [];
+            senderUser.history.push(`[${dateStr}] 🔴 Transfer ke ${normTarget} (-Rp ${nom.toLocaleString('id-ID')})`);
+            if (!Array.isArray(targetUser.history)) targetUser.history = [];
+            targetUser.history.push(`[${dateStr}] 🟢 Terima Transfer (+Rp ${nom.toLocaleString('id-ID')}) dari ${normSender}`);
+
+            db.saveUsers();
+
+            await sock.sendMessage(sender, {
+                text: `✅ *TRANSFER SALDO BERHASIL*\n\n🎯 Tujuan: ${normTarget}\n💰 Nominal: ${formatRupiah(nom)}\n💵 Sisa Saldo: ${formatRupiah(senderUser.saldo)}`
+            });
+
+            await sock.sendMessage(targetJid, {
+                text: `🎁 *SALDO MASUK*\n\nAnda menerima transfer saldo sebesar *${formatRupiah(nom)}* dari ${normSender}.\n💰 Saldo Baru: ${formatRupiah(targetUser.saldo)}`
+            }).catch(()=>{});
+            return;
+        }
+
+        // FALLBACK (NON-IPAY / LOKAL ONLY)
+        const deductRes = db.deductSaldo(sender, nom, `TRF-${cleanTargetNo}`, `Transfer ke ${cleanTargetNo}`);
         if (!deductRes.success) {
             return sock.sendMessage(sender, {
                 text: `❌ Transfer gagal: ${deductRes.reason}.\nSaldo Anda saat ini: ${formatRupiah(deductRes.saldo || senderUser.saldo || 0)}`
             });
         }
 
-        const targetJid = targetNo.includes('@') ? targetNo : targetNo + '@s.whatsapp.net';
-        const targetUser = db.getUser ? db.getUser(targetJid) : (db.users[targetJid] || (db.users[targetJid] = { saldo: 0, phone: targetNo }));
+        const targetJid = (cleanTargetNo.startsWith('0') ? '62' + cleanTargetNo.slice(1) : cleanTargetNo) + '@s.whatsapp.net';
+        const targetUser = db.getUser ? db.getUser(targetJid) : (db.users[targetJid] || (db.users[targetJid] = { saldo: 0, phone: cleanTargetNo }));
         targetUser.saldo = (Number(targetUser.saldo) || 0) + nom;
         if (!Array.isArray(targetUser.history)) targetUser.history = [];
         const dateStr = new Date().toLocaleDateString('id-ID');
-        targetUser.history.push(`[${dateStr}] 🟢 Terima Transfer (+Rp ${nom.toLocaleString('id-ID')}) dari ${senderPhone}`);
-
-        // 🚀 SSOT: Sinkronkan transfer saldo antar user ke server iPay
-        if (config.provider?.active === 'ipay') {
-            try {
-                const ipayHelper = require('../lib/ipay');
-                const deductIpay = await ipayHelper.adjustMemberBalance(senderPhone, nom, 'deduct', `Transfer ke ${targetNo}`);
-                if (deductIpay && deductIpay.success && typeof deductIpay.new_balance === 'number') {
-                    senderUser.saldo = deductIpay.new_balance;
-                }
-                const addIpay = await ipayHelper.adjustMemberBalance(targetNo, nom, 'add', `Transfer dari ${senderPhone}`);
-                if (addIpay && addIpay.success && typeof addIpay.new_balance === 'number') {
-                    targetUser.saldo = addIpay.new_balance;
-                }
-            } catch (e) {
-                console.error('[IPAY TRANSFER SALDO ERR]', e.message);
-            }
-        }
-
+        targetUser.history.push(`[${dateStr}] 🟢 Terima Transfer (+Rp ${nom.toLocaleString('id-ID')}) dari ${normSender}`);
         db.saveUsers();
 
         await sock.sendMessage(sender, {
-            text: `✅ *TRANSFER SALDO BERHASIL*\n\n🎯 Tujuan: ${targetNo}\n💰 Nominal: ${formatRupiah(nom)}\n💵 Sisa Saldo: ${formatRupiah(deductRes.remainingSaldo)}`
+            text: `✅ *TRANSFER SALDO BERHASIL*\n\n🎯 Tujuan: ${normTarget}\n💰 Nominal: ${formatRupiah(nom)}\n💵 Sisa Saldo: ${formatRupiah(deductRes.remainingSaldo)}`
         });
 
         await sock.sendMessage(targetJid, {
-            text: `🎁 *SALDO MASUK*\n\nAnda menerima transfer saldo sebesar *${formatRupiah(nom)}* dari ${senderPhone}.\n💰 Saldo Baru: ${formatRupiah(targetUser.saldo)}`
+            text: `🎁 *SALDO MASUK*\n\nAnda menerima transfer saldo sebesar *${formatRupiah(nom)}* dari ${normSender}.\n💰 Saldo Baru: ${formatRupiah(targetUser.saldo)}`
         }).catch(()=>{});
         return;
     }
@@ -1112,10 +1167,12 @@ ${depositId}`
             if (config.provider?.active === 'ipay') {
                 try {
                     const ipayHelper = require('../lib/ipay');
-                    const targetPhone = user.phone || sender.replace(/[^0-9]/g, '');
-                    const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, amount, 'add', `Deposit QRIS Bot WA (${depositId})`);
-                    if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
-                        user.saldo = ipayRes.new_balance;
+                    const targetPhone = db.getCanonicalPhone ? db.getCanonicalPhone(sender) : (user.phone || sender.replace(/[^0-9]/g, ''));
+                    if (targetPhone) {
+                        const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, amount, 'add', `Deposit QRIS Bot WA (${depositId})`);
+                        if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                            user.saldo = ipayRes.new_balance;
+                        }
                     }
                 } catch (e) {
                     console.error('[IPAY USER DEPOSIT SYNC ERR]', e.message);

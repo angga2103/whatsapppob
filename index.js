@@ -218,12 +218,14 @@ const handleDanaWebhook = async (req, res) => {
                 // 🚀 SINGLE SOURCE OF TRUTH (SSOT): Sinkronkan ke saldo akun member di iPay jika provider iPay aktif
                 if (config.provider?.active === 'ipay') {
                     try {
-                        const targetPhone = user.phone || targetJid.replace(/[^0-9]/g, '');
-                        const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, nominalPokok, 'add', `Deposit DANA (${deposit.id})`);
-                        if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
-                            user.saldo = ipayRes.new_balance;
-                            if (db.saveUsers) db.saveUsers();
-                            console.log(`[IPAY DEPOSIT SYNC OK] User ${targetPhone} saldo sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
+                        const targetPhone = db.getCanonicalPhone ? db.getCanonicalPhone(targetJid) : (user.phone || targetJid.replace(/[^0-9]/g, ''));
+                        if (targetPhone) {
+                            const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, nominalPokok, 'add', `Deposit DANA (${deposit.id})`);
+                            if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                                user.saldo = ipayRes.new_balance;
+                                if (db.saveUsers) db.saveUsers();
+                                console.log(`[IPAY DEPOSIT SYNC OK] User ${targetPhone} saldo sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
+                            }
                         }
                     } catch (e) {
                         console.error('[IPAY DEPOSIT SYNC ERR]', e.message);
@@ -1486,7 +1488,7 @@ async function processCheckout(sock, sender, session) {
     if (config.provider?.active === 'ipay') {
         try {
             const ipayHelper = require('./lib/ipay');
-            const bPhone = buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, '');
+            const bPhone = db.getCanonicalPhone ? db.getCanonicalPhone(cleanBuyer) : (buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, ''));
             if (bPhone) {
                 const sRes = await ipayHelper.syncMember(bPhone, buyerUser.name, true, Number(buyerUser.saldo) || 0);
                 if (sRes && sRes.success && sRes.user) {
@@ -1516,9 +1518,39 @@ async function processCheckout(sock, sender, session) {
             if (config.provider?.active === 'ipay' && !isOwnerBuyer) {
                 try {
                     const ipayHelper = require('./lib/ipay');
-                    const bPhone = buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, '');
+                    const bPhone = db.getCanonicalPhone ? db.getCanonicalPhone(cleanBuyer) : (buyerUser.phone || cleanBuyer.replace(/[^0-9]/g, ''));
+                    if (!bPhone) {
+                        // Tidak ada nomor GSM yang valid untuk akun ini
+                        buyerUser.saldo = (Number(buyerUser.saldo) || 0) + baseAmount;
+                        if (Array.isArray(buyerUser.history) && buyerUser.history.length > 0) buyerUser.history.pop();
+                        order.status = 'failed';
+                        order.refunded = true;
+                        if (db.saveUsers) db.saveUsers();
+                        if (db.saveOrders) db.saveOrders();
+                        activeTransactions.delete(trxKey);
+                        return sock.sendMessage(sender, {
+                            text: `❌ *PEMBAYARAN GAGAL*\nAkun Anda belum memiliki nomor HP GSM yang terverifikasi untuk sinkronisasi saldo iPay. Silakan hubungi admin.`
+                        });
+                    }
+
                     const ipayRes = await ipayHelper.adjustMemberBalance(bPhone, baseAmount, 'deduct', `Beli ${order.item} (${oid})`);
-                    if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                    if (!ipayRes || !ipayRes.success) {
+                        // 🛡️ ROLLBACK LOKAL: Server iPay menolak pemotongan (saldo di iPay tidak cukup)
+                        buyerUser.saldo = (Number(buyerUser.saldo) || 0) + baseAmount;
+                        if (Array.isArray(buyerUser.history) && buyerUser.history.length > 0) buyerUser.history.pop();
+                        order.status = 'failed';
+                        order.refunded = true;
+                        if (db.saveUsers) db.saveUsers();
+                        if (db.saveOrders) db.saveOrders();
+                        activeTransactions.delete(trxKey);
+
+                        console.warn(`[IPAY DEDUCT REJECTED] Order ${oid} ditolak oleh iPay: ${ipayRes?.message || 'Saldo iPay tidak mencukupi'}`);
+                        return sock.sendMessage(sender, {
+                            text: `❌ *PEMBAYARAN DITOLAK SERVER IPAY*\n\nAlasan: ${ipayRes?.message || 'Saldo akun iPay Anda tidak mencukupi'}.\n💵 Saldo Anda: ${formatRupiah(buyerUser.saldo)}\n\nSilakan lakukan deposit saldo terlebih dahulu atau ketik *.deposit*.`
+                        });
+                    }
+
+                    if (typeof ipayRes.new_balance === 'number') {
                         buyerUser.saldo = ipayRes.new_balance;
                         if (db.saveUsers) db.saveUsers();
                     }
@@ -1668,10 +1700,12 @@ function resumeDepositPolling(sock, dep) {
                 // 🚀 SSOT Sync dengan iPay
                 if (config.provider?.active === 'ipay') {
                     try {
-                        const targetPhone = user.phone || targetJid.replace(/[^0-9]/g, '');
-                        const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, currentDep.amount, 'add', `Deposit QRIS Bot WA (${depositId})`);
-                        if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
-                            user.saldo = ipayRes.new_balance;
+                        const targetPhone = db.getCanonicalPhone ? db.getCanonicalPhone(targetJid) : (user.phone || targetJid.replace(/[^0-9]/g, ''));
+                        if (targetPhone) {
+                            const ipayRes = await ipayHelper.adjustMemberBalance(targetPhone, currentDep.amount, 'add', `Deposit QRIS Bot WA (${depositId})`);
+                            if (ipayRes && ipayRes.success && typeof ipayRes.new_balance === 'number') {
+                                user.saldo = ipayRes.new_balance;
+                            }
                         }
                     } catch (e) {
                         console.error('[IPAY DEPOSIT CHECK SYNC ERR]', e.message);

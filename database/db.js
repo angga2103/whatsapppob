@@ -1017,6 +1017,72 @@ const db = {
         return clean;
     },
 
+    // 📱 Validasi Nomor GSM Seluler Indonesia (08... atau 628...)
+    isValidGsmPhone: (phone) => {
+        if (!phone) return false;
+        const clean = String(phone).replace(/[^0-9]/g, '');
+        if (clean.startsWith('08') && clean.length >= 10 && clean.length <= 14) return true;
+        if (clean.startsWith('628') && clean.length >= 11 && clean.length <= 15) return true;
+        return false;
+    },
+
+    // 📱 Normalisasi Nomor ke Format 08...
+    normalizePhone08: (phone) => {
+        if (!phone) return '';
+        let clean = String(phone).replace(/[^0-9]/g, '');
+        if (clean.startsWith('62')) clean = '0' + clean.slice(2);
+        if (clean.startsWith('08') && clean.length >= 10 && clean.length <= 14) return clean;
+        return '';
+    },
+
+    // 🔍 Ekstraksi Nomor Telepon GSM Resmi (Anti-LID Leak)
+    getCanonicalPhone: (identifier) => {
+        if (!identifier) return '';
+        const raw = String(identifier).trim();
+
+        // 1. Cek langsung di db.users
+        if (db.users && db.users[raw]) {
+            const u = db.users[raw];
+            if (u.phone && db.isValidGsmPhone(u.phone)) {
+                return db.normalizePhone08(u.phone);
+            }
+            if (u.canonical && db.users[u.canonical]?.phone && db.isValidGsmPhone(db.users[u.canonical].phone)) {
+                return db.normalizePhone08(db.users[u.canonical].phone);
+            }
+        }
+
+        // 2. Jika JID @s.whatsapp.net
+        if (raw.includes('@s.whatsapp.net')) {
+            const num = raw.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+            if (db.isValidGsmPhone(num)) {
+                return db.normalizePhone08(num);
+            }
+        }
+
+        // 3. Jika JID @lid, cari relasi ke akun canonical
+        if (raw.includes('@lid')) {
+            const cleanLid = raw.split(':')[0] + '@lid';
+            for (const [j, u] of Object.entries(db.users || {})) {
+                if (u && (j === cleanLid || u.lid === cleanLid || u.canonical === cleanLid)) {
+                    if (u.phone && db.isValidGsmPhone(u.phone)) {
+                        return db.normalizePhone08(u.phone);
+                    }
+                    if (u.canonical && db.users[u.canonical]?.phone && db.isValidGsmPhone(db.users[u.canonical].phone)) {
+                        return db.normalizePhone08(db.users[u.canonical].phone);
+                    }
+                }
+            }
+        }
+
+        // 4. Jika angka mentah
+        const digits = raw.replace(/[^0-9]/g, '');
+        if (db.isValidGsmPhone(digits)) {
+            return db.normalizePhone08(digits);
+        }
+
+        return '';
+    },
+
     // 👤 Ambil User Secara Konsisten (Selalu Menggunakan Akun Canonical)
     getUser: (sender, extra = {}) => {
         const jid = db.normalizeJid(sender);
@@ -1116,16 +1182,18 @@ const db = {
                 const ipayHelper = require('../lib/ipay');
                 if (!isOwnerBuyer) {
                     // Regular Member: Tambahkan refund ke saldo member iPay
-                    const targetPhone = user.phone || buyerJid.replace(/[^0-9]/g, '');
-                    ipayHelper.adjustMemberBalance(targetPhone, refundAmount, 'add', `Refund ${order.item || order.sku || order.id} (${reason})`).then(res => {
-                        if (res && res.success && typeof res.new_balance === 'number') {
-                            user.saldo = res.new_balance;
-                            db.saveUsers();
-                            console.log(`[IPAY REFUND SYNC OK] User ${targetPhone} saldo sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
-                        }
-                    }).catch(e => {
-                        console.error('[IPAY REFUND SYNC ERR]', e.message);
-                    });
+                    const targetPhone = db.getCanonicalPhone(buyerJid) || db.getCanonicalPhone(user.phone);
+                    if (targetPhone) {
+                        ipayHelper.adjustMemberBalance(targetPhone, refundAmount, 'add', `Refund ${order.item || order.sku || order.id} (${reason})`).then(res => {
+                            if (res && res.success && typeof res.new_balance === 'number') {
+                                user.saldo = res.new_balance;
+                                db.saveUsers();
+                                console.log(`[IPAY REFUND SYNC OK] User ${targetPhone} saldo sinkron ke iPay: Rp ${user.saldo.toLocaleString('id-ID')}`);
+                            }
+                        }).catch(e => {
+                            console.error('[IPAY REFUND SYNC ERR]', e.message);
+                        });
+                    }
                 } else {
                     // Owner Toko: iPay sudah otomatis me-refund modal merchant ke akun owner saat transaksi ditolak.
                     // Cukup sinkronkan saldo real-time akun owner dari server iPay agar tidak terjadi double-credit.
