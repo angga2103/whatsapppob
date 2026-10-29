@@ -1,5 +1,5 @@
 const db = require('../database/db');
-const { formatRupiah, detectOperator } = require('../lib/utils');
+const { formatRupiah, detectOperator, sanitizeTargetNumber } = require('../lib/utils');
 const api = require('../lib/api');
 const config = require('../config');
 const legal = require('../lib/legal');
@@ -1723,13 +1723,16 @@ ${depositId}`
             session.step = S.IDLE;
             return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali." });
         }
-        const target = txt.replace(/[^0-9a-zA-Z]/g, '');
+        const target = sanitizeTargetNumber(text) || text.replace(/[^0-9a-zA-Z]/g, '');
         if (!target || target.length < 5) {
             return sock.sendMessage(sender, { text: "❌ Nomor ID Pelanggan tidak valid. Silakan periksa kembali." });
         }
         const product = session.tempPostpaidProduct || { sku: 'post685486', name: 'PLN Pascabayar', brand: 'PLN PASCABAYAR' };
         session.tempTarget = target;
 
+        if (sock && typeof sock.sendPresenceUpdate === 'function') {
+            sock.sendPresenceUpdate('composing', sender).catch(() => {});
+        }
         await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengecek rincian tagihan ke server..." });
 
         const postpaid = require('../lib/postpaid');
@@ -1865,7 +1868,7 @@ ${depositId}`
             }
         }
 
-        const phone = rawInput.replace(/[^0-9]/g, '');
+        const phone = sanitizeTargetNumber(rawInput);
         if (session.tempTipe === 'PLN') {
             if (phone.length < 11 || phone.length > 12) {
                 return sock.sendMessage(sender, { text: `❌ Nomor Meter / ID Pelanggan PLN harus 11 atau 12 digit.` });
@@ -1952,7 +1955,7 @@ ${depositId}`
     }
 
     if (session.step === S.INPUT_TARGET_EMONEY) {
-        session.tempTarget = txt.replace(/[^0-9]/g, '');
+        session.tempTarget = sanitizeTargetNumber(text);
         const produkRaw = db.ppob.filter(p => p.kategori === 'E-Money' && p.brand === session.tempBrand);
         
         let parsedProducts = produkRaw.map(p => { return { ...p, ...parseProduct(p.nama, session.tempBrand) }; });
@@ -2215,7 +2218,7 @@ ${depositId}`
             return sock.sendMessage(sender, { text: "🚫 Batal. Ketik *MENU* untuk kembali ke menu utama." });
         }
 
-        const target = rawTrim;
+        const target = rawTrim.includes('@') ? rawTrim : sanitizeTargetNumber(rawTrim);
         if (!target || target.length < 4) {
             return sock.sendMessage(sender, {
                 text: `⚠️ Nomor tujuan atau email tidak valid (terlalu pendek). Silakan masukkan tujuan yang benar:\nKetik *0* atau *B* untuk batal.`

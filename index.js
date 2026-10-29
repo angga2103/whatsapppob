@@ -1217,8 +1217,10 @@ if (!global.heartbeatStarted) {
 
             spamDelay.set(sender, Date.now());
 
-            
-            
+            // 🟢 Tampilkan status sedang mengetik... (Visual Typing Presence Feedback)
+            if (sock && typeof sock.sendPresenceUpdate === 'function') {
+                sock.sendPresenceUpdate('composing', sender).catch(() => {});
+            }
 
             // =========================================
             // AUTO KIRIM AKUN MANUAL (FIXED VERSION)
@@ -1423,6 +1425,11 @@ async function processCheckout(sock, sender, session) {
     }
 
     activeTransactions.add(trxKey);
+
+    // 🟢 Tampilkan status sedang mengetik saat proses checkout
+    if (sock && typeof sock.sendPresenceUpdate === 'function') {
+        sock.sendPresenceUpdate('composing', sender).catch(() => {});
+    }
 
     const isPpob = !!item.sku;
     const qty = isPpob ? 1 : (session.tempQty || 1);
@@ -1731,6 +1738,62 @@ function resumeDepositPolling(sock, dep) {
     activeCheckers.set(depositId, depositChecker);
 }
 
+// ============================================================
+// ⚠️ EARLY WARNING: ALARM SALDO MODAL H2H MENIPIS (TELEGRAM & WA)
+// Mencegah transaksi member gagal massal akibat saldo deposit habis
+// ============================================================
+let lastLowBalanceAlertTime = 0;
+async function checkAndAlertLowMerchantBalance(forceCheck = false) {
+    try {
+        const prov = config.provider?.active || 'digiflazz';
+        let balance = null;
+        if (prov === 'ipay') {
+            const ipayHelper = require('./lib/ipay');
+            balance = await ipayHelper.cekSaldoIpay();
+        } else {
+            balance = await api.cekSaldoDigi();
+        }
+
+        if (typeof balance !== 'number') return;
+
+        const threshold = Number(config.provider?.ipay?.lowBalanceAlert) || 50000;
+        if (balance < threshold) {
+            const now = Date.now();
+            // Debounce: kirim notifikasi maksimal 1x per 60 menit kecuali forceCheck
+            if (forceCheck || (now - lastLowBalanceAlertTime > 60 * 60 * 1000)) {
+                lastLowBalanceAlertTime = now;
+                const provName = prov === 'ipay' ? 'iPay (GarudaTel)' : 'Digiflazz';
+                const alertMsg = 
+                    `⚠️ *PERINGATAN: SALDO MODAL H2H MENIPIS!*\n\n` +
+                    `• Provider : *${provName}*\n` +
+                    `• Sisa Saldo Modal : *${formatRupiah(balance)}*\n` +
+                    `• Batas Minimum Aman : *${formatRupiah(threshold)}*\n\n` +
+                    `🚨 _Segera lakukan isi ulang saldo deposit merchant agar transaksi member tidak terhambat / gagal massal._`;
+
+                if (global.botTg && config.telegram?.chatId) {
+                    global.botTg.sendMessage(config.telegram.chatId, alertMsg, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '💰 Cek Saldo Provider Sekarang', callback_data: prov === 'ipay' ? 'tg_cek_ipay' : 'tg_cekdigi' }]
+                            ]
+                        }
+                    }).catch(() => {});
+                }
+
+                if (global.sock && Array.isArray(config.owner) && config.owner.length > 0) {
+                    for (const o of config.owner) {
+                        const oJid = o.includes('@') ? o : `${o}@s.whatsapp.net`;
+                        global.sock.sendMessage(oJid, { text: alertMsg }).catch(() => {});
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[LOW BALANCE ALERT ERR]', e.message);
+    }
+}
+
 // LOGIKA EKSEKUSI PRODUK (DIGIFLAZZ / LOKAL)
 async function handleSuccessPayment(sock, order, viaSaldo) {
     const targetJid = order.buyer;
@@ -1774,6 +1837,9 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
                         }).catch(() => {});
                     } catch (_) {}
                 }
+
+                // ⚠️ Pantau sisa saldo merchant provider secara otomatis pasca transaksi
+                checkAndAlertLowMerchantBalance().catch(() => {});
 
                 activeTransactions.delete(
                     (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
@@ -6540,11 +6606,12 @@ if (config.provider?.active === 'ipay') {
     }, 15 * 60 * 1000);
 }
 
-
-
-
-
-
+// Pengecekan berkala saldo modal merchant (iPay / Digiflazz) setiap 30 menit
+setInterval(async () => {
+    try {
+        await checkAndAlertLowMerchantBalance();
+    } catch (_) {}
+}, 30 * 60 * 1000);
 // ==========================================
 // 📡 RADAR PEMANTAU DIGIFLAZZ V4 (INTELIJEN)
 // ==========================================

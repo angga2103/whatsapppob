@@ -1,5 +1,5 @@
 const db = require('../database/db');
-const { formatRupiah } = require('../lib/utils');
+const { formatRupiah, sanitizeTargetNumber } = require('../lib/utils');
 const api = require('../lib/api');
 const marginHelper = require('../lib/margin');
 const analytics = require('../lib/analytics');
@@ -165,7 +165,7 @@ if (cmd === 'namatoko') {
         if (isNaN(nominal) || nominal <= 0 || nominal > 50000000) {
             return sock.sendMessage(sender, { text: "❌ Nominal harus berupa angka valid antara Rp1 - Rp50.000.000." });
         }
-        let phone = phoneRaw.replace(/[^0-9]/g, '');
+        let phone = sanitizeTargetNumber(phoneRaw);
         if (phone.startsWith('0')) phone = '62' + phone.slice(1);
         if (phone.length < 10 || !phone.startsWith('62')) {
             return sock.sendMessage(sender, { text: "❌ Nomor tujuan tidak valid. Format: 62812xxx (Min 10 digit)." });
@@ -207,7 +207,7 @@ if (cmd === 'namatoko') {
         if (isNaN(nominal) || nominal <= 0) {
             return sock.sendMessage(sender, { text: "❌ Nominal harus berupa angka valid lebih dari 0." });
         }
-        let phone = phoneRaw.replace(/[^0-9]/g, '');
+        let phone = sanitizeTargetNumber(phoneRaw);
         if (phone.startsWith('0')) phone = '62' + phone.slice(1);
         if (phone.length < 10 || !phone.startsWith('62')) {
             return sock.sendMessage(sender, { text: "❌ Nomor tujuan tidak valid. Format: 62812xxx (Min 10 digit)." });
