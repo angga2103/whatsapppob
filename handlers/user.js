@@ -892,18 +892,19 @@ async function handleUser(sock, sender, text, session, processCheckout) {
                     session.tempQty = 1;
                     session.step = S.CONFIRM;
 
-                    let card = `⚡ *QUICK ORDER TERDETEKSI*\n\n`;
-                    card += `📦 Produk : *${quick.product.nama}*\n`;
-                    card += `🎯 Tujuan : *${quick.target}*\n`;
-                    card += `💰 Total  : *${formatRupiah(quick.product.hargaJual)}*\n`;
-                    card += `💵 Saldo  : ${formatRupiah(userSaldo)}\n\n`;
+                    let card = `╭── ⚡ *QUICK ORDER (KILAT)* ──╮\n`;
+                    card += `│ 📦 Produk : *${quick.product.nama}*\n`;
+                    card += `│ 🎯 Tujuan : *${quick.target}*\n`;
+                    card += `│ 💰 Total  : *${formatRupiah(quick.product.hargaJual)}*\n`;
+                    card += `│ 💵 Saldo  : ${formatRupiah(userSaldo)}\n`;
+                    card += `╰──────────────────────────────╯\n\n`;
                     if (userSaldo >= quick.product.hargaJual) {
-                        card += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+                        card += `💳 *Metode:* Potong Saldo Akun (Instan)\n\n`;
                     } else {
-                        card += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+                        card += `💳 *Metode:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
                     }
-                    card += `👉 Balas *1* atau *YA* untuk BAYAR SEKARANG\n👉 Balas *2* atau *B* untuk BATAL\n\n`;
-                    card += `⚖️ _Membayar berarti menyetujui S&K Layanan. Info: ketik .snk_`;
+                    card += `👉 Balas *1* atau *YA* untuk *BAYAR SEKARANG*\n👉 Balas *2* atau *B* untuk *BATAL*\n\n`;
+                    card += `⚖️ _Membayar berarti menyetujui S&K Layanan._`;
                     return sock.sendMessage(sender, { text: card });
                 }
 
@@ -957,19 +958,38 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     // 1. MAIN MENU
     if (['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT'].includes(txt)) {
         session.step = S.PILIH_KATEGORI;
-        let t = `╭── 🛍️ *${db.store.namaToko || 'DIGITAL STORE'}* ──\n│\n`;
-        t += `├ *1.* 🌐 Pulsa Reguler (Prabayar)\n`;
-        t += `├ *2.* 📶 Paket Data Internet\n`;
-        t += `├ *3.* 💸 Topup E-Money & E-Wallet\n`;
-        t += `├ *4.* ⚡ Token Listrik PLN (Prabayar)\n`;
-        t += `├ *5.* 📑 Tagihan PPOB Pascabayar\n`;
-        t += `├ *6.* 📂 Produk Digital (Akun / Aplikasi)\n`;
-        t += `├ *7.* 🔄 Produk Berlangganan (Auto-Order)\n`;
-        t += `├ *8.* 💰 Isi Saldo (Deposit QRIS)\n`;
-        t += `├ *9.* 👤 Profil & Cek Saldo\n`;
-        t += `├ *10.* 🧾 Riwayat Transaksi\n`;
-        t += `├ *11.* 📖 Bantuan & Panduan\n│\n`;
-        t += `╰───────────────────────────\n\n`;
+
+        const u = db.getUser ? db.getUser(sender) : null;
+        const saldo = Number(u?.saldo) || 0;
+        const isOwner = checkIsOwner(sender);
+        const roleLabel = isOwner ? '👑 Owner / Admin' : '👤 Member / Konter';
+        let namaUser = u?.name || '';
+        if (!namaUser || namaUser === 'User') {
+            let phoneClean = (u?.phone || sender).split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+            if (phoneClean.startsWith('62')) phoneClean = '0' + phoneClean.slice(2);
+            namaUser = phoneClean || 'Pelanggan';
+        }
+
+        let t = `╭── 🏪 *${db.store.namaToko || 'DIGITAL STORE PPOB'}* ──╮\n`;
+        t += `│ 👤 Akun   : *${namaUser}* (${roleLabel})\n`;
+        t += `│ 💰 Saldo  : *${formatRupiah(saldo)}*\n`;
+        t += `╰─────────────────────────────╯\n\n`;
+        t += `📦 *LAYANAN & PRODUK TRANSAKSI:*\n`;
+        t += ` *1.* 📱 Pulsa Reguler (All Operator)\n`;
+        t += ` *2.* 📶 Paket Data & Kuota Internet\n`;
+        t += ` *3.* 💸 Topup E-Wallet (DANA/OVO/GoPay/Shopee)\n`;
+        t += ` *4.* ⚡ Token Listrik PLN (Prabayar)\n`;
+        t += ` *5.* 📑 Tagihan PPOB / Pasca (PLN, BPJS, PDAM, WiFi)\n`;
+        t += ` *6.* 📂 Produk Digital (Akun Premium / Aplikasi)\n`;
+        t += ` *7.* 🔄 Layanan Berlangganan (Auto-Order Rutin)\n\n`;
+        t += `⚙️ *PUSAT AKUN & INFORMASI:*\n`;
+        t += ` *8.* 💰 Isi Saldo (Deposit QRIS Instan)\n`;
+        t += ` *9.* 👤 Profil & Cek Saldo Akun\n`;
+        t += ` *10.* 🧾 Riwayat Transaksi Terakhir\n`;
+        t += ` *11.* 📖 Panduan Transaksi & Format Cepat\n\n`;
+        t += `💡 *TIPS KONTER (TRANSAKSI KILAT):*\n`;
+        t += `• Mau isi nomor pembeli langsung? Cukup ketik nomor tujuannya di chat (contoh: *08123456789*)!\n`;
+        t += `• Ketik *0* atau *BATAL* kapan saja untuk batalkan alur.\n\n`;
         t += `👇 Balas dengan *ANGKA (1 - 11)* untuk memilih menu.`;
         return sock.sendMessage(sender, { text: t });
     }
@@ -1466,16 +1486,13 @@ ${depositId}`
             const isValidSender = senderPhone && senderPhone.startsWith('08') && senderPhone.length >= 10;
             session.tempSenderPhone = isValidSender ? senderPhone : null;
 
-            let msg = session.tempTipe === 'Data' ? `📶 *PAKET DATA INTERNET*\n\n` : `📱 *PULSA REGULER*\n\n`;
+            let msg = session.tempTipe === 'Data' ? `📶 *PAKET DATA & KUOTA INTERNET*\n\n` : `📱 *PULSA REGULER (ALL OPERATOR)*\n\n`;
+            msg += `Silakan masukkan *Nomor HP Pelanggan / Tujuan*:\n_Contoh: 08123456789_\n\n`;
             if (isValidSender) {
-                msg += `Silakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\n` +
-                       `👉 Atau balas *1* untuk mengisi ke nomor sendiri (*${senderPhone}*).\n\n`;
-            } else {
-                msg += `Silakan masukkan *Nomor HP Tujuan*:\n_Contoh: 08123456789_\n\n`;
+                msg += `👉 Atau balas *1* jika ingin mengisi ke nomor akun ini (*${senderPhone}*).\n\n`;
             }
-
             if (session.tempTipe === 'Data') {
-                msg += `💡 *Tips:* Bisa langsung sertakan kuota/harga (contoh: *08123456789 2gb* atau *1 50k*)\n\n`;
+                msg += `💡 *Tips Konter:* Bisa langsung sertakan kuota/harga (contoh: *08123456789 2gb* atau *1 50k*)\n\n`;
             }
             msg += `Ketik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: msg });
@@ -1486,7 +1503,8 @@ ${depositId}`
             if (brands.length === 0) return sock.sendMessage(sender, { text: `❌ Sistem belum menarik data E-Money. Ketik .sync emoney` });
             
             session.tempBrands = brands;
-            let t = `💸 *PILIH PROVIDER E-MONEY*\n\n`;
+            let t = `💸 *TOPUP SALDO E-WALLET & E-MONEY*\n\n`;
+            t += `Pilih provider e-wallet tujuan pelanggan:\n`;
             brands.forEach((b, i) => t += `*${i+1}.* ${b}\n`);
             t += `\nBalas angka (*1 - ${brands.length}*) pilihan Anda.\nKetik *0* atau *B* untuk batal.`;
             return sock.sendMessage(sender, { text: t });
@@ -1951,11 +1969,41 @@ ${depositId}`
         // MENCUCI OTAK BOT DARI TRANSAKSI SEBELUMNYA
         delete session.tempOp;
         delete session.tempSmartMode;
-        return sock.sendMessage(sender, { text: `💸 *${session.tempBrand}*\n\nSilakan masukkan Nomor Akun / HP Anda:` });
+
+        const u = db.getUser ? db.getUser(sender) : null;
+        let senderPhone = u?.phone || '';
+        if (!senderPhone && !sender.includes('@lid')) {
+            senderPhone = sender.split('@')[0].split(':')[0];
+        }
+        if (senderPhone.startsWith('62')) senderPhone = '0' + senderPhone.slice(2);
+        const isValidSender = senderPhone && senderPhone.startsWith('08') && senderPhone.length >= 10;
+        session.tempSenderPhone = isValidSender ? senderPhone : null;
+
+        let promptMsg = `💸 *TOPUP ${session.tempBrand}*\n\n` +
+                        `Silakan masukkan *Nomor HP Pelanggan / ID Akun*:\n_Contoh: 08123456789_\n\n`;
+        if (isValidSender) {
+            promptMsg += `👉 Atau balas *1* jika ingin mengisi ke nomor akun ini (*${senderPhone}*).\n\n`;
+        }
+        promptMsg += `Ketik *0* atau *B* untuk batal.`;
+        return sock.sendMessage(sender, { text: promptMsg });
     }
 
     if (session.step === S.INPUT_TARGET_EMONEY) {
-        session.tempTarget = sanitizeTargetNumber(text);
+        if (txt === 'B' || txt === '0') {
+            session.step = S.IDLE;
+            return sock.sendMessage(sender, { text: "🚫 Transaksi dibatalkan. Ketik *MENU* untuk kembali belanja." });
+        }
+
+        let rawTarget = text.trim();
+        if (session.tempSenderPhone && (rawTarget === '1' || rawTarget.startsWith('1 '))) {
+            rawTarget = session.tempSenderPhone;
+        }
+
+        const cleanTarget = sanitizeTargetNumber(rawTarget);
+        if (cleanTarget.length < 8 || cleanTarget.length > 15) {
+            return sock.sendMessage(sender, { text: "❌ Nomor akun / HP tujuan tidak valid (harus 8 - 15 digit).\nKetik *0* atau *B* untuk batal." });
+        }
+        session.tempTarget = cleanTarget;
         const produkRaw = db.ppob.filter(p => p.kategori === 'E-Money' && p.brand === session.tempBrand);
         
         let parsedProducts = produkRaw.map(p => { return { ...p, ...parseProduct(p.nama, session.tempBrand) }; });
@@ -2493,26 +2541,28 @@ async function showInvoice(sock, sender, session) {
     const qty = isPpob ? 1 : (session.tempQty || 1);
     const total = (isPpob ? session.tempItem.hargaJual : session.tempItem.harga) * qty;
     const user = db.getUser(sender);
-    const saldo = Number(user.saldo) || 0;
+    const saldo = Number(user?.saldo) || 0;
     
-    let t = `🧾 *KONFIRMASI PESANAN*\n\n`;
-    t += `📦 Produk : *${session.tempItem.cleanName || session.tempItem.nama}*\n`;
-    if (isPpob) t += `🎯 Tujuan : *${session.tempTarget}*\n`;
-    else t += `📊 Jumlah : *${qty}*\n`;
-    
-    t += `💰 Total  : *${formatRupiah(total)}*\n`;
-    t += `💵 Saldo  : ${formatRupiah(saldo)}\n\n`;
+    let t = `╭── 🧾 *RINCIAN PESANAN* ──╮\n`;
+    t += `│ 📦 Produk : *${session.tempItem.cleanName || session.tempItem.nama}*\n`;
+    if (isPpob) t += `│ 🎯 Tujuan : *${session.tempTarget}*\n`;
+    else t += `│ 📊 Jumlah : *${qty} item*\n`;
+    t += `│ 💰 Total  : *${formatRupiah(total)}*\n`;
+    t += `│ 💵 Saldo  : ${formatRupiah(saldo)}\n`;
+    t += `╰──────────────────────────╯\n\n`;
     
     if (saldo >= total) {
-        t += `💳 *Metode Bayar:* Potong Saldo Otomatis (Instan)\n\n`;
+        t += `💳 *Metode:* Potong Saldo Akun (Instan)\n\n`;
     } else {
-        t += `💳 *Metode Bayar:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n\n`;
+        t += `💳 *Metode:* QRIS Otomatis (BCA, DANA, GoPay, OVO, ShopeePay)\n`;
+        t += `⚠️ _Saldo akun tidak mencukupi, sistem akan menerbitkan QRIS._\n\n`;
     }
-    t += `👉 Balas *1* untuk BAYAR SEKARANG\n👉 Balas *2* untuk BATAL\n\n`;
+    t += `👉 Balas *1* untuk *BAYAR SEKARANG*\n`;
+    t += `👉 Balas *2* untuk *BATAL*\n\n`;
     if (!isPpob) {
         t += legal.getTermsDigitalShort();
     } else {
-        t += `⚖️ _Membayar berarti menyetujui S&K Layanan (salah no tujuan tanggung jawab pembeli). Info: ketik .snk_`;
+        t += `⚖️ _Membayar berarti menyetujui S&K Layanan (pastikan nomor tujuan pelanggan sudah benar)._`;
     }
     
     await sock.sendMessage(sender, { text: t });
