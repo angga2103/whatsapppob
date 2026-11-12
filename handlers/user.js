@@ -1748,9 +1748,6 @@ ${depositId}`
         const product = session.tempPostpaidProduct || { sku: 'post685486', name: 'PLN Pascabayar', brand: 'PLN PASCABAYAR' };
         session.tempTarget = target;
 
-        if (sock && typeof sock.sendPresenceUpdate === 'function') {
-            sock.sendPresenceUpdate('composing', sender).catch(() => {});
-        }
         await sock.sendMessage(sender, { text: "⏳ *INQUIRY:* Sedang mengecek rincian tagihan ke server..." });
 
         const postpaid = require('../lib/postpaid');

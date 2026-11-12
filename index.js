@@ -977,7 +977,7 @@ process.on('unhandledRejection', err => {
 });
 const userSessions = new Map();
 const activeCheckers = new Map();
-const spamDelay = new Map();
+const userRateMap = new Map();
 
 // ================================
 // DIGIFLAZZ RETRY CONFIG
@@ -1548,245 +1548,223 @@ if (!global.heartbeatStarted) {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
-        try {
-            const m = messages[0];
-            if (!m.message || m.key.fromMe) return;
+        if (!Array.isArray(messages)) return;
 
-            // Filter out groups, broadcasts, and newsletters
-            const remoteJid = m.key.remoteJid || '';
-            if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast' || remoteJid.endsWith('@newsletter') || remoteJid.endsWith('@broadcast')) {
-                return;
-            }
+        for (const m of messages) {
+            try {
+                if (!m.message || m.key.fromMe) continue;
 
-            // 1. Ekstrak real phone number & PushName dari WhatsApp
-            let realPhone = null;
-            const altJid = m.key.remoteJidAlt || m.key.participantAlt || m.key.participant || '';
-            if (remoteJid.includes('@s.whatsapp.net')) {
-                realPhone = remoteJid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-            } else if (altJid && altJid.includes('@s.whatsapp.net')) {
-                realPhone = altJid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-            }
-
-            // Fallback signal repository jika remoteJid adalah LID
-            if (!realPhone && remoteJid.includes('@lid') && sock.signalRepository?.lidMapping?.getPNForLID) {
-                try {
-                    const pn = await sock.signalRepository.lidMapping.getPNForLID(remoteJid);
-                    if (pn) realPhone = pn.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-                } catch (_) {}
-            }
-
-            if (realPhone) {
-                if (realPhone.startsWith('0')) realPhone = '62' + realPhone.slice(1);
-            }
-
-            const pushName = (m.pushName || '').trim();
-            if (realPhone && remoteJid.includes('@lid') && db.linkLidToPhone) {
-                db.linkLidToPhone(remoteJid, realPhone, pushName);
-            }
-
-            const sender = jidNormalizedUser(remoteJid);
-            const normSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
-            const isOwner = (config.owner || []).some(o => {
-                const normO = db.normalizeJid ? db.normalizeJid(o) : o;
-                return normO === normSender || o === sender;
-            });
-            let textBody = m.message.conversation || m.message.extendedTextMessage?.text || '';
-
-            db.getUser(normSender, { phone: realPhone, name: pushName });
-            if (!userSessions.has(normSender)) userSessions.set(normSender, { step: S.IDLE });
-            const session = userSessions.get(normSender);
-
-            const lastChat = spamDelay.get(sender) || 0;
-
-            if (Date.now() - lastChat < 1500) {
-                return;
-            }
-
-            spamDelay.set(sender, Date.now());
-
-            // 🟢 Tampilkan status sedang mengetik... (Visual Typing Presence Feedback)
-            if (sock && typeof sock.sendPresenceUpdate === 'function') {
-                sock.sendPresenceUpdate('composing', sender).catch(() => {});
-            }
-
-            // =========================================
-            // AUTO KIRIM AKUN MANUAL (FIXED VERSION)
-            // =========================================
-            if (
-                isOwner &&
-                m.message?.extendedTextMessage?.contextInfo?.quotedMessage
-            ) {
-
-                const quoted =
-                    m.message.extendedTextMessage.contextInfo.quotedMessage;
-
-                const quotedText =
-                    quoted.conversation ||
-                    quoted.extendedTextMessage?.text ||
-                    '';
-
-                // hanya proses reply ORDER MANUAL
-                if (quotedText.includes('ORDER MASUK MANUAL')) {
-
-                    // ambil ORDER ID
-                    const idMatch = quotedText.match(/ID:\s*(.+)/);
-                    
-                    // 🛡️ KOPLING PEMBATALAN (CEGAH SUKSES JIKA ADMIN KETIK BATAL)
-                    let adminReplyText = m.message?.extendedTextMessage?.text || '';
-                    let txtLower = adminReplyText.toLowerCase();
-                    let isCancelCommand = txtLower.startsWith('batal') || txtLower.startsWith('tolak') || txtLower.startsWith('refund');
-
-                    if (idMatch && isCancelCommand) {
-                        let targetInv = idMatch[1].trim();
-                        let targetOrder = typeof db !== 'undefined' && db.orders ? db.orders.find(o => o.id === targetInv) : null;
-                        
-                        if (targetOrder && (targetOrder.status === 'pending' || targetOrder.status === 'processing')) {
-                            const refundResult = db.refundOrder(targetOrder, 'Dibatalkan Admin (Via Reply)');
-                            
-                            if (refundResult.success) {
-                                // Lapor Admin
-                                sock.sendMessage(m.key.remoteJid, { text: '✅ *ORDER DIBATALKAN (VIA REPLY)*\n\n🧾 Invoice: ' + targetInv + '\n💸 Saldo Rp ' + refundResult.amount.toLocaleString('id-ID') + ' telah dikembalikan ke pembeli.' }, { quoted: m });
-                                
-                                // Lapor Pembeli
-                                let pesanPembeli = '❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda dibatalkan.\n\n📦 Produk: ' + (targetOrder.item || targetOrder.sku) + '\n🧾 Invoice: ' + targetInv + '\n💰 Saldo Rp ' + refundResult.amount.toLocaleString('id-ID') + ' telah dikembalikan ke dompet Anda.';
-                                sock.sendMessage(refundResult.buyerJid, { text: pesanPembeli }).catch(()=>{});
-                            } else {
-                                sock.sendMessage(m.key.remoteJid, { text: '⚠️ *PERHATIAN:* Order ' + targetInv + ' ' + (refundResult.alreadyRefunded ? 'sudah pernah di-refund sebelumnya.' : 'gagal di-refund: ' + refundResult.reason) }, { quoted: m });
-                            }
-                        }
-                        return; // 🛑 HENTIKAN KODE DISINI AGAR TIDAK DIEKSEKUSI SEBAGAI PESANAN SUKSES
-                    }
-
-                    if (!idMatch) {
-                        return sock.sendMessage(sender, {
-                            text: '❌ ORDER ID tidak ditemukan.'
-                        });
-                    }
-
-                    const orderId = idMatch[1].trim();
-
-                    // cari order berdasarkan ID
-                    const order = db.orders.find(
-                        o =>
-                            o.id == orderId &&
-                            o.isPpob === false &&
-                            o.status !== 'success'
-                    );
-
-                    if (!order) {
-                        return sock.sendMessage(sender, {
-                            text:
-                                '❌ Order manual tidak ditemukan atau sudah selesai.'
-                        });
-                    }
-
-                    // ambil isi reply admin
-                    const akunText = textBody.trim();
-
-                    if (!akunText) {
-                        return sock.sendMessage(sender, {
-                            text: '❌ Isi akun kosong.'
-                        });
-                    }
-
-                    // kirim akun ke pembeli dengan format rapi & S&K resmi
-                    const targetBuyer = db.normalizeJid ? db.normalizeJid(order.buyer) : order.buyer;
-                    let deliverMsg = `✅ *PESANAN PRODUK DIGITAL SUKSES*\n\n` +
-                        `📦 Produk : *${order.item}*\n` +
-                        `📊 Jumlah : *${order.qty || 1}*\n` +
-                        `🧾 No. Inv: \`${order.id}\`\n\n` +
-                        `🔑 *DETAIL AKUN / KREDENSIAL:*\n` +
-                        `${akunText}\n\n` +
-                        `📌 *ATURAN PENGGUNAAN WAJIB & BATASAN HUKUM:*\n` +
-                        `1. Wajib login HANYA di *1 Device* (Dilarang multi-device/sharing).\n` +
-                        `2. Dilarang mengubah email, password, profile, atau billing/pembayaran.\n` +
-                        `3. Akun bersumber dari promo seller luar, *TIDAK ADA garansi seumur hidup/permanen*.\n` +
-                        `4. Garansi HANYA saat *First Login (maks 1x24 jam)* jika salah password saat pertama diterima.\n` +
-                        `5. Jika akun tersuspend pihak provider resmi di kemudian hari, *TIDAK ADA REFUND / UANG KEMBALI*.\n\n` +
-                        `_Ketik *.snkdigital* untuk membaca syarat & ketentuan lengkap._\n` +
-                        `Terima kasih telah berbelanja di *${db.store.namaToko || 'STORE'}*! 🙏`;
-
-                    await currentSock.sendMessage(targetBuyer, { text: deliverMsg }).catch(err => {
-                        console.error('[DELIVER_WA_REPLY_ERR]', err?.message);
-                    });
-
-                    // update status
-                    const menuItem = db.menu.find(m => m.nama === order.item);
-                    if (menuItem) {
-                        menuItem.stok = Math.max(0, (menuItem.stok || 0) - (order.qty || 1));
-                        db.saveMenu();
-                    }
-
-                    order.status = 'success';
-                    order.sn = akunText;
-                    order.dataAkun = [akunText];
-                    order.doneAt = Date.now();
-                    order.deliveredAt = Date.now();
-                    db.saveOrders();
-
-                    // Tembusan ke Telegram jika aktif
-                    if (global.botTg && config.telegram && config.telegram.chatId) {
-                        global.botTg.sendMessage(config.telegram.chatId,
-                            `✅ *AKUN TERKIRIM (VIA REPLY WA)*\n\n` +
-                            `🧾 Invoice: \`${order.id}\`\n` +
-                            `📦 Produk: *${order.item}*\n` +
-                            `👤 Pembeli: \`${order.buyer}\`\n\n` +
-                            `Status pesanan telah diperbarui menjadi SUKSES.`,
-                            { parse_mode: 'Markdown' }
-                        ).catch(() => {});
-                    }
-
-                    return sock.sendMessage(sender, {
-                        text: `✅ *AKUN BERHASIL DIKIRIM KE PEMBELI!*\n\n🧾 Invoice: \`${order.id}\`\n📦 Produk: *${order.item}*\n👤 Pembeli: ${order.buyer}\nStatus pesanan: SUKSES.`
-                    });
+                // Filter out groups, broadcasts, and newsletters
+                const remoteJid = m.key.remoteJid || '';
+                if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast' || remoteJid.endsWith('@newsletter') || remoteJid.endsWith('@broadcast')) {
+                    continue;
                 }
-            }
 
-            const rawCmd = textBody.split(/\s+/)[0] || '';
-            const cmd = rawCmd.toLowerCase().replace(/^[.!\/#]/, '');
-            const args = textBody.slice(rawCmd.length).trim();
+                // 1. Ekstrak real phone number & PushName dari WhatsApp
+                let realPhone = null;
+                const altJid = m.key.remoteJidAlt || m.key.participantAlt || m.key.participant || '';
+                if (remoteJid.includes('@s.whatsapp.net')) {
+                    realPhone = remoteJid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+                } else if (altJid && altJid.includes('@s.whatsapp.net')) {
+                    realPhone = altJid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+                }
 
-            const adminCommands = [
-                'admin', 'pullppob', 'cekdigi', 'addsaldo', 'tariksaldo', 'addmenu', 'adddata', 'delmenu', 
-                'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
-                'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
-                'settings', 'pengaturan', 'setprovider', 'setipay', 'statusipay', 'cekipay', 'syncmembers', 'syncmember', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
-                'setdana', 'setdanatoken', 'setqris', 'danastatus',
-                'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
-                'kirimakun', 'kirim', 'batalorder',
-                'snk', 'tos', 'syarat', 'aturan', 'snkdigital', 'digital', 'aturanakun'
-            ];
+                // Cek cache lokal terlebih dahulu sebelum fallback getPNForLID
+                if (!realPhone && remoteJid.includes('@lid')) {
+                    const cachedU = db.users ? db.users[remoteJid] : null;
+                    if (cachedU && cachedU.phone) realPhone = cachedU.phone;
+                    else if (db.getCanonicalPhone) {
+                        const p = db.getCanonicalPhone(remoteJid);
+                        if (p) realPhone = p;
+                    }
+                }
 
-            if (isOwner && adminCommands.includes(cmd)) {
-                return handleAdmin(sock, sender, cmd, args, m);
-            }
-            if (
-                !isOwner &&
-                db.store &&
-                db.store.buka === false
-            ) {
-                return sock.sendMessage(sender, {
-                    text:
-`🔴 *${db.store.namaToko || 'TOKO'} SEDANG OFFLINE*
+                // Fallback signal repository jika remoteJid adalah LID (dengan timeout 200ms agar respon selalu instan)
+                if (!realPhone && remoteJid.includes('@lid') && sock.signalRepository?.lidMapping?.getPNForLID) {
+                    try {
+                        const pn = await Promise.race([
+                            sock.signalRepository.lidMapping.getPNForLID(remoteJid),
+                            new Promise(r => setTimeout(() => r(null), 200))
+                        ]);
+                        if (pn) realPhone = pn.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+                    } catch (_) {}
+                }
 
-Silakan coba lagi nanti.`
+                if (realPhone) {
+                    if (realPhone.startsWith('0')) realPhone = '62' + realPhone.slice(1);
+                }
+
+                const pushName = (m.pushName || '').trim();
+                if (realPhone && remoteJid.includes('@lid') && db.linkLidToPhone) {
+                    db.linkLidToPhone(remoteJid, realPhone, pushName);
+                }
+
+                const sender = jidNormalizedUser(remoteJid);
+                const normSender = db.normalizeJid ? db.normalizeJid(sender) : sender;
+
+                // 🛡️ Proteksi anti-flood ekstrim (> 6 pesan dalam 1 detik dari nomor yang sama)
+                const userTimes = userRateMap.get(normSender) || [];
+                const now = Date.now();
+                const recentChats = userTimes.filter(t => now - t < 1000);
+                if (recentChats.length >= 6) {
+                    continue; // Skip jika flood bot
+                }
+                recentChats.push(now);
+                userRateMap.set(normSender, recentChats);
+
+                // 🔒 FIFO Execution Lock per User: Menjamin setiap ketikan diproses berurutan tanpa balapan step (anti out-of-sync)
+                await mutex.withLock(normSender, async () => {
+                    const isOwner = (config.owner || []).some(o => {
+                        const normO = db.normalizeJid ? db.normalizeJid(o) : o;
+                        return normO === normSender || o === sender;
+                    });
+                    let textBody = m.message.conversation || m.message.extendedTextMessage?.text || '';
+
+                    db.getUser(normSender, { phone: realPhone, name: pushName });
+                    if (!userSessions.has(normSender)) userSessions.set(normSender, { step: S.IDLE });
+                    const session = userSessions.get(normSender);
+
+                    // =========================================
+                    // AUTO KIRIM AKUN MANUAL (FIXED VERSION)
+                    // =========================================
+                    if (
+                        isOwner &&
+                        m.message?.extendedTextMessage?.contextInfo?.quotedMessage
+                    ) {
+                        const quoted = m.message.extendedTextMessage.contextInfo.quotedMessage;
+                        const quotedText = quoted.conversation || quoted.extendedTextMessage?.text || '';
+
+                        // hanya proses reply ORDER MANUAL
+                        if (quotedText.includes('ORDER MASUK MANUAL')) {
+                            const idMatch = quotedText.match(/ID:\s*(.+)/);
+                            let adminReplyText = m.message?.extendedTextMessage?.text || '';
+                            let txtLower = adminReplyText.toLowerCase();
+                            let isCancelCommand = txtLower.startsWith('batal') || txtLower.startsWith('tolak') || txtLower.startsWith('refund');
+
+                            if (idMatch && isCancelCommand) {
+                                let targetInv = idMatch[1].trim();
+                                let targetOrder = typeof db !== 'undefined' && db.orders ? db.orders.find(o => o.id === targetInv) : null;
+                                
+                                if (targetOrder && (targetOrder.status === 'pending' || targetOrder.status === 'processing')) {
+                                    const refundResult = db.refundOrder(targetOrder, 'Dibatalkan Admin (Via Reply)');
+                                    if (refundResult.success) {
+                                        await sock.sendMessage(m.key.remoteJid, { text: '✅ *ORDER DIBATALKAN (VIA REPLY)*\n\n🧾 Invoice: ' + targetInv + '\n💸 Saldo Rp ' + refundResult.amount.toLocaleString('id-ID') + ' telah dikembalikan ke pembeli.' }, { quoted: m });
+                                        let pesanPembeli = '❌ *ORDER DIBATALKAN ADMIN*\n\nMohon maaf, pesanan Anda dibatalkan.\n\n📦 Produk: ' + (targetOrder.item || targetOrder.sku) + '\n🧾 Invoice: ' + targetInv + '\n💰 Saldo Rp ' + refundResult.amount.toLocaleString('id-ID') + ' telah dikembalikan ke dompet Anda.';
+                                        sock.sendMessage(refundResult.buyerJid, { text: pesanPembeli }).catch(()=>{});
+                                    } else {
+                                        await sock.sendMessage(m.key.remoteJid, { text: '⚠️ *PERHATIAN:* Order ' + targetInv + ' ' + (refundResult.alreadyRefunded ? 'sudah pernah di-refund sebelumnya.' : 'gagal di-refund: ' + refundResult.reason) }, { quoted: m });
+                                    }
+                                }
+                                return;
+                            }
+
+                            if (!idMatch) {
+                                return sock.sendMessage(sender, { text: '❌ ORDER ID tidak ditemukan.' });
+                            }
+
+                            const orderId = idMatch[1].trim();
+                            const order = db.orders.find(o => o.id == orderId && o.isPpob === false && o.status !== 'success');
+                            if (!order) {
+                                return sock.sendMessage(sender, { text: '❌ Order manual tidak ditemukan atau sudah selesai.' });
+                            }
+
+                            const akunText = textBody.trim();
+                            if (!akunText) {
+                                return sock.sendMessage(sender, { text: '❌ Isi akun kosong.' });
+                            }
+
+                            const targetBuyer = db.normalizeJid ? db.normalizeJid(order.buyer) : order.buyer;
+                            let deliverMsg = `✅ *PESANAN PRODUK DIGITAL SUKSES*\n\n` +
+                                `📦 Produk : *${order.item}*\n` +
+                                `📊 Jumlah : *${order.qty || 1}*\n` +
+                                `🧾 No. Inv: \`${order.id}\`\n\n` +
+                                `🔑 *DETAIL AKUN / KREDENSIAL:*\n` +
+                                `${akunText}\n\n` +
+                                `📌 *ATURAN PENGGUNAAN WAJIB & BATASAN HUKUM:*\n` +
+                                `1. Wajib login HANYA di *1 Device* (Dilarang multi-device/sharing).\n` +
+                                `2. Dilarang mengubah email, password, profile, atau billing/pembayaran.\n` +
+                                `3. Akun bersumber dari promo seller luar, *TIDAK ADA garansi seumur hidup/permanen*.\n` +
+                                `4. Garansi HANYA saat *First Login (maks 1x24 jam)* jika salah password saat pertama diterima.\n` +
+                                `5. Jika akun tersuspend pihak provider resmi di kemudian hari, *TIDAK ADA REFUND / UANG KEMBALI*.\n\n` +
+                                `_Ketik *.snkdigital* untuk membaca syarat & ketentuan lengkap._\n` +
+                                `Terima kasih telah berbelanja di *${db.store.namaToko || 'STORE'}*! 🙏`;
+
+                            await (currentSock || sock).sendMessage(targetBuyer, { text: deliverMsg }).catch(err => {
+                                console.error('[DELIVER_WA_REPLY_ERR]', err?.message);
+                            });
+
+                            const menuItem = db.menu.find(m => m.nama === order.item);
+                            if (menuItem) {
+                                menuItem.stok = Math.max(0, (menuItem.stok || 0) - (order.qty || 1));
+                                db.saveMenu();
+                            }
+
+                            order.status = 'success';
+                            order.sn = akunText;
+                            order.dataAkun = [akunText];
+                            order.doneAt = Date.now();
+                            order.deliveredAt = Date.now();
+                            db.saveOrders();
+
+                            if (global.botTg && config.telegram && config.telegram.chatId) {
+                                global.botTg.sendMessage(config.telegram.chatId,
+                                    `✅ *AKUN TERKIRIM (VIA REPLY WA)*\n\n` +
+                                    `🧾 Invoice: \`${order.id}\`\n` +
+                                    `📦 Produk: *${order.item}*\n` +
+                                    `👤 Pembeli: \`${order.buyer}\`\n\n` +
+                                    `Status pesanan telah diperbarui menjadi SUKSES.`,
+                                    { parse_mode: 'Markdown' }
+                                ).catch(() => {});
+                            }
+
+                            return sock.sendMessage(sender, {
+                                text: `✅ *AKUN BERHASIL DIKIRIM KE PEMBELI!*\n\n🧾 Invoice: \`${order.id}\`\n📦 Produk: *${order.item}*\n👤 Pembeli: ${order.buyer}\nStatus pesanan: SUKSES.`
+                            });
+                        }
+                    }
+
+                    const rawCmd = textBody.split(/\s+/)[0] || '';
+                    const cmd = rawCmd.toLowerCase().replace(/^[.!\/#]/, '');
+                    const args = textBody.slice(rawCmd.length).trim();
+
+                    const adminCommands = [
+                        'admin', 'pullppob', 'cekdigi', 'addsaldo', 'tariksaldo', 'addmenu', 'adddata', 'delmenu', 
+                        'editmenu', 'setharga', 'stok', 'setstok', 'listmenu', 'cekdata', 'resend', 'member', 'info', 'topsaldo', 
+                        'toptrx', 'stats', 'toko', 'namatoko', 'lunas', 'backup', 'health',
+                        'settings', 'pengaturan', 'setprovider', 'setipay', 'statusipay', 'cekipay', 'syncmembers', 'syncmember', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
+                        'setdana', 'setdanatoken', 'setqris', 'danastatus',
+                        'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
+                        'kirimakun', 'kirim', 'batalorder',
+                        'snk', 'tos', 'syarat', 'aturan', 'snkdigital', 'digital', 'aturanakun'
+                    ];
+
+                    if (isOwner && adminCommands.includes(cmd)) {
+                        return handleAdmin(sock, sender, cmd, args, m);
+                    }
+                    if (
+                        !isOwner &&
+                        db.store &&
+                        db.store.buka === false
+                    ) {
+                        return sock.sendMessage(sender, {
+                            text: `🔴 *${db.store.namaToko || 'TOKO'} SEDANG OFFLINE*\n\nSilakan coba lagi nanti.`
+                        });
+                    }
+
+                    if (textBody) {
+                        await handleUser(
+                            sock,
+                            sender,
+                            textBody,
+                            session,
+                            processCheckout
+                        );
+                    }
                 });
+            } catch (e) {
+                console.error('[MESSAGE ERROR]', e);
             }
-
-if (textBody)
-    await handleUser(
-        sock,
-        sender,
-        textBody,
-        session,
-        processCheckout
-    );
-
-        } catch (e) {
-    console.error('[MESSAGE ERROR]');
-    console.error(e);
-    console.error(e.stack);
-}
+        }
     });
 
     global.sock = sock;
@@ -1812,11 +1790,6 @@ async function processCheckout(sock, sender, session) {
     }
 
     activeTransactions.add(trxKey);
-
-    // 🟢 Tampilkan status sedang mengetik saat proses checkout
-    if (sock && typeof sock.sendPresenceUpdate === 'function') {
-        sock.sendPresenceUpdate('composing', sender).catch(() => {});
-    }
 
     const isPpob = !!item.sku;
     const qty = isPpob ? 1 : (session.tempQty || 1);
