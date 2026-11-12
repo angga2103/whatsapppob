@@ -24,6 +24,11 @@ const receiptLib = require('./lib/receipt');
 const mutex = require('./lib/mutex');
 const danaHelper = require('./lib/dana');
 
+// Inisialisasi state global transaksi
+const activeTransactions = new Set();
+let currentSock = null;
+let lastLowBalanceAlertTime = 0;
+
 // ========================================
 // 🌐 EXPRESS WEB SERVER (STRUK DIGITAL, HEALTH, & DANA MUTASI)
 // ========================================
@@ -311,6 +316,455 @@ const handleDanaWebhook = async (req, res) => {
 app.all(['/callback/dana-mutasi', '/callback/dana', '/api/callback/dana-mutasi'], handleDanaWebhook);
 
 // ============================================================
+// ⚠️ EARLY WARNING: ALARM SALDO MODAL H2H MENIPIS (TELEGRAM & WA)
+// Mencegah transaksi member gagal massal akibat saldo deposit habis
+// ============================================================
+async function checkAndAlertLowMerchantBalance(forceCheck = false) {
+    try {
+        const prov = config.provider?.active || 'digiflazz';
+        let balance = null;
+        if (prov === 'ipay') {
+            const ipayHelper = require('./lib/ipay');
+            balance = await ipayHelper.cekSaldoIpay();
+        } else {
+            balance = await api.cekSaldoDigi();
+        }
+
+        if (typeof balance !== 'number') return;
+
+        const threshold = Number(config.provider?.ipay?.lowBalanceAlert) || 50000;
+        if (balance < threshold) {
+            const now = Date.now();
+            if (forceCheck || (now - lastLowBalanceAlertTime > 60 * 60 * 1000)) {
+                lastLowBalanceAlertTime = now;
+                const provName = prov === 'ipay' ? 'iPay (GarudaTel)' : 'Digiflazz';
+                const alertMsg = 
+                    `⚠️ *PERINGATAN: SALDO MODAL H2H MENIPIS!*\n\n` +
+                    `• Provider : *${provName}*\n` +
+                    `• Sisa Saldo Modal : *${formatRupiah(balance)}*\n` +
+                    `• Batas Minimum Aman : *${formatRupiah(threshold)}*\n\n` +
+                    `🚨 _Segera lakukan isi ulang saldo deposit merchant agar transaksi member tidak terhambat / gagal massal._`;
+
+                if (global.botTg && config.telegram?.chatId) {
+                    global.botTg.sendMessage(config.telegram.chatId, alertMsg, {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '💰 Cek Saldo Provider Sekarang', callback_data: prov === 'ipay' ? 'tg_cek_ipay' : 'tg_cekdigi' }]
+                            ]
+                        }
+                    }).catch(() => {});
+                }
+
+                if (global.sock && Array.isArray(config.owner) && config.owner.length > 0) {
+                    for (const o of config.owner) {
+                        const oJid = o.includes('@') ? o : `${o}@s.whatsapp.net`;
+                        global.sock.sendMessage(oJid, { text: alertMsg }).catch(() => {});
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[LOW BALANCE ALERT ERR]', e.message);
+    }
+}
+
+// ============================================================
+// 🔔 CENTRALIZED NOTIFICATION DISPATCHER (TRANSAKSI SUKSES & GAGAL)
+// Menjamin SN, Token PLN, dan Status Transaksi 100% Terkirim ke WA & Telegram
+// ============================================================
+async function notifyOrderSuccess(sock, order, resultData = {}) {
+    if (!order) return;
+    if (order.status === 'success' && order.notified) return;
+
+    const rawSn = String(resultData.sn || resultData.message || order.sn || '').trim();
+    const isPostpaid = Boolean(order.isPasca || (order.sku && (String(order.sku).toLowerCase().startsWith('post') || String(order.sku).toLowerCase().includes('pasca'))));
+    const isPln = Boolean(order.sku?.toLowerCase().includes('pln') || order.item?.toLowerCase().includes('pln') || order.isPln);
+    const plnData = formatPlnToken(rawSn);
+    const storeName = db.store?.namaToko || 'DIGITAL STORE';
+    const timeStr = getTanggalLengkap(order.timestamp || Date.now());
+    const totalAmount = order.baseAmount || order.total || order.price || 0;
+
+    let msgText = '';
+
+    if (isPln && plnData) {
+        msgText = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
+                  `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
+                  `\`${plnData.token}\`\n` +
+                  `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
+        if (plnData.nama) msgText += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
+        if (plnData.tarif) msgText += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
+        if (plnData.kwh) msgText += `📊 Jumlah Kwh     : *${plnData.kwh}*\n`;
+        msgText += `🎯 No. Meter / ID  : *${order.target}*\n` +
+                   `💰 Total Bayar     : *${formatRupiah(totalAmount)}*\n` +
+                   `🕒 Waktu           : ${timeStr}\n\n` +
+                   `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                   `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
+    } else if (isPln) {
+        msgText = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
+                  `⚡ *KODE TOKEN / KETERANGAN:*\n` +
+                  `\`${rawSn || '-'}\`\n\n` +
+                  `🎯 No. Meter / ID  : *${order.target}*\n` +
+                  `💰 Total Bayar     : *${formatRupiah(totalAmount)}*\n` +
+                  `🕒 Waktu           : ${timeStr}\n\n` +
+                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
+    } else if (isPostpaid) {
+        let descText = '';
+        if (resultData.desc) {
+            try {
+                const d = typeof resultData.desc === 'object' ? resultData.desc : JSON.parse(resultData.desc);
+                if (d.tarif && d.daya) descText += `⚡ Daya/Tarif: *${d.tarif} / ${d.daya}VA*\n`;
+                if (d.lembar_tagihan) descText += `📑 Lembar Tagihan: *${d.lembar_tagihan} bulan*\n`;
+            } catch (_) {}
+        }
+        const snText = rawSn ? `\n🧾 *No. Ref / SN:* \`${rawSn}\`` : '';
+        msgText = `✅ *PEMBAYARAN PASCABAYAR BERHASIL*\n\n` +
+                  `📦 Layanan: *${order.item || order.sku}*\n` +
+                  `🎯 ID Pelanggan: *${order.target}*\n` +
+                  `${descText}` +
+                  `💰 Total Bayar: *${formatRupiah(totalAmount)}*` +
+                  `${snText}\n\n` +
+                  `_Terima kasih telah melakukan pembayaran di *${storeName}*!_`;
+    } else {
+        const cleanSn = formatDigiflazzMessage(rawSn);
+        msgText = `✅ *TRANSAKSI BERHASIL*\n\n` +
+                  `📦 Produk   : *${order.item || order.sku}*\n` +
+                  `🎯 Tujuan   : *${order.target}*\n` +
+                  `💰 Total    : *${formatRupiah(totalAmount)}*\n` +
+                  `🧾 SN / Ref : \`${cleanSn}\`\n` +
+                  `🕒 Waktu    : ${timeStr}\n\n` +
+                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
+                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
+    }
+
+    // Resolusi Target WhatsApp (Prioritaskan format GSM @s.whatsapp.net jika target sebelumnya @lid)
+    const targetCandidates = [];
+    if (order.buyer) targetCandidates.push(order.buyer);
+    if (order.sender && !targetCandidates.includes(order.sender)) targetCandidates.push(order.sender);
+    if (order.jid && !targetCandidates.includes(order.jid)) targetCandidates.push(order.jid);
+
+    for (const cand of [...targetCandidates]) {
+        if (typeof cand === 'string' && cand.includes('@lid')) {
+            const u = db.users ? db.users[cand] : null;
+            if (u && u.canonical && !targetCandidates.includes(u.canonical)) {
+                targetCandidates.unshift(u.canonical);
+            }
+            if (db.getCanonicalPhone) {
+                const p = db.getCanonicalPhone(cand);
+                if (p && !targetCandidates.includes(`${p}@s.whatsapp.net`)) {
+                    targetCandidates.unshift(`${p}@s.whatsapp.net`);
+                }
+            }
+        }
+    }
+
+    let sent = false;
+    const activeSock = (sock && typeof sock.sendMessage === 'function') ? sock : (global.sock || currentSock);
+
+    if (activeSock && typeof activeSock.sendMessage === 'function') {
+        for (const target of targetCandidates) {
+            try {
+                await activeSock.sendMessage(target, { text: msgText });
+                sent = true;
+                console.log(`[ORDER NOTIFIED OK] Sukses kirim notifikasi transaksi ke ${target} (Inv: ${order.id})`);
+                break;
+            } catch (err) {
+                console.warn(`[ORDER NOTIFIED FAIL] Gagal kirim notif ke ${target}:`, err.message);
+            }
+        }
+    } else {
+        console.warn(`[ORDER NOTIFIED WARN] Socket WA belum siap saat pesanan ${order.id} sukses.`);
+    }
+
+    order.status = 'success';
+    order.notified = sent;
+    if (rawSn) order.sn = rawSn;
+    if (resultData.ref_id) order.digiflazz_oid = resultData.ref_id;
+    order.profit = analytics.calculateOrderProfit(order, db.ppob);
+    if (typeof db.saveOrders === 'function') db.saveOrders();
+
+    // Hapus transaction idempotency lock
+    activeTransactions.delete(
+        (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+    );
+
+    // Potong stok produk digital lokal jika ada
+    const menuItem = db.menu ? db.menu.find(m => m.nama === order.item) : null;
+    if (menuItem) {
+        menuItem.stok = Math.max(0, (menuItem.stok || 0) - (order.qty || 1));
+        if (db.saveMenu) db.saveMenu();
+    }
+
+    // Update siklus subscription jika pesanan langganan
+    if (order.isSubscription) {
+        try {
+            const sub = (db.subscriptions || []).find(s => s.id === order.subscriptionId);
+            if (sub) {
+                if (!Array.isArray(sub.history)) sub.history = [];
+                const mH = sub.history.find(h => h.orderId === order.id || h.cycle === order.cycle);
+                if (mH) {
+                    mH.status = 'success';
+                    mH.sn = rawSn;
+                } else {
+                    sub.history.push({
+                        cycle: order.cycle || sub.currentCycle || 1,
+                        date: Date.now(),
+                        orderId: order.id,
+                        status: 'success',
+                        amount: totalAmount,
+                        sn: rawSn
+                    });
+                }
+                if (typeof db.saveSubscriptions === 'function') db.saveSubscriptions();
+            }
+        } catch (_) {}
+    }
+
+    // Sinkronisasi saldo owner dari iPay jika iPay aktif
+    if (db.isOwner && db.isOwner(order.buyer) && config.provider?.active === 'ipay') {
+        try {
+            const ipayHelper = require('./lib/ipay');
+            ipayHelper.cekSaldoIpay().then(provBal => {
+                if (typeof provBal === 'number') {
+                    const u = db.getUser(order.buyer);
+                    if (u) {
+                        u.saldo = provBal;
+                        if (db.saveUsers) db.saveUsers();
+                    }
+                }
+            }).catch(() => {});
+        } catch (_) {}
+    }
+
+    // Log transaksi
+    addLog(
+`TRANSACTION SUCCESS
+ID: ${order.id}
+USER: ${order.buyer}
+ITEM: ${order.item}
+TARGET: ${order.target}
+SN: ${rawSn}
+STATUS: SUCCESS`,
+'transaksi.log'
+    );
+
+    // Notifikasi Telegram
+    if (global.botTg && config.telegram?.chatId) {
+        global.botTg.sendMessage(config.telegram.chatId,
+            `✅ *TRANSAKSI PPOB SUKSES*\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `• Invoice : \`${order.id}\`\n` +
+            `• Produk  : *${order.item || order.sku}*\n` +
+            `• Target  : \`${order.target}\`\n` +
+            `• SN/Token: \`${rawSn || '-'}\`\n` +
+            `• Total   : *${formatRupiah(totalAmount)}*\n` +
+            `• Profit  : *${formatRupiah(order.profit || 0)}*`,
+            { parse_mode: 'Markdown' }
+        ).catch(() => {});
+    }
+
+    // Pantau saldo modal
+    checkAndAlertLowMerchantBalance().catch(() => {});
+}
+
+async function notifyOrderFailure(sock, order, reason = 'Gangguan Server') {
+    if (!order) return;
+    if (order.status === 'failed' && order.refunded) return;
+
+    activeTransactions.delete(
+        (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
+    );
+
+    let userReason = reason || 'Gangguan Server';
+    if (userReason.toLowerCase().includes('saldo deposit') || userReason.toLowerCase().includes('saldo buyer')) {
+        userReason = 'Jalur operator sedang mengalami antrean padat / gangguan sementara';
+    }
+
+    const refundRes = db.refundOrder(order, userReason);
+
+    const targetCandidates = [];
+    if (refundRes.buyerJid) targetCandidates.push(refundRes.buyerJid);
+    if (order.buyer && !targetCandidates.includes(order.buyer)) targetCandidates.push(order.buyer);
+    if (order.sender && !targetCandidates.includes(order.sender)) targetCandidates.push(order.sender);
+
+    for (const cand of [...targetCandidates]) {
+        if (typeof cand === 'string' && cand.includes('@lid')) {
+            const u = db.users ? db.users[cand] : null;
+            if (u && u.canonical && !targetCandidates.includes(u.canonical)) {
+                targetCandidates.unshift(u.canonical);
+            }
+            if (db.getCanonicalPhone) {
+                const p = db.getCanonicalPhone(cand);
+                if (p && !targetCandidates.includes(`${p}@s.whatsapp.net`)) {
+                    targetCandidates.unshift(`${p}@s.whatsapp.net`);
+                }
+            }
+        }
+    }
+
+    const refundAmount = refundRes.amount || order.baseAmount || order.total || order.price || 0;
+    const failMsg = `❌ *TRANSAKSI GAGAL*\n\n` +
+                    `📦 Produk : *${order.item || order.sku}*\n` +
+                    `🎯 Tujuan : *${order.target}*\n` +
+                    `⚠️ Alasan : ${userReason}\n\n` +
+                    `💰 *Saldo Anda telah dikembalikan 100%:* ${formatRupiah(refundAmount)}`;
+
+    const activeSock = (sock && typeof sock.sendMessage === 'function') ? sock : (global.sock || currentSock);
+    if (activeSock && typeof activeSock.sendMessage === 'function') {
+        for (const target of targetCandidates) {
+            try {
+                await activeSock.sendMessage(target, { text: failMsg });
+                break;
+            } catch (_) {}
+        }
+    }
+
+    if (order.isSubscription) {
+        try {
+            const sub = (db.subscriptions || []).find(s => s.id === order.subscriptionId);
+            if (sub) {
+                if (sub.status === 'completed') sub.status = 'active';
+                sub.failCount = (sub.failCount || 0) + 1;
+                sub.nextRunAt = Date.now() + (24 * 60 * 60 * 1000);
+                if (Array.isArray(sub.history)) {
+                    const hMatch = sub.history.find(h => h.orderId === order.id || h.cycle === order.cycle);
+                    if (hMatch) { hMatch.status = 'failed'; hMatch.sn = userReason; }
+                }
+                if (typeof db.saveSubscriptions === 'function') db.saveSubscriptions();
+            }
+        } catch (_) {}
+    }
+
+    if (global.botTg && config.telegram?.chatId) {
+        global.botTg.sendMessage(config.telegram.chatId,
+            `⚠️ *TRANSAKSI PPOB GAGAL (REFUND)*\n` +
+            `━━━━━━━━━━━━━━━━━━━━━\n` +
+            `• Invoice : \`${order.id}\`\n` +
+            `• Produk  : *${order.item || order.sku}*\n` +
+            `• Target  : \`${order.target}\`\n` +
+            `• Alasan  : *${userReason}*\n` +
+            `• Refund  : *${formatRupiah(refundAmount)}*`,
+            { parse_mode: 'Markdown' }
+        ).catch(() => {});
+    }
+}
+
+// ============================================================
+// 🚀 ACTIVE FAST-POLLER KILAT
+// Mengecek status langsung dalam 3-35 detik pasca-order agar user tidak macet di "MENUNGGU PROVIDER"
+// ============================================================
+async function launchActivePpobPoller(sock, order) {
+    if (!order || !order.isPpob) return;
+    const orderId = order.id;
+    const digiRef = order.digiflazz_oid || orderId;
+
+    console.log(`[ACTIVE FAST-POLLER] 🚀 Memulai fast-polling aktif untuk Order: ${orderId} (${order.sku} -> ${order.target})`);
+
+    const delays = [3000, 4000, 5000, 6000, 8000, 10000];
+
+    for (let i = 0; i < delays.length; i++) {
+        await new Promise(r => setTimeout(r, delays[i]));
+
+        const curOrder = (db.orders || []).find(o => o.id === orderId);
+        if (!curOrder || curOrder.status === 'success' || curOrder.status === 'failed' || curOrder.notified) {
+            console.log(`[ACTIVE FAST-POLLER] Order ${orderId} sudah terselesaikan (${curOrder?.status}). Hentikan fast-poller.`);
+            return;
+        }
+
+        try {
+            let res = null;
+            if (config.provider?.active === 'ipay') {
+                const ipayHelper = require('./lib/ipay');
+                const check = await ipayHelper.checkStatusIpay(orderId);
+                if (check) {
+                    res = { status: check.status, sn: check.sn, message: check.message, ref_id: orderId };
+                }
+            } else {
+                res = await api.checkDigiflazz(digiRef, curOrder.sku, curOrder.target);
+            }
+
+            if (!res) continue;
+
+            const statLower = String(res.status || '').toLowerCase().trim();
+            const isSuccess = statLower === 'sukses' || statLower === 'success' || res.rc === '00';
+            const isFailed = statLower === 'gagal' || statLower === 'failed' || (res.rc && res.rc !== '00' && res.rc !== '03');
+
+            if (isSuccess) {
+                const isPln = curOrder.sku?.toLowerCase().includes('pln') || curOrder.item?.toLowerCase().includes('pln');
+                const rawSn = res.sn || res.message || '';
+                const plnData = formatPlnToken(rawSn);
+
+                if (isPln && !plnData && i < delays.length - 1) {
+                    console.log(`[ACTIVE FAST-POLLER] ⚡ Token PLN status Sukses tapi 20 digit belum siap ("${rawSn}"). Tunggu poll berikutnya...`);
+                    continue;
+                }
+
+                console.log(`[ACTIVE FAST-POLLER] ✅ SUKSES tertangkap pada poll ke-${i + 1}! Mengirim notifikasi WA...`);
+                await notifyOrderSuccess(sock, curOrder, res);
+                return;
+            } else if (isFailed) {
+                const snMsg = res.sn || res.message || 'Gagal dari provider';
+                if (snMsg.includes('IP Anda tidak kami kenali') || snMsg.includes('Signature') || snMsg.includes('tidak ditemukan')) {
+                    console.warn(`[ACTIVE FAST-POLLER] ⚠️ Transaksi pending tapi respon provider: ${snMsg}`);
+                    continue;
+                }
+                console.log(`[ACTIVE FAST-POLLER] ❌ GAGAL tertangkap pada poll ke-${i + 1}: ${snMsg}`);
+                await notifyOrderFailure(sock, curOrder, snMsg);
+                return;
+            }
+        } catch (err) {
+            console.warn(`[ACTIVE FAST-POLLER ERR] Poll ke-${i + 1} error:`, err.message);
+        }
+    }
+    console.log(`[ACTIVE FAST-POLLER] ⏳ Order ${orderId} masih diproses setelah ~35s. Dilanjutkan Radar & Webhook.`);
+}
+
+// ============================================================
+// 🚀 DIGIFLAZZ TRANSACTION WEBHOOK CALLBACK (PUSH NOTIFICATION)
+// ============================================================
+const handleDigiflazzWebhook = async (req, res) => {
+    try {
+        const payload = req.body || {};
+        const data = payload.data || payload;
+        const refId = String(data.ref_id || payload.ref_id || '').trim();
+
+        if (!refId) {
+            return res.json({ success: true, message: 'Ping / No ref_id' });
+        }
+
+        console.log(`[DIGIFLAZZ WEBHOOK] ⚡ Callback diterima untuk Ref: ${refId} | Status: ${data.status} | SN: ${data.sn || '-'}`);
+
+        const order = (db.orders || []).find(o => o.id === refId || o.digiflazz_oid === refId);
+        if (!order) {
+            console.warn(`[DIGIFLAZZ WEBHOOK] Order ${refId} tidak ditemukan di database bot.`);
+            return res.json({ success: true, message: 'Order not found in this bot' });
+        }
+
+        if (order.status === 'success' && order.notified) {
+            return res.json({ success: true, message: 'Order already completed and notified' });
+        }
+
+        const statLower = String(data.status || '').toLowerCase().trim();
+        const isSuccess = statLower === 'sukses' || statLower === 'success' || data.rc === '00';
+        const isFailed = statLower === 'gagal' || statLower === 'failed' || (data.rc && data.rc !== '00' && data.rc !== '03');
+
+        const botSock = typeof sock !== 'undefined' ? sock : (global.sock || currentSock);
+
+        if (isSuccess) {
+            await notifyOrderSuccess(botSock, order, data);
+        } else if (isFailed) {
+            await notifyOrderFailure(botSock, order, data.message || data.sn || 'Gagal dari provider Digiflazz');
+        }
+
+        return res.json({ success: true, message: 'Digiflazz Webhook Processed' });
+    } catch (err) {
+        console.error('[DIGIFLAZZ WEBHOOK EXCEPTION]', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// ============================================================
 // 🚀 IPAY H2H TRANSACTION WEBHOOK CALLBACK (PUSH NOTIFICATION)
 // ============================================================
 const ipayHelper = require('./lib/ipay');
@@ -341,104 +795,26 @@ const handleIpayWebhook = async (req, res) => {
         }
 
         // Cari transaksi di database Bot WA
-        const order = (db.orders || []).find(o => o.id === refId);
+        const order = (db.orders || []).find(o => o.id === refId || o.digiflazz_oid === refId);
         if (!order) {
             console.warn(`[IPAY WEBHOOK] Order ${refId} tidak ditemukan di database bot.`);
             return res.json({ status: 'ok', success: false, message: 'Order not found in this bot' });
         }
 
-        const rawStat = String(payload.status || payload.data?.status || '').toLowerCase();
+        if (order.status === 'success' && order.notified) {
+            return res.json({ success: true, message: 'Order already completed and notified' });
+        }
+
+        const rawStat = String(payload.status || payload.data?.status || '').toLowerCase().trim();
         const snToken = String(payload.sn || payload.data?.sn || '').trim();
         const apiMsg = String(payload.message || payload.data?.message || '').trim();
-        const buyerJid = order.buyer || order.sender || order.jid;
-        const realBuyerJid = buyerJid && typeof buyerJid === 'string' && buyerJid.includes(':') 
-            ? buyerJid.split(':')[0] + '@s.whatsapp.net' 
-            : buyerJid;
+
+        const botSock = typeof sock !== 'undefined' ? sock : (global.sock || currentSock);
 
         if (rawStat === 'success' || rawStat === 'sukses') {
-            if (order.status !== 'success') {
-                order.status = 'success';
-                if (snToken) order.sn = snToken;
-                order.profit = analytics.calculateOrderProfit(order, db.ppob);
-                if (typeof db.saveOrders === 'function') db.saveOrders();
-
-                activeTransactions.delete(
-                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                );
-
-                // Kirim notifikasi WA ke Pembeli
-                if (global.sock && realBuyerJid) {
-                    const rawSn = snToken || order.sn || '';
-                    const plnData = formatPlnToken(rawSn);
-                    const storeName = db.store?.namaToko || 'DIGITAL STORE';
-                    const timeStr = getTanggalLengkap(order.timestamp || Date.now());
-
-                    let textSucc = `🎉 *PESANAN SELESAI!*\n`;
-                    textSucc += `━━━━━━━━━━━━━━━━━━━━━\n`;
-                    textSucc += `🏪 *Toko:* ${storeName}\n`;
-                    textSucc += `🧾 *Invoice:* \`${order.id}\`\n`;
-                    textSucc += `📦 *Produk:* ${order.item}\n`;
-                    textSucc += `🎯 *Target:* ${order.target}\n`;
-                    textSucc += `💰 *Harga:* ${formatRupiah(order.price)}\n`;
-                    textSucc += `📅 *Waktu:* ${timeStr}\n`;
-                    textSucc += `━━━━━━━━━━━━━━━━━━━━━\n`;
-                    if (plnData.isPln) {
-                        textSucc += `⚡ *TOKEN PLN:* \`${plnData.token}\`\n`;
-                    } else if (rawSn) {
-                        textSucc += `🔑 *SN / Bukti:* \`${rawSn}\`\n`;
-                    }
-                    textSucc += `\n_Terima kasih telah bertransaksi di toko kami!_`;
-
-                    await global.sock.sendMessage(realBuyerJid, { text: textSucc }).catch(() => {});
-                }
-
-                // Kirim notifikasi Telegram ke Admin
-                if (global.botTg && config.telegram?.chatId) {
-                    global.botTg.sendMessage(config.telegram.chatId,
-                        `✅ *TRANSAKSI H2H IPAY SUKSES*\n` +
-                        `━━━━━━━━━━━━━━━━━━━━━\n` +
-                        `• Invoice : \`${order.id}\`\n` +
-                        `• Produk  : *${order.item}*\n` +
-                        `• Target  : \`${order.target}\`\n` +
-                        `• SN/Token: \`${snToken || '-'}\`\n` +
-                        `• Profit  : *${formatRupiah(order.profit || 0)}*`,
-                        { parse_mode: 'Markdown' }
-                    ).catch(() => {});
-                }
-            }
+            await notifyOrderSuccess(botSock, order, { sn: snToken, message: apiMsg, ref_id: refId });
         } else if (rawStat === 'failed' || rawStat === 'gagal') {
-            if (order.status !== 'failed' && !order.refunded) {
-                // Auto-Refund dengan proteksi anti double refund
-                const refundRes = db.refundOrder(order, `Transaksi Gagal dari Provider iPay (${apiMsg || 'Gagal'})`);
-
-                activeTransactions.delete(
-                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                );
-
-                // Kirim pesan WA ke Pembeli
-                if (global.sock && realBuyerJid) {
-                    const failMsg = `❌ *TRANSAKSI GAGAL*\n\n` +
-                        `Pesanan *${order.item}* untuk nomor *${order.target}* mengalami kendala dari provider.\n\n` +
-                        `💰 Saldo sebesar *${formatRupiah(order.price)}* telah *DIKEMBALIKAN 100%* ke dompet Anda.\n` +
-                        `Silakan coba beberapa saat lagi atau hubungi admin.`;
-
-                    await global.sock.sendMessage(realBuyerJid, { text: failMsg }).catch(() => {});
-                }
-
-                // Notifikasi Telegram Admin
-                if (global.botTg && config.telegram?.chatId) {
-                    global.botTg.sendMessage(config.telegram.chatId,
-                        `⚠️ *TRANSAKSI H2H IPAY GAGAL (REFUND)*\n` +
-                        `━━━━━━━━━━━━━━━━━━━━━\n` +
-                        `• Invoice : \`${order.id}\`\n` +
-                        `• Produk  : *${order.item}*\n` +
-                        `• Target  : \`${order.target}\`\n` +
-                        `• Alasan  : *${apiMsg || 'Gagal dari provider'}*\n` +
-                        `• Refund  : *${refundRes.success ? formatRupiah(order.price) : 'Gagal (' + refundRes.reason + ')'}*`,
-                        { parse_mode: 'Markdown' }
-                    ).catch(() => {});
-                }
-            }
+            await notifyOrderFailure(botSock, order, apiMsg || 'Gagal dari provider iPay');
         }
 
         return res.json({ success: true, message: 'iPay Webhook Processed', status: rawStat });
@@ -448,7 +824,21 @@ const handleIpayWebhook = async (req, res) => {
     }
 };
 
-app.all(['/callback/ipay-trx', '/callback/ipay', '/api/callback/ipay-trx', '/api/ppob/webhook'], handleIpayWebhook);
+app.all(['/callback/digiflazz', '/webhook/digiflazz', '/api/callback/digiflazz', '/api/digiflazz/webhook'], handleDigiflazzWebhook);
+app.all(['/callback/ipay-trx', '/callback/ipay', '/api/callback/ipay-trx'], handleIpayWebhook);
+app.all(['/api/ppob/webhook'], (req, res) => {
+    const isDigi = Boolean(
+        req.headers['x-digiflazz-event'] || 
+        req.headers['x-hub-signature'] || 
+        (req.headers['user-agent'] && req.headers['user-agent'].includes('Digiflazz')) ||
+        req.body?.data?.buyer_sku_code
+    );
+    if (isDigi) {
+        return handleDigiflazzWebhook(req, res);
+    } else {
+        return handleIpayWebhook(req, res);
+    }
+});
 
 const webPort = config.port || 3000;
 try {
@@ -587,10 +977,7 @@ process.on('unhandledRejection', err => {
 });
 const userSessions = new Map();
 const activeCheckers = new Map();
-const activeTransactions = new Set();
 const spamDelay = new Map();
-
-let currentSock = null;
 
 // ================================
 // DIGIFLAZZ RETRY CONFIG
@@ -1738,62 +2125,6 @@ function resumeDepositPolling(sock, dep) {
     activeCheckers.set(depositId, depositChecker);
 }
 
-// ============================================================
-// ⚠️ EARLY WARNING: ALARM SALDO MODAL H2H MENIPIS (TELEGRAM & WA)
-// Mencegah transaksi member gagal massal akibat saldo deposit habis
-// ============================================================
-let lastLowBalanceAlertTime = 0;
-async function checkAndAlertLowMerchantBalance(forceCheck = false) {
-    try {
-        const prov = config.provider?.active || 'digiflazz';
-        let balance = null;
-        if (prov === 'ipay') {
-            const ipayHelper = require('./lib/ipay');
-            balance = await ipayHelper.cekSaldoIpay();
-        } else {
-            balance = await api.cekSaldoDigi();
-        }
-
-        if (typeof balance !== 'number') return;
-
-        const threshold = Number(config.provider?.ipay?.lowBalanceAlert) || 50000;
-        if (balance < threshold) {
-            const now = Date.now();
-            // Debounce: kirim notifikasi maksimal 1x per 60 menit kecuali forceCheck
-            if (forceCheck || (now - lastLowBalanceAlertTime > 60 * 60 * 1000)) {
-                lastLowBalanceAlertTime = now;
-                const provName = prov === 'ipay' ? 'iPay (GarudaTel)' : 'Digiflazz';
-                const alertMsg = 
-                    `⚠️ *PERINGATAN: SALDO MODAL H2H MENIPIS!*\n\n` +
-                    `• Provider : *${provName}*\n` +
-                    `• Sisa Saldo Modal : *${formatRupiah(balance)}*\n` +
-                    `• Batas Minimum Aman : *${formatRupiah(threshold)}*\n\n` +
-                    `🚨 _Segera lakukan isi ulang saldo deposit merchant agar transaksi member tidak terhambat / gagal massal._`;
-
-                if (global.botTg && config.telegram?.chatId) {
-                    global.botTg.sendMessage(config.telegram.chatId, alertMsg, {
-                        parse_mode: 'Markdown',
-                        reply_markup: {
-                            inline_keyboard: [
-                                [{ text: '💰 Cek Saldo Provider Sekarang', callback_data: prov === 'ipay' ? 'tg_cek_ipay' : 'tg_cekdigi' }]
-                            ]
-                        }
-                    }).catch(() => {});
-                }
-
-                if (global.sock && Array.isArray(config.owner) && config.owner.length > 0) {
-                    for (const o of config.owner) {
-                        const oJid = o.includes('@') ? o : `${o}@s.whatsapp.net`;
-                        global.sock.sendMessage(oJid, { text: alertMsg }).catch(() => {});
-                    }
-                }
-            }
-        }
-    } catch (e) {
-        console.warn('[LOW BALANCE ALERT ERR]', e.message);
-    }
-}
-
 // LOGIKA EKSEKUSI PRODUK (DIGIFLAZZ / LOKAL)
 async function handleSuccessPayment(sock, order, viaSaldo) {
     const targetJid = order.buyer;
@@ -1802,162 +2133,55 @@ async function handleSuccessPayment(sock, order, viaSaldo) {
         order.status = 'processing'; db.saveOrders();
         await sock.sendMessage(targetJid, { text: `⏳ *DIPROSES*...\nMenembak ke server pusat untuk nomor: *${order.target}*.` });
         
-                const maskPhone = (p = '') => p.length > 7 ? p.slice(0, 4) + '****' + p.slice(-3) : p;
-                console.log(`[ORDER PPOB] ID: ${order.id} | SKU: ${order.sku} | Target: ${maskPhone(order.target)}`);
-                const hit = await safeHitDigiflazz(sock, order);
+        const maskPhone = (p = '') => p.length > 7 ? p.slice(0, 4) + '****' + p.slice(-3) : p;
+        console.log(`[ORDER PPOB] ID: ${order.id} | SKU: ${order.sku} | Target: ${maskPhone(order.target)}`);
+        const hit = await safeHitDigiflazz(sock, order);
         
         if (hit && hit.data) {
-            if (hit.data.status === 'Sukses') {
+            const statLower = String(hit.data.status || '').toLowerCase();
+            const rc = String(hit.data.rc || '');
+
+            if (statLower === 'sukses' || rc === '00') {
                 console.log(`[HIT SUCCESS] ${order.id} -> Sukses`);
-                    const menuItem = db.menu.find(m => m.nama === order.item);
-                    if (menuItem) {
-                        menuItem.stok = Math.max(0, (menuItem.stok || 0) - (order.qty || 1));
-                        db.saveMenu();
-                    }
-
-                order.status = 'success'; 
-                order.sn = hit.data.sn || order.sn;
-                if (hit.data.ref_id) order.digiflazz_oid = hit.data.ref_id;
-                order.profit = analytics.calculateOrderProfit(order, db.ppob);
-                db.saveOrders();
-
-                // 🚀 SINKRONISASI SALDO OWNER REAL-TIME DARI IPAY (KARENA MODAL WHOLESALE DIPOTONG DARI AKUN OWNER)
-                if (db.isOwner && db.isOwner(order.buyer) && config.provider?.active === 'ipay') {
-                    try {
-                        const ipayHelper = require('./lib/ipay');
-                        ipayHelper.cekSaldoIpay().then(provBal => {
-                            if (typeof provBal === 'number') {
-                                const u = db.getUser(order.buyer);
-                                if (u) {
-                                    u.saldo = provBal;
-                                    if (db.saveUsers) db.saveUsers();
-                                    console.log(`[IPAY OWNER BALANCE SYNC OK] Saldo Owner diperbarui: Rp ${u.saldo.toLocaleString('id-ID')}`);
-                                }
-                            }
-                        }).catch(() => {});
-                    } catch (_) {}
-                }
-
-                // ⚠️ Pantau sisa saldo merchant provider secara otomatis pasca transaksi
-                checkAndAlertLowMerchantBalance().catch(() => {});
-
-                activeTransactions.delete(
-                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                );
-
-                if (order.isPasca) {
-                    let descText = '';
-                    if (hit.data.desc) {
-                        try {
-                            const d = typeof hit.data.desc === 'object' ? hit.data.desc : JSON.parse(hit.data.desc);
-                            if (d.tarif && d.daya) descText += `⚡ Daya/Tarif: *${d.tarif} / ${d.daya}VA*\n`;
-                            if (d.lembar_tagihan) descText += `📑 Lembar Tagihan: *${d.lembar_tagihan} bulan*\n`;
-                        } catch (_) {}
-                    }
-                    const snText = hit.data.sn ? `\n🧾 *No. Ref / SN:* \`${hit.data.sn}\`` : '';
-                    await sock.sendMessage(targetJid, {
-                        text: `✅ *PEMBAYARAN PASCABAYAR BERHASIL*\n\n` +
-                              `📦 Layanan: *${order.item}*\n` +
-                              `🎯 ID Pelanggan: *${order.target}*\n` +
-                              `${descText}` +
-                              `💰 Total Bayar: *${formatRupiah(order.baseAmount || order.total || 0)}*` +
-                              `${snText}\n\n` +
-                              `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
-                    });
-                } else {
-                    const rawSn = hit.data.sn || hit.data.message || '';
-                    const plnData = formatPlnToken(rawSn);
-                    const storeName = db.store.namaToko || 'DIGITAL STORE';
-                    const timeStr = getTanggalLengkap(order.timestamp || Date.now());
-
-                    if (plnData) {
-                        let plnMsg = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
-                                     `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
-                                     `\`${plnData.token}\`\n` +
-                                     `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
-                        if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
-                        if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
-                        if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n`;
-                        plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
-                                  `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
-                                  `🕒 Waktu           : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
-                        await sock.sendMessage(targetJid, { text: plnMsg });
-                    } else {
-                        await sock.sendMessage(targetJid, {
-                            text: `✅ *TRANSAKSI BERHASIL*\n\n` +
-                                  `📦 Produk   : *${order.item}*\n` +
-                                  `🎯 Tujuan   : *${order.target}*\n` +
-                                  `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
-                                  `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
-                                  `🕒 Waktu    : ${timeStr}\n\n` +
-                                  `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                  `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`
-                        });
-                    }
-                }
-            } else if (hit.data.status === 'Pending') {
+                await notifyOrderSuccess(sock, order, hit.data);
+            } else if (statLower === 'pending' || statLower === 'processing' || rc === '03' || rc === '39') {
                 order.status = 'processing';
-                if (typeof hit !== 'undefined' && hit.data && hit.data.ref_id) { order.digiflazz_oid = hit.data.ref_id; }
+                if (hit.data.ref_id) order.digiflazz_oid = hit.data.ref_id;
+                order.lastRetryAt = Date.now();
                 db.saveOrders();
+
                 if (order.isPasca) {
                     await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU KONFIRMASI BILLER*\n\nPembayaran tagihan Anda sedang diproses oleh server pusat/biller. Mohon ditunggu ya kak, notifikasi sukses akan dikirim otomatis.` });
                 } else {
-                    await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU PROVIDER*\n\nPembayaran LUNAS. Transaksi sedang diproses oleh server pusat. Mohon ditunggu ya kak, produk akan segera masuk.` });
+                    await sock.sendMessage(targetJid, { text: `⏳ *MENUNGGU PROVIDER*\n\nPembayaran LUNAS. Transaksi sedang diproses oleh server pusat. Notifikasi & SN akan segera dikirim otomatis ke nomor ini.` });
                 }
+
+                // 🚀 JALANKAN FAST-POLLER INSTAN (Detik 3, 7, 12, 18, 25, 33)
+                launchActivePpobPoller(sock, order).catch(e => console.error('[FAST-POLLER ERR]', e.message));
             } else {
-                activeTransactions.delete(
-                    (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                );
-
-                const refundRes = db.refundOrder(order, hit.data.message || 'Gangguan Server');
-                if (refundRes.success) {
-                    if (!order.isSubscription) {
-                        let userReason = hit.data.message || 'Gangguan';
-                        if (userReason.toLowerCase().includes('saldo deposit') || userReason.toLowerCase().includes('saldo buyer')) {
-                            userReason = 'Jalur operator sedang mengalami antrean padat / gangguan sementara';
-                        }
-                        await sock.sendMessage(targetJid, {
-                            text:
-`❌ *TRANSAKSI GAGAL*
-
-Alasan:
-${userReason}
-
-💰 Saldo otomatis dikembalikan:
-${formatRupiah(refundRes.amount)}`
-                        });
-                    }
-
-                    for (const owner of config.owner) {
-                        await sock.sendMessage(owner, { 
-                            text: `⚠️ *PPOB GAGAL*\nID: ${order.id}\nTarget: ${order.target}\nAlasan: ${hit.data.message || 'Gangguan'}\nSaldo di-refund: ${formatRupiah(refundRes.amount)}` 
-                        }).catch(()=>{});
-                    }
-                }
+                console.warn(`[HIT FAILED] ${order.id} -> ${hit.data.message || hit.data.status}`);
+                await notifyOrderFailure(sock, order, hit.data.message || 'Gangguan Server');
             }
         } else {
-
             order.status = 'processing';
             order.needRetry = true;
             order.lastRetryAt = Date.now();
-
             db.saveOrders();
 
             await sock.sendMessage(targetJid, {
                 text:
-`⚠️ *SERVER PPOB SEDANG SIBUK*
+`⏳ *TRANSAKSI DALAM ANTREAN*
 
-Pembayaran Anda sudah diterima.
+Pembayaran Anda telah sukses diterima.
 
-Sistem akan mencoba memproses transaksi secara otomatis.
+Server operator sedang memproses antrean pengiriman. Notifikasi sukses & SN akan dikirim otomatis begitu transaksi tuntas.
 
 🧾 ID Transaksi:
-${order.id}
-
-Mohon tunggu beberapa menit ya kak.`
+\`${order.id}\``
             });
+
+            // Aktifkan poller juga agar mengecek segera setelah antrean terbuka
+            launchActivePpobPoller(sock, order).catch(() => {});
         }
         
 
@@ -6613,7 +6837,7 @@ setInterval(async () => {
     } catch (_) {}
 }, 30 * 60 * 1000);
 // ==========================================
-// 📡 RADAR PEMANTAU DIGIFLAZZ V4 (INTELIJEN)
+// 📡 RADAR PEMANTAU DIGIFLAZZ V4 (INTELIJEN & RESILIEN)
 // ==========================================
 setInterval(async () => {
     try {
@@ -6622,234 +6846,75 @@ setInterval(async () => {
         if (!botSock) return;
 
         let ordersArray = Array.isArray(db.orders) ? db.orders : Object.values(db.orders);
-        let pendingOrders = ordersArray.filter(o => o && (o.status === 'pending' || o.status === 'Pending' || o.status === 'processing') && o.isPpob !== false && o.sku);
+        let pendingOrders = ordersArray.filter(o => {
+            if (!o || o.isPpob === false) return false;
+            // Retry kirim notifikasi jika status sukses tapi belum terkirim ke WhatsApp
+            if (o.status === 'success' && !o.notified) return true;
+            // Orders yang masih pending/processing
+            const isPend = (o.status === 'pending' || o.status === 'Pending' || o.status === 'processing');
+            return isPend && o.sku;
+        });
         
         if (pendingOrders.length === 0) return;
 
-        const crypto = require('crypto');
-        const configData = require('./config'); 
-
         for (let order of pendingOrders) {
             try {
-                // Anti-Conflict: Untuk langganan beri jeda 10s, untuk reguler 30s
-                const minAge = order.isSubscription ? 10000 : 30000;
+                let oid = order.digiflazz_oid || order.ref_id || order.invoice || order.oid || order.refId || order.id; 
+                if (!oid) continue;
+
+                // Jika sudah sukses tapi pesan WA belum terkirim (misal karena reconnect), coba kirim ulang notifikasi
+                if (order.status === 'success' && !order.notified) {
+                    console.log(`[RADAR V4] 🔁 Retrying unsent notification for OID: ${oid}`);
+                    await notifyOrderSuccess(botSock, order, { sn: order.sn, message: order.sn });
+                    continue;
+                }
+
+                // Anti-Flood: Untuk langganan beri jeda 10s, untuk reguler 15s antar pengecekan
+                const minAge = order.isSubscription ? 10000 : 15000;
                 const orderAge = Date.now() - (order.lastRetryAt || order.timestamp || 0);
                 if (orderAge < minAge) {
                     continue;
                 }
 
-                // PRIORITAS: Gunakan OID asli dari Digiflazz yang baru kita tambal
-                let oid = order.digiflazz_oid || order.ref_id || order.invoice || order.oid || order.refId || order.id; 
-                if (!oid) continue;
+                // Tandai waktu cek agar tidak dobel hit pada siklus berikutnya
+                order.lastRetryAt = Date.now();
 
-                let res;
-                if (configData.provider?.active === 'ipay') {
-                    const ipayService = require('./lib/ipay');
-                    const check = await ipayService.checkStatusIpay(oid);
-                    if (check) {
-                        res = {
-                            data: {
-                                status: check.status,
-                                sn: check.sn || check.message || '',
-                                message: check.message || '',
-                                ref_id: oid
-                            }
-                        };
+                const res = await api.checkDigiflazz(oid, order.sku, order.target);
+                if (!res) continue;
+
+                const statLower = String(res.status || '').toLowerCase();
+                const rc = String(res.rc || '');
+                const sn = String(res.sn || res.message || '');
+                console.log(`[RADAR V4] 📡 Respon Provider -> Status: ${res.status} | RC: ${rc} | Ket: ${sn}`);
+
+                if (statLower === 'sukses' || rc === '00') {
+                    await notifyOrderSuccess(botSock, order, res);
+                    console.log(`[RADAR V4] ✅ Sukses! Notifikasi & SN terkirim untuk OID: ${oid}`);
+                } else if (statLower === 'gagal' || rc === '02' || rc === '04' || rc === '41') {
+                    const snLower = sn.toLowerCase();
+                    // PERISAI ANTI-REFUND PALSU
+                    if (snLower.includes('ip') && snLower.includes('tidak')) {
+                        console.warn(`[RADAR V4] ⚠️ IP provider belum di-whitelist, abaikan refund palsu: ${sn}`);
+                        continue;
                     }
-                } else {
-                    const sign = crypto.createHash('md5').update(configData.digiflazz.username + configData.digiflazz.key + oid).digest('hex');
-                    
-                    let payload = {
-                        username: configData.digiflazz.username,
-                        buyer_sku_code: order.sku,
-                        customer_no: order.target,
-                        ref_id: oid,
-                        sign: sign
-                    };
-
-                    const isPostpaid = !!order.isPasca || (order.sku && (String(order.sku).toLowerCase().startsWith('post') || String(order.sku).toLowerCase().includes('pasca')));
-
-                    if (isPostpaid) {
-                        payload.commands = 'status-pasca';
-                    }
-
-                    const req = await fetch('https://api.digiflazz.com/v1/transaction', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    res = await req.json();
-                }
-
-                if (!res || !res.data) continue;
-
-                let status = res.data.status;
-                let sn = res.data.sn || res.data.message || '';
-                let buyerJid = order.buyer || order.sender || order.jid;
-                // 🧬 Normalisasi Dompet Utama
-                let realBuyerJid = buyerJid && typeof buyerJid === 'string' && buyerJid.includes(':') ? buyerJid.split(':')[0] + '@s.whatsapp.net' : buyerJid;
-
-                console.log(`[RADAR V4] 📡 Respon Digiflazz -> Status: ${status} | Ket: ${sn}`);
-
-                if (status === 'Sukses') {
-                    order.status = 'success';
-                    if (sn) order.sn = sn;
-                    order.profit = analytics.calculateOrderProfit(order, db.ppob);
-                    if (typeof db.saveOrders === 'function') db.saveOrders();
-
-                    activeTransactions.delete(
-                        (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                    );
-
-                    const rawSn = sn || order.sn || '';
-                    const plnData = formatPlnToken(rawSn);
-                    const storeName = db.store?.namaToko || 'DIGITAL STORE';
-                    const timeStr = getTanggalLengkap(order.timestamp || Date.now());
-
-                    // 🔄 JIKA PESANAN BERASAL DARI SIKLUS LANGGANAN OTOMATIS:
-                    if (order.isSubscription) {
-                        try {
-                            const subId = order.subscriptionId;
-                            const sub = (db.subscriptions || []).find(s => s.id === subId);
-                            if (sub) {
-                                if (!Array.isArray(sub.history)) sub.history = [];
-                                const matchH = sub.history.find(h => h.orderId === order.id || h.cycle === order.cycle);
-                                if (matchH) {
-                                    matchH.status = 'success';
-                                    matchH.sn = rawSn;
-                                } else {
-                                    sub.history.push({
-                                        cycle: order.cycle || sub.currentCycle || 1,
-                                        date: Date.now(),
-                                        orderId: order.id,
-                                        status: 'success',
-                                        amount: order.baseAmount || order.total || 0,
-                                        sn: rawSn
-                                    });
-                                }
-                                if (typeof db.saveSubscriptions === 'function') db.saveSubscriptions();
-                            }
-                        } catch (subSaveErr) {
-                            console.error('[RADAR SUBS HISTORY ERR]', subSaveErr.message);
-                        }
-
-                        if (plnData) {
-                            let plnMsg = `⚡ *KODE TOKEN LISTRIK (LANGGANAN)*\n\n` +
-                                         `Perpanjangan otomatis Anda telah sukses diproses oleh provider:\n` +
-                                         `• Produk    : *${order.item || order.sku}*\n` +
-                                         `• Tujuan    : \`${order.target}\`\n` +
-                                         `• Siklus    : *Siklus ${order.cycle || 1}*\n` +
-                                         `• Invoice   : \`${order.id}\`\n\n` +
-                                         `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
-                                         `\`${plnData.token}\`\n` +
-                                         `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
-                            if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
-                            if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
-                            if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n\n`;
-                            plnMsg += `🕒 Waktu           : ${timeStr}\n\n` +
-                                      `_Terima kasih telah berlangganan di *${storeName}*!_\n\n` +
-                                      `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
-                            await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg }).catch(() => {});
-                        } else {
-                            let subSnMsg = `🧾 *SERIAL NUMBER (SN) LANGGANAN*\n\n` +
-                                           `Perpanjangan otomatis Anda telah sukses diproses oleh provider:\n` +
-                                           `• Produk    : *${order.item || order.sku}*\n` +
-                                           `• Tujuan    : \`${order.target}\`\n` +
-                                           `• Siklus    : *Siklus ${order.cycle || 1}*\n` +
-                                           `• Invoice   : \`${order.id}\`\n\n` +
-                                           `🧾 *SN / HASIL PROVIDER:*\n` +
-                                           `\`${formatDigiflazzMessage(rawSn)}\`\n\n` +
-                                           `🕒 Waktu    : ${timeStr}\n\n` +
-                                           `_Terima kasih telah berlangganan di *${storeName}*!_\n\n` +
-                                           `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
-                            await botSock.sendMessage(realBuyerJid || buyerJid, { text: subSnMsg }).catch(() => {});
-                        }
-                    } else if (isPostpaid) {
-                        let snText = sn ? `\n🧾 *No. Ref / SN:* \`${sn}\`` : '';
-                        await botSock.sendMessage(realBuyerJid || buyerJid, {
-                            text: `✅ *PEMBAYARAN PASCABAYAR BERHASIL*\n\n` +
-                                  `📦 Layanan: *${order.item || order.sku}*\n` +
-                                  `🎯 ID Pelanggan: *${order.target}*\n` +
-                                  `💰 Total Bayar: *${formatRupiah(order.baseAmount || order.total || 0)}*` +
-                                  `${snText}\n\n` +
-                                  `_Terima kasih telah melakukan pembayaran di *${db.store.namaToko || 'Toko Kami'}*!_`
-                        }).catch(() => {});
-                    } else {
-                        if (plnData) {
-                            let plnMsg = `✅ *PEMBELIAN TOKEN LISTRIK BERHASIL*\n\n` +
-                                         `⚡ *KODE TOKEN ANDA (20 DIGIT):*\n` +
-                                         `\`${plnData.token}\`\n` +
-                                         `_(Ketuk kode di atas untuk menyalin ke meteran)_\n\n`;
-                            if (plnData.nama) plnMsg += `👤 Nama Pelanggan : *${plnData.nama}*\n`;
-                            if (plnData.tarif) plnMsg += `⚡ Tarif / Daya    : *${plnData.tarif}*\n`;
-                            if (plnData.kwh) plnMsg += `📊 Jumlah Kwh     : *${plnData.kwh}*\n`;
-                            plnMsg += `🎯 No. Meter / ID  : *${order.target}*\n` +
-                                      `💰 Total Bayar     : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
-                                      `🕒 Waktu           : ${timeStr}\n\n` +
-                                      `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                      `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`;
-                            await botSock.sendMessage(realBuyerJid || buyerJid, { text: plnMsg }).catch(() => {});
-                        } else {
-                            await botSock.sendMessage(realBuyerJid || buyerJid, {
-                                text: `✅ *TRANSAKSI BERHASIL*\n\n` +
-                                      `📦 Produk   : *${order.item || order.sku}*\n` +
-                                      `🎯 Tujuan   : *${order.target}*\n` +
-                                      `💰 Total    : *${formatRupiah(order.baseAmount || order.total || 0)}*\n` +
-                                      `🧾 SN / Ref : \`${formatDigiflazzMessage(rawSn)}\`\n` +
-                                      `🕒 Waktu    : ${timeStr}\n\n` +
-                                      `_Terima kasih telah berbelanja di *${storeName}*!_\n\n` +
-                                      `🧾 *Cetak Struk:* Ketik *.struk* untuk mendapatkan file PDF struk siap cetak.`
-                            }).catch(() => {});
-                        }
-                    }
-                    console.log(`[RADAR V4] ✅ Sukses! Pesan terkirim untuk OID: ${oid}`);
-                } 
-                else if (status === 'Gagal') {
-                    // PERISAI ANTI-REFUND PALSU:
-                    // Jika error karena kunci salah atau OID tidak ditemukan, abaikan jika masih baru!
-                    if (sn.includes("tidak ditemukan") || sn.includes("Signature") || sn.includes("Gagal memproses")) {
-                        // Jika order sudah sangat lama (> 30 menit) dan SKU tidak valid/dummy, tutup agar tidak membebani antrean
+                    if (snLower.includes('tidak ditemukan') || snLower.includes('signature') || snLower.includes('gagal memproses')) {
                         if (orderAge > 30 * 60 * 1000) {
                             order.status = 'failed';
                             if (typeof db.saveOrders === 'function') db.saveOrders();
                             console.log(`[RADAR V4] 🧹 Menutup order kedaluwarsa/dummy ${oid} (${order.sku}) agar radar bersih.`);
                         } else {
-                            console.log("[RADAR V4] ⚠️ Mengabaikan Gagal palsu karena OID lama.");
+                            console.log(`[RADAR V4] ⚠️ Mengabaikan Gagal palsu karena OID baru / signature.`);
                         }
-                        continue; 
+                        continue;
                     }
 
-                    activeTransactions.delete(
-                        (order.buyer || '') + '-' + (order.sku || order.item || 'ITEM') + '-' + (order.target || 'TARGET')
-                    );
-
-                    const refundRes = db.refundOrder(order, sn || 'Gagal dari server Digiflazz');
-                    if (refundRes.success) {
-                        // Jika langganan, pulihkan siklus
-                        if (order.isSubscription) {
-                            try {
-                                const sub = (db.subscriptions || []).find(s => s.id === order.subscriptionId);
-                                if (sub) {
-                                    if (sub.status === 'completed') sub.status = 'active';
-                                    sub.failCount = (sub.failCount || 0) + 1;
-                                    sub.nextRunAt = Date.now() + (24 * 60 * 60 * 1000);
-                                    if (Array.isArray(sub.history)) {
-                                        const hMatch = sub.history.find(h => h.orderId === order.id || h.cycle === order.cycle);
-                                        if (hMatch) { hMatch.status = 'failed'; hMatch.sn = sn || 'Gagal'; }
-                                    }
-                                    if (typeof db.saveSubscriptions === 'function') db.saveSubscriptions();
-                                }
-                            } catch (_) {}
-                        }
-
-                        await botSock.sendMessage(refundRes.buyerJid, { 
-                            text: `❌ *PPOB GAGAL*\n\n` +
-                                  `Produk : ${order.item || order.sku}\n` +
-                                  `Tujuan : ${order.target}\n` +
-                                  `Alasan : ${sn}\n\n` +
-                                  `💰 Saldo Rp ${refundRes.amount.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.` 
-                        }).catch(() => {});
-                        console.log(`[RADAR V4] ❌ Gagal asli! Saldo Rp ${refundRes.amount} di-refund ke ${refundRes.buyerJid}.`);
+                    await notifyOrderFailure(botSock, order, sn || 'Gagal dari server provider');
+                    console.log(`[RADAR V4] ❌ Gagal asli! Saldo di-refund untuk OID: ${oid}`);
+                } else {
+                    // Masih pending di provider, simpan ref_id jika baru diperoleh
+                    if (res.ref_id && !order.digiflazz_oid) {
+                        order.digiflazz_oid = res.ref_id;
+                        if (typeof db.saveOrders === 'function') db.saveOrders();
                     }
                 }
             } catch (orderErr) {
