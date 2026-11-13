@@ -878,8 +878,11 @@ async function handleUser(sock, sender, text, session, processCheckout) {
     const isExemptQuickOrder = ['MENU', 'HALO', 'P', 'YY', 'MM', 'JJ', 'KK', 'PP', '#', 'START', 'INFO', 'BOT', 'PROFIL', 'DEPOSIT', 'B', '0', 'YA', 'TIDAK'].includes(txt);
     const isSingleDigitMenu = /^(1[0-1]|[1-9])$/.test(txt);
 
-    // Aktif saat user di IDLE, di menu utama (PILIH_KATEGORI), atau saat ditanya nomor tujuan
-    if (!isExemptQuickOrder && [S.IDLE, S.PILIH_KATEGORI, S.INPUT_TARGET_PULSA].includes(session.step)) {
+    // Aktif saat user di IDLE atau di menu utama (PILIH_KATEGORI)
+    // CATATAN: S.INPUT_TARGET_PULSA sengaja TIDAK dimasukkan ke sini agar saat user sudah memilih
+    // menu layanan (misal Menu 2: Paket Data atau Menu 1: Pulsa) lalu memasukkan nomor tujuan,
+    // bot TIDAK mencegatnya dengan pertanyaan ulang "Pilih Pulsa atau Data"!
+    if (!isExemptQuickOrder && [S.IDLE, S.PILIH_KATEGORI].includes(session.step)) {
         // Jika user sedang di menu pilihan 1-11 dan mengetik angka tunggal 1-11, jangan cegat (biarkan masuk ke menu angka)
         if (!(session.step === S.PILIH_KATEGORI && isSingleDigitMenu)) {
             const quick = quickOrder.parseQuickOrder(text, db.ppob || []);
@@ -1869,17 +1872,16 @@ ${depositId}`
             if (extra) searchKeyword = extra;
         }
 
-        if (session.tempTipe === 'Data') {
-            if (!searchKeyword) {
-                if (rawInput.includes('.')) {
-                    const parts = rawInput.split('.');
-                    rawInput = parts[0];
-                    searchKeyword = parts.slice(1).join('.').trim();
-                } else if (rawInput.includes(' ')) {
-                    const parts = rawInput.split(/\s+/);
-                    rawInput = parts[0];
-                    searchKeyword = parts.slice(1).join(' ').trim();
-                }
+        // Ekstraksi nomor & kata kunci pencarian tambahan (misal: "08123456789 2gb" atau "08123456789 25k")
+        if (!searchKeyword) {
+            if (rawInput.includes('.')) {
+                const parts = rawInput.split('.');
+                rawInput = parts[0];
+                searchKeyword = parts.slice(1).join('.').trim();
+            } else if (rawInput.includes(' ')) {
+                const parts = rawInput.split(/\s+/);
+                rawInput = parts[0];
+                searchKeyword = parts.slice(1).join(' ').trim();
             }
         }
 
@@ -1930,7 +1932,7 @@ ${depositId}`
         // Simpan seluruh katalog lengkap operator untuk fitur search & reset
         session.tempAllProducts = [...parsedProducts];
 
-        // SMART DATA
+        // SMART FILTERING (DATA, PULSA, PLN)
         if (session.tempTipe === 'Data') {
             session.tempSearchKeyword = searchKeyword || '';
 
@@ -1947,6 +1949,18 @@ ${depositId}`
                     .sort((a, b) => a.hargaJual - b.hargaJual)
                     .slice(0, 5);
                 session.tempSmartMode = true;
+            }
+        } else if ((session.tempTipe === 'Pulsa' || session.tempTipe === 'PLN') && searchKeyword) {
+            session.tempSearchKeyword = searchKeyword;
+            const cleanNom = searchKeyword.toLowerCase().replace(/k$/, '000').replace(/[^0-9]/g, '');
+            if (cleanNom) {
+                const filtered = parsedProducts.filter(p => {
+                    const pNom = p.nama.replace(/[^0-9]/g, '');
+                    return pNom.includes(cleanNom) || String(p.hargaJual).includes(cleanNom);
+                });
+                if (filtered && filtered.length > 0) {
+                    parsedProducts = filtered;
+                }
             }
         }
 
