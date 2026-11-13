@@ -1734,6 +1734,7 @@ if (!global.heartbeatStarted) {
                         'settings', 'pengaturan', 'setprovider', 'setipay', 'statusipay', 'cekipay', 'syncmembers', 'syncmember', 'setdigi', 'setpayment', 'setgateway', 'gateway', 'setpakasir', 'settg', 'setprofit', 
                         'setdana', 'setdanatoken', 'setqris', 'danastatus',
                         'settier', 'setpasca', 'setadminpasca', 'margin', 'tier', 'laba', 'topproduk', 'terlaris', 'produkgagal', 'gagal', 'addowner', 'delowner', 'listowner', 'sync', 'refund', 'batal',
+                        'syncsubs', 'syncsub',
                         'kirimakun', 'kirim', 'batalorder',
                         'snk', 'tos', 'syarat', 'aturan', 'snkdigital', 'digital', 'aturanakun'
                     ];
@@ -3491,7 +3492,8 @@ function initTelegramBot() {
                         { text: '➕ Tambah dari PPOB', callback_data: 'tg_subs_add_ppob' }
                     ],
                     [
-                        { text: `👥 Pelanggan Aktif (${activeSubs.length})`, callback_data: 'tg_subs_users' }
+                        { text: `👥 Pelanggan Aktif (${activeSubs.length})`, callback_data: 'tg_subs_users' },
+                        { text: '🔄 Sinkronkan Harga', callback_data: 'tg_subs_sync_prices' }
                     ],
                     [
                         { text: '⬅️ Menu Utama', callback_data: 'tg_menu' }
@@ -3503,7 +3505,7 @@ function initTelegramBot() {
         };
 
         const renderSubsCatalog = () => {
-            const catalog = db.subscriptionCatalog || [];
+            const catalog = subLib.getCatalog(false);
             let text = `📂 *KATALOG PRODUK BERLANGGANAN (TAYANG DI WA)*\n\n`;
             const inline_keyboard = [];
 
@@ -4980,6 +4982,15 @@ function initTelegramBot() {
             if (action === 'tg_subs_catalog') {
                 global.tgInputState = null;
                 global.botTg.answerCallbackQuery(query.id);
+                return updateOrSend(chatId, messageId, renderSubsCatalog());
+            }
+
+            if (action === 'tg_subs_sync_prices') {
+                const res = subLib.syncCatalogPrices();
+                global.botTg.answerCallbackQuery(query.id, {
+                    text: `✅ Sukses! ${res.updatedCatalog} harga katalog & ${res.updatedActiveSubs} kontrak aktif telah disinkronkan.`,
+                    show_alert: true
+                });
                 return updateOrSend(chatId, messageId, renderSubsCatalog());
             }
 

@@ -34,6 +34,7 @@ async function handleAdmin(sock, sender, cmd, args, docMsg) {
         t += `• *.sync* (Sinkronisasi Seluruh Produk PPOB)\n\n`;
         t += `⚙️ *KONTROL DATA PRODUK*\n`;
         t += `• *.pullppob* [pulsa/data/emoney/pln/pasca]\n`;
+        t += `• *.syncsubs* (Sinkronkan Harga Produk Langganan ke PPOB)\n`;
         t += `• *.cekdigi* (Cek Saldo API Digiflazz)\n`;
         t += `• *.addmenu* Nama|Harga|Stok\n`;
         t += `• *.adddata* ID [QTY] Teks\n`;
@@ -131,6 +132,17 @@ if (cmd === 'namatoko') {
         );
 
         return;
+    }
+
+    if (cmd === 'syncsubs' || cmd === 'syncsub') {
+        const subLib = require('../lib/subscription');
+        const res = subLib.syncCatalogPrices();
+        return sock.sendMessage(sender, {
+            text: `🔄 *SINKRONISASI HARGA LANGGANAN SELESAI*\n\n` +
+                  `• Produk Katalog Terupdate : *${res.updatedCatalog} produk*\n` +
+                  `• Kontrak Aktif Terupdate  : *${res.updatedActiveSubs} kontrak*\n\n` +
+                  `Harga produk di menu langganan kini 100% identik dengan master PPOB & Digital.`
+        });
     }
 
     if (cmd === 'pullppob') {
