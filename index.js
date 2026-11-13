@@ -6809,6 +6809,20 @@ setInterval(async () => {
         await checkAndAlertLowMerchantBalance();
     } catch (_) {}
 }, 30 * 60 * 1000);
+// Auto-clean startup: Tandai order lama yang sudah sukses agar tidak pernah di-retry oleh radar
+try {
+    const ordersList = Array.isArray(db.orders) ? db.orders : Object.values(db.orders || {});
+    const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
+    let cleanedOldOrders = false;
+    for (const o of ordersList) {
+        if (o && o.status === 'success' && !o.notified && (o.timestamp || 0) < twoHoursAgo) {
+            o.notified = true;
+            cleanedOldOrders = true;
+        }
+    }
+    if (cleanedOldOrders && typeof db.saveOrders === 'function') db.saveOrders();
+} catch (_) {}
+
 // ==========================================
 // 📡 RADAR PEMANTAU DIGIFLAZZ V4 (INTELIJEN & RESILIEN)
 // ==========================================
@@ -6819,10 +6833,19 @@ setInterval(async () => {
         if (!botSock) return;
 
         let ordersArray = Array.isArray(db.orders) ? db.orders : Object.values(db.orders);
+        const now = Date.now();
         let pendingOrders = ordersArray.filter(o => {
             if (!o || o.isPpob === false) return false;
-            // Retry kirim notifikasi jika status sukses tapi belum terkirim ke WhatsApp
-            if (o.status === 'success' && !o.notified) return true;
+            // Retry notifikasi hanya untuk order sukses BARU (< 1 jam) dan retries < 3
+            if (o.status === 'success') {
+                if (o.notified) return false;
+                const age = now - (o.timestamp || 0);
+                if (age > 60 * 60 * 1000 || (o.notifyRetries || 0) >= 3) {
+                    o.notified = true; // Tandai selesai agar radar bersih
+                    return false;
+                }
+                return true;
+            }
             // Orders yang masih pending/processing
             const isPend = (o.status === 'pending' || o.status === 'Pending' || o.status === 'processing');
             return isPend && o.sku;
@@ -6835,16 +6858,32 @@ setInterval(async () => {
                 let oid = order.digiflazz_oid || order.ref_id || order.invoice || order.oid || order.refId || order.id; 
                 if (!oid) continue;
 
-                // Jika sudah sukses tapi pesan WA belum terkirim (misal karena reconnect), coba kirim ulang notifikasi
+                const orderAge = Date.now() - (order.lastRetryAt || order.timestamp || 0);
+
+                // Jika sudah sukses tapi pesan WA belum terkirim (misal karena reconnect), coba kirim ulang maksimal 3x
                 if (order.status === 'success' && !order.notified) {
-                    console.log(`[RADAR V4] 🔁 Retrying unsent notification for OID: ${oid}`);
+                    order.notifyRetries = (order.notifyRetries || 0) + 1;
+                    if (order.notifyRetries >= 3) {
+                        order.notified = true;
+                        if (typeof db.saveOrders === 'function') db.saveOrders();
+                        continue;
+                    }
+                    console.log(`[RADAR V4] 🔁 Retrying unsent notification (${order.notifyRetries}/3) for OID: ${oid}`);
                     await notifyOrderSuccess(botSock, order, { sn: order.sn, message: order.sn });
+                    continue;
+                }
+
+                // Tutup otomatis pesanan pending yang sudah gantung lebih dari 24 jam agar tidak membebani server
+                if (orderAge > 24 * 60 * 60 * 1000) {
+                    order.status = 'failed';
+                    order.lastError = 'Kedaluwarsa (> 24 jam)';
+                    if (typeof db.saveOrders === 'function') db.saveOrders();
+                    console.log(`[RADAR V4] 🧹 Menutup order pending kedaluwarsa (> 24 jam) OID: ${oid}`);
                     continue;
                 }
 
                 // Anti-Flood: Untuk langganan beri jeda 10s, untuk reguler 15s antar pengecekan
                 const minAge = order.isSubscription ? 10000 : 15000;
-                const orderAge = Date.now() - (order.lastRetryAt || order.timestamp || 0);
                 if (orderAge < minAge) {
                     continue;
                 }
